@@ -755,9 +755,45 @@ def topic_states() -> dict[str, dict[str, Any]]:
 
 PRESENT_META_KEY = "present_tasks"
 PRESENT_SKILLS = ("youtube-insights:outline-to-presentation",)
+PRESENT_MAX_RETRIES = 2
+
+_OUTLINE_ITEM_RE = re.compile(r"^(\s*)(\d+)[.)]\s+(.+)$")
+
+
+def _outline_slide_map(outline: str) -> list[str]:
+    """Slide list an outline expands to: one divider per top-level item,
+    one slide per second-level item (deeper levels fold into their parent).
+    Returns [] when nothing parses (free-form outline — count not enforced)."""
+    indents: list[int] = []
+    slides: list[str] = []
+    for line in outline.splitlines():
+        m = _OUTLINE_ITEM_RE.match(line)
+        if not m:
+            continue
+        depth_ws = len(m.group(1).replace("\t", "    "))
+        if depth_ws not in indents:
+            indents.append(depth_ws)
+            indents.sort()
+        level = indents.index(depth_ws)
+        if level == 0:
+            slides.append(f"[divider] {m.group(3).strip()}")
+        elif level == 1:
+            slides.append(m.group(3).strip())
+    return slides
 
 
 def _build_present_brief(topic: str, outline: str, out_dir: Path) -> str:
+    slide_map = _outline_slide_map(outline)
+    contract: list[str] = []
+    if slide_map:
+        contract = [
+            "### The beat contract (mechanically checked after you finish)",
+            f"script-outline.md MUST contain the Hook section plus AT LEAST",
+            f"{len(slide_map)} `## Beat N:` sections — one per line below, in",
+            "this exact order. A validator counts them; a short script is",
+            "REJECTED and reopened:",
+            "",
+        ] + [f"  {i+1}. {s}" for i, s in enumerate(slide_map)] + [""]
     return "\n".join([
         "## MANDATORY: Expand ONE speaker outline into a presentation script.",
         "",
@@ -775,7 +811,7 @@ def _build_present_brief(topic: str, outline: str, out_dir: Path) -> str:
         "",
         "### Step 1 — Expand (outline-to-presentation skill)",
         "Load `youtube-insights:outline-to-presentation` and follow it",
-        "COMPLETELY. Write exactly two files:",
+        "COMPLETELY. Write exactly two files — AND NOTHING ELSE:",
         f"  - {out_dir}/concepts.md   (PRESENTATION MODE header, topic,",
         "    outline verbatim, slide map, visual language)",
         f"  - {out_dir}/script-outline.md   (standard script format: Hook +",
@@ -783,6 +819,7 @@ def _build_present_brief(topic: str, outline: str, out_dir: Path) -> str:
         "    lines, a rich **Visual** per slide with quoted label text,",
         "    Production Notes with SIX Thumbnail Options A-F)",
         "",
+    ] + contract + [
         "### Step 2 — Format gate (yt_lint_script, NOT optional)",
         f"Run the `yt_lint_script` tool on {out_dir}/script-outline.md and",
         "fix every finding, re-running until it reports ok:true.",
@@ -791,17 +828,23 @@ def _build_present_brief(topic: str, outline: str, out_dir: Path) -> str:
         "Attach both files to THIS kanban task with `kanban_attach` and",
         "finish with `kanban_complete` whose summary lists both paths and",
         "says: review the script on the Artifacts tab, then press Produce",
-        "on script-outline.md to generate the slide images, thumbnails,",
-        "and PDF.",
+        "on script-outline.md for the slide images, 6 thumbnail options,",
+        "and the PDF.",
         "",
         "### CRITICAL RULES",
         f"- Every output file goes under exactly {out_dir}/ — no alternate paths.",
+        "- Write ONLY the two files named above. NO helper scripts (no .py,",
+        "  .sh, .mjs), no notes files, no assets, no extra markdown — a",
+        "  worker once littered the folder with scratch tooling; that is a",
+        "  contract violation.",
         "- Do NOT generate images, do NOT run generate-image, do NOT write",
         "  PDFs — that is the Produce step, which runs only after a human",
         "  approves this script.",
         "- Keep the outline's order and hierarchy exactly: one slide per",
         "  second-level bullet, dividers for top-level items, third-level",
-        "  items as labeled elements inside their parent's Visual.",
+        "  items as labeled elements inside their parent's Visual. EVERY",
+        "  outline item must be represented — never truncate a long",
+        "  outline.",
     ])
 
 
@@ -847,7 +890,9 @@ def create_present_task(topic: str, outline: str) -> dict[str, Any]:
                 priority=10,
             )
         mapping[key] = {"taskId": task_id, "createdAt": _now_iso(),
-                        "topic": topic, "outDir": str(out_dir)}
+                        "topic": topic, "outDir": str(out_dir),
+                        "outline": outline,
+                        "expectedBeats": len(_outline_slide_map(outline)) or None}
         yti_store.set_meta(conn, PRESENT_META_KEY, json.dumps(mapping))
     except Exception as exc:
         return {"error": f"could not create the presentation task: {exc}"}
@@ -860,6 +905,99 @@ def create_present_task(topic: str, outline: str) -> dict[str, Any]:
 def present_states() -> dict[str, dict[str, Any]]:
     """Per-presentation expansion state for the Artifacts page."""
     return _states_for(PRESENT_META_KEY)
+
+
+def _build_present_fix_brief(entry: dict[str, Any], problems: list[str]) -> str:
+    out_dir = entry.get("outDir") or ""
+    return "\n".join([
+        "## MANDATORY: Fix an INCOMPLETE outline->presentation expansion.",
+        "",
+        "A worker completed this presentation task, but validation FAILED:",
+        "",
+    ] + [f"- {p}" for p in problems] + [
+        "",
+        f"**Output directory:** {out_dir}",
+        f"**Topic:** {entry.get('topic') or ''}",
+        "",
+        "### The speaker's outline (the CONTRACT — every item, in order)",
+        "",
+        "```",
+        entry.get("outline") or "(see concepts.md)",
+        "```",
+        "",
+        "Load `youtube-insights:outline-to-presentation` and rewrite",
+        f"{out_dir}/script-outline.md IN PLACE so the Hook plus one",
+        "`## Beat N:` section per slide covers the ENTIRE outline (dividers",
+        "for top-level items, one slide per second-level item, deeper items",
+        "as labeled elements in their parent's Visual). Keep what is already",
+        "good; add what is missing; run `yt_lint_script` until ok:true.",
+        "Write ONLY the two contract files — remove any stray helper files",
+        "you find in the output directory (scripts, notes, scratch files).",
+        "Then `kanban_complete`; the user reviews and presses Produce.",
+    ])
+
+
+def handle_present_completion(conn, kanban_task_id: str) -> Optional[dict[str, Any]]:
+    """kanban_task_completed hook: when an outline->presentation expansion
+    (or its fix task) finishes, validate completeness and AUTO-CHAIN the
+    produce task — the user's one button goes all the way to images + PDF."""
+    kb = _kanban()
+    if kb is None:
+        return None
+    raw = yti_store.get_meta(conn, PRESENT_META_KEY)
+    try:
+        mapping = json.loads(raw) if raw else {}
+    except ValueError:
+        return None
+    if not isinstance(mapping, dict):
+        return None
+    for key, entry in mapping.items():
+        if not isinstance(entry, dict) or entry.get("taskId") != kanban_task_id:
+            continue
+        out_dir = Path(entry.get("outDir") or "")
+        script = out_dir / "script-outline.md"
+        problems: list[str] = []
+        if not script.exists():
+            problems.append(f"script-outline.md was never written at {script}")
+        else:
+            beats = len(re.findall(r"^## Beat \d+", script.read_text(),
+                                   re.MULTILINE))
+            expected = entry.get("expectedBeats")
+            if expected and beats < int(expected):
+                problems.append(
+                    f"script has only {beats} '## Beat' sections but the "
+                    f"outline requires at least {expected} (one per divider "
+                    "and per second-level bullet) — the outline was "
+                    "truncated")
+        if not (out_dir / "concepts.md").exists():
+            problems.append(f"concepts.md was never written in {out_dir}")
+        if problems:
+            retries = int(entry.get("presentRetries") or 0)
+            if retries >= PRESENT_MAX_RETRIES:
+                return {"ok": False, "exhausted": True, "key": key,
+                        "problems": problems}
+            with kb.connect_closing() as conn_kb:
+                fix_id = kb.create_task(
+                    conn_kb,
+                    title=f"Fix presentation: {key.rsplit('/', 1)[-1]}",
+                    body=_build_present_fix_brief(entry, problems),
+                    assignee=resolve_kanban_assignee(),
+                    created_by="youtube-insights",
+                    workspace_kind="scratch",
+                    skills=list(PRESENT_SKILLS),
+                    priority=10,
+                )
+            entry["taskId"] = fix_id
+            entry["presentRetries"] = retries + 1
+            entry["createdAt"] = _now_iso()
+            mapping[key] = entry
+            yti_store.set_meta(conn, PRESENT_META_KEY, json.dumps(mapping))
+            kick_dispatcher()
+            return {"ok": True, "fixTask": fix_id, "problems": problems}
+        # Clean and complete: the script now waits for HUMAN review — the
+        # user presses Produce on it when satisfied (deliberate pause).
+        return {"ok": True, "clean": True, "key": key}
+    return None
 
 
 # ---------------------------------------------------------------------------

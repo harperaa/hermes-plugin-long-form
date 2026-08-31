@@ -91,9 +91,28 @@ def _on_kanban_task_completed(task_id: str, **kwargs) -> None:
             except ImportError:  # pragma: no cover
                 import yti_generate  # type: ignore
             script_result = yti_generate.handle_script_completion(conn, task_id)
-            conn.close()
             if script_result is None:
+                # Maybe an outline->presentation expansion: validate
+                # completeness (every outline item became a beat).
+                present_result = yti_generate.handle_present_completion(
+                    conn, task_id)
+                conn.close()
+                if present_result is None:
+                    return
+                if present_result.get("fixTask"):
+                    logger.warning(
+                        "presentation %s incomplete -> fix task %s (%s)",
+                        task_id, present_result["fixTask"],
+                        "; ".join(present_result.get("problems") or []))
+                elif present_result.get("exhausted"):
+                    logger.error(
+                        "presentation %s still incomplete after retries: %s",
+                        task_id,
+                        "; ".join(present_result.get("problems") or []))
+                else:
+                    logger.info("presentation %s validated complete", task_id)
                 return
+            conn.close()
             if script_result.get("clean"):
                 logger.info("script task %s lints clean", task_id)
             elif script_result.get("retry"):

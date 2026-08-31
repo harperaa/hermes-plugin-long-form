@@ -323,3 +323,82 @@ def test_present_states_shape(tmp_home, gen_kanban):
     assert len(states) == 1
     entry = next(iter(states.values()))
     assert entry["status"] in ("open", "stale", "done")
+
+
+def test_outline_slide_map_levels():
+    outline = ("1. Problem\n"
+               "    1. Vibe app\n"
+               "    2. Findings\n"
+               "        1. Auth\n"
+               "        2. Input\n"
+               "2. Fix\n"
+               "    1. Awareness\n")
+    m = yti_generate._outline_slide_map(outline)
+    # top-level -> dividers, second-level -> slides, third-level folds in
+    assert m == ["[divider] Problem", "Vibe app", "Findings",
+                 "[divider] Fix", "Awareness"]
+    assert yti_generate._outline_slide_map("free text, no numbers") == []
+
+
+def test_present_brief_carries_beat_contract(tmp_home, gen_kanban):
+    r = yti_generate.create_present_task(
+        "Contract Talk", "1. A\n    1. B\n    2. C")
+    body = gen_kanban.created[-1]["body"]
+    assert "AT LEAST" in body and "3" in body
+    assert "NO helper scripts" in body
+
+
+def test_present_completion_bounces_short_script(conn, tmp_home, gen_kanban):
+    r = yti_generate.create_present_task(
+        "Short Deck", "1. A\n    1. B\n    2. C\n    3. D")
+    tid = r["taskId"]
+    out = Path(r["outDir"])
+    out.mkdir(parents=True, exist_ok=True)
+    (out / "concepts.md").write_text("**PRESENTATION MODE**")
+    # only 2 beats where the outline requires 5 (1 divider + 3 slides... 4)
+    (out / "script-outline.md").write_text(
+        "# T\n## Hook (0:00-1:00)\n- **Visual**: x\n"
+        "## Beat 1: A (1:00-2:00)\n- line\n- **Visual**: x\n"
+        "## Beat 2: B (2:00-3:00)\n- line\n- **Visual**: x\n")
+    gen_kanban.tasks[tid]["status"] = "done"
+    res = yti_generate.handle_present_completion(conn, tid)
+    assert res and res.get("fixTask"), res
+    fix = gen_kanban.created[-1]
+    assert fix["title"].startswith("Fix presentation:")
+    assert "truncated" in fix["body"] or "only 2" in fix["body"]
+    # retry bookkeeping: the fix task replaces the original in state
+    states = yti_generate.present_states()
+    assert next(iter(states.values()))["taskId"] == res["fixTask"]
+
+
+def test_present_completion_clean_passes_no_chain(conn, tmp_home, gen_kanban):
+    r = yti_generate.create_present_task("Full Deck", "1. A\n    1. B")
+    tid = r["taskId"]
+    out = Path(r["outDir"])
+    out.mkdir(parents=True, exist_ok=True)
+    (out / "concepts.md").write_text("**PRESENTATION MODE**")
+    (out / "script-outline.md").write_text(
+        "# T\n## Hook (0:00-1:00)\n- **Visual**: x\n"
+        "## Beat 1: A (1:00-2:00)\n- line\n- **Visual**: x\n"
+        "## Beat 2: B (2:00-3:00)\n- line\n- **Visual**: x\n")
+    gen_kanban.tasks[tid]["status"] = "done"
+    n_before = len(gen_kanban.created)
+    res = yti_generate.handle_present_completion(conn, tid)
+    assert res and res.get("clean") is True
+    # review pause is deliberate: NO produce task auto-created
+    assert len(gen_kanban.created) == n_before
+
+
+def test_present_completion_retry_cap(conn, tmp_home, gen_kanban):
+    r = yti_generate.create_present_task("Cap Deck", "1. A\n    1. B")
+    tid = r["taskId"]
+    Path(r["outDir"]).mkdir(parents=True, exist_ok=True)  # no files at all
+    gen_kanban.tasks[tid]["status"] = "done"
+    for expect_fix in (True, True, False):
+        res = yti_generate.handle_present_completion(conn, tid)
+        if expect_fix:
+            assert res.get("fixTask"), res
+            tid = res["fixTask"]
+            gen_kanban.tasks[tid]["status"] = "done"
+        else:
+            assert res.get("exhausted") is True
