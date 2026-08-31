@@ -92,6 +92,15 @@ def _on_kanban_task_completed(task_id: str, **kwargs) -> None:
                 import yti_generate  # type: ignore
             script_result = yti_generate.handle_script_completion(conn, task_id)
             if script_result is None:
+                # Produce task? Sweep scratch files out of assets/ so the
+                # Artifacts tab shows only images.
+                sweep = yti_generate.handle_produce_completion(conn, task_id)
+                if sweep is not None:
+                    conn.close()
+                    if sweep.get("swept"):
+                        logger.info("produce %s: swept %s scratch files from "
+                                    "assets/", task_id, sweep["swept"])
+                    return
                 # Maybe an outline->presentation expansion: validate
                 # completeness (every outline item became a beat).
                 present_result = yti_generate.handle_present_completion(

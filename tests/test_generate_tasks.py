@@ -402,3 +402,29 @@ def test_present_completion_retry_cap(conn, tmp_home, gen_kanban):
             gen_kanban.tasks[tid]["status"] = "done"
         else:
             assert res.get("exhausted") is True
+
+
+def test_produce_completion_sweeps_non_images(conn, tmp_home, gen_kanban):
+    rel = "youtube/2026-08-31/presentations/sweep-deck/script-outline.md"
+    script = _mk_script(rel)
+    r = yti_generate.create_produce_task(rel)
+    tid = r["taskId"]
+    assets = script.parent / "assets"
+    assets.mkdir()
+    (assets / "01-hook.jpg").write_bytes(b"jpg")
+    (assets / "thumb-a-x.png").write_bytes(b"png")
+    (assets / "_gen_beats.sh").write_text("#!/bin/bash")
+    (assets / "_log01.txt").write_text("log")
+    (assets / "verify-pdf.py").write_text("print()")
+    gen_kanban.tasks[tid]["status"] = "done"
+    (script.parent / "verify-pdf.py").write_text("print()")
+    res = yti_generate.handle_produce_completion(conn, tid)
+    assert res and res["swept"] == 4, res
+    assert not (script.parent / "verify-pdf.py").exists()
+    assert (script.parent / "script-outline.md").exists()
+    left = sorted(p.name for p in assets.iterdir())
+    assert left == ["01-hook.jpg", "thumb-a-x.png"]
+    # brief carries the hygiene + portrait conventions
+    body = gen_kanban.created[-1]["body"]
+    assert "ONLY generated image files" in body
+    assert "portrait-black-shirt.jpg" in body

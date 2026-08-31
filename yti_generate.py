@@ -382,6 +382,20 @@ def _build_produce_brief(script_abs: Path) -> str:
         "   task with `kanban_attach`; leave every file in place (they appear",
         "   on the YouTube Insights Artifacts tab). Then `kanban_complete`",
         "   with a summary listing every file produced.",
+        "",
+        "### OUTPUT HYGIENE (mechanically enforced after you complete)",
+        f"- {assets_dir}/ may contain ONLY generated image files when you",
+        "  finish. Helper scripts, logs, and scratch files belong in your",
+        "  task scratch workspace — NEVER in the output folder. A validator",
+        "  deletes any non-image file it finds there.",
+        "",
+        "### SPEAKER PORTRAIT (thumbnails only)",
+        "- Check $HERMES_HOME/media/ for a presenter portrait (prefer",
+        "  portrait-black-shirt.jpg, else source-portrait.png). If present,",
+        "  any thumbnail option that features the speaker MUST use it as the",
+        "  source image (`--input <portrait>` — image-to-image), so the",
+        "  real person appears in the thumbnail rather than an invented",
+        "  face. Purely typographic/metaphor thumbnails skip the portrait.",
     ])
 
 
@@ -476,6 +490,53 @@ def _states_for(meta_key: str) -> dict[str, dict[str, Any]]:
     except Exception:
         return out
     return out
+
+
+_ASSET_IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".webp"}
+
+
+def handle_produce_completion(conn, kanban_task_id: str) -> Optional[dict[str, Any]]:
+    """kanban_task_completed hook: when a produce task finishes, sweep its
+    assets/ folder — workers sometimes leave scratch scripts and logs there,
+    but the Artifacts tab should show ONLY images. Deterministic cleanup;
+    never touches images, the script, or the PDF."""
+    raw = yti_store.get_meta(conn, PRODUCE_META_KEY)
+    try:
+        mapping = json.loads(raw) if raw else {}
+    except ValueError:
+        return None
+    if not isinstance(mapping, dict):
+        return None
+    for key, entry in mapping.items():
+        if not isinstance(entry, dict) or entry.get("taskId") != kanban_task_id:
+            continue
+        script_dir = (yti_paths.workspace_dir() / key).parent
+        removed = []
+        assets = script_dir / "assets"
+        if assets.is_dir():
+            for p in sorted(assets.rglob("*")):
+                if p.is_file() and p.suffix.lower() not in _ASSET_IMAGE_EXTS:
+                    try:
+                        p.unlink()
+                        removed.append(p.name)
+                    except OSError:
+                        pass
+        # Worker scratch in the slug folder itself (verify-pdf.py and the
+        # like): sweep only unmistakable scratch patterns — never .md, .pdf,
+        # or images a human might have placed there.
+        for p in sorted(script_dir.iterdir()):
+            if not p.is_file():
+                continue
+            if p.suffix.lower() in (".py", ".sh", ".mjs", ".log") \
+                    or p.name.startswith("_"):
+                try:
+                    p.unlink()
+                    removed.append(p.name)
+                except OSError:
+                    pass
+        return {"ok": True, "swept": len(removed), "removed": removed,
+                "key": key}
+    return None
 
 
 def produce_states() -> dict[str, dict[str, Any]]:
