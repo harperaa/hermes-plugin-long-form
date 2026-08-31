@@ -362,7 +362,10 @@ def _build_produce_brief(script_abs: Path) -> str:
         "1. Load `youtube-insights:youtube-content-creator` and run **Mode B**",
         "   (images-and-pdf) against the script above.",
         "2. **Phase 6 — images:** one image per beat (from each beat's Visual",
-        "   field) plus 3 thumbnail options, ALL via the",
+        "   field) plus ONE THUMBNAIL PER OPTION listed in the script's",
+        "   Production Notes -> Thumbnail Options section (video scripts list",
+        "   A-C, presentations list A-F — the script is the authority), ALL",
+        "   via the",
         "   `youtube-insights:generate-image` skill (grok imagine + its",
         "   mandatory verify_image QA and baseline-reference check). Beat",
         "   images MUST pass the baseline as the source image:",
@@ -375,7 +378,7 @@ def _build_produce_brief(script_abs: Path) -> str:
         f"3. **Phase 6b — PDF:** produce the production PDF at {pdf_path}",
         "   (landscape, one image per page — thumbnails first, then each beat",
         "   image in order).",
-        "4. **Publish:** attach the PDF and the 3 thumbnails to THIS kanban",
+        "4. **Publish:** attach the PDF and every thumbnail to THIS kanban",
         "   task with `kanban_attach`; leave every file in place (they appear",
         "   on the YouTube Insights Artifacts tab). Then `kanban_complete`",
         "   with a summary listing every file produced.",
@@ -740,6 +743,123 @@ def create_topic_task(topic: str, context: str = "") -> dict[str, Any]:
 def topic_states() -> dict[str, dict[str, Any]]:
     """Per-topic generation state for the Artifacts page (open|stale|done)."""
     return _states_for(TOPIC_META_KEY)
+
+
+# ---------------------------------------------------------------------------
+# Outline -> Presentation: the Artifacts page's second entry path. One kanban
+# task EXPANDS a speaker outline into a presentation script — one slide per
+# bullet, each beat's Visual a rich whiteboard-image spec. No images here:
+# the user reviews the script, then the normal Produce button runs the
+# existing pipeline (generate-image QA, 3 thumbnails, PDF) unchanged.
+# ---------------------------------------------------------------------------
+
+PRESENT_META_KEY = "present_tasks"
+PRESENT_SKILLS = ("youtube-insights:outline-to-presentation",)
+
+
+def _build_present_brief(topic: str, outline: str, out_dir: Path) -> str:
+    return "\n".join([
+        "## MANDATORY: Expand ONE speaker outline into a presentation script.",
+        "",
+        f"**Topic / hook:** {topic}",
+        f"**Output directory:** {out_dir}",
+        "",
+        "### The speaker's outline (a CONTRACT — keep order and hierarchy)",
+        "",
+        "```",
+        outline,
+        "```",
+        "",
+        "You do ALL steps yourself in this session — no subtasks, no",
+        "delegation. Work autonomously.",
+        "",
+        "### Step 1 — Expand (outline-to-presentation skill)",
+        "Load `youtube-insights:outline-to-presentation` and follow it",
+        "COMPLETELY. Write exactly two files:",
+        f"  - {out_dir}/concepts.md   (PRESENTATION MODE header, topic,",
+        "    outline verbatim, slide map, visual language)",
+        f"  - {out_dir}/script-outline.md   (standard script format: Hook +",
+        "    one Beat per slide in outline order, talking-point spoken",
+        "    lines, a rich **Visual** per slide with quoted label text,",
+        "    Production Notes with SIX Thumbnail Options A-F)",
+        "",
+        "### Step 2 — Format gate (yt_lint_script, NOT optional)",
+        f"Run the `yt_lint_script` tool on {out_dir}/script-outline.md and",
+        "fix every finding, re-running until it reports ok:true.",
+        "",
+        "### Step 3 — Publish",
+        "Attach both files to THIS kanban task with `kanban_attach` and",
+        "finish with `kanban_complete` whose summary lists both paths and",
+        "says: review the script on the Artifacts tab, then press Produce",
+        "on script-outline.md to generate the slide images, thumbnails,",
+        "and PDF.",
+        "",
+        "### CRITICAL RULES",
+        f"- Every output file goes under exactly {out_dir}/ — no alternate paths.",
+        "- Do NOT generate images, do NOT run generate-image, do NOT write",
+        "  PDFs — that is the Produce step, which runs only after a human",
+        "  approves this script.",
+        "- Keep the outline's order and hierarchy exactly: one slide per",
+        "  second-level bullet, dividers for top-level items, third-level",
+        "  items as labeled elements inside their parent's Visual.",
+    ])
+
+
+def create_present_task(topic: str, outline: str) -> dict[str, Any]:
+    """Create (or reuse a still-open) outline->presentation task."""
+    kb = _kanban()
+    if kb is None:
+        return {"error": "kanban unavailable"}
+    topic = (topic or "").strip()
+    outline = (outline or "").strip()
+    if not topic:
+        return {"error": "topic required"}
+    if not outline:
+        return {"error": "outline required"}
+    slug = _slug(topic)
+    today = _now().strftime("%Y-%m-%d")
+    out_dir = yti_paths.workspace_dir() / "youtube" / today / "presentations" / slug
+    key = f"{today}/{slug}"
+    conn = yti_store.connect()
+    try:
+        mapping_raw = yti_store.get_meta(conn, PRESENT_META_KEY)
+        try:
+            mapping = json.loads(mapping_raw) if mapping_raw else {}
+            if not isinstance(mapping, dict):
+                mapping = {}
+        except ValueError:
+            mapping = {}
+        entry = mapping.get(key) or {}
+        existing = entry.get("taskId")
+        with kb.connect_closing() as conn_kb:
+            if existing and _kanban_task_open(kb, conn_kb, existing):
+                age = _age_minutes(entry.get("createdAt"))
+                if age is not None and age < STALE_MINUTES:
+                    return {"ok": True, "taskId": existing, "already": True}
+            task_id = kb.create_task(
+                conn_kb,
+                title=f"Presentation: {topic}",
+                body=_build_present_brief(topic, outline, out_dir),
+                assignee=resolve_kanban_assignee(),
+                created_by="youtube-insights",
+                workspace_kind="scratch",
+                skills=list(PRESENT_SKILLS),
+                priority=10,
+            )
+        mapping[key] = {"taskId": task_id, "createdAt": _now_iso(),
+                        "topic": topic, "outDir": str(out_dir)}
+        yti_store.set_meta(conn, PRESENT_META_KEY, json.dumps(mapping))
+    except Exception as exc:
+        return {"error": f"could not create the presentation task: {exc}"}
+    finally:
+        conn.close()
+    kick_dispatcher()
+    return {"ok": True, "taskId": task_id, "outDir": str(out_dir)}
+
+
+def present_states() -> dict[str, dict[str, Any]]:
+    """Per-presentation expansion state for the Artifacts page."""
+    return _states_for(PRESENT_META_KEY)
 
 
 # ---------------------------------------------------------------------------

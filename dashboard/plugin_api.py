@@ -216,6 +216,27 @@ def get_topic_states() -> dict[str, Any]:
     return {"states": yti_generate.topic_states()}
 
 
+class PresentBody(BaseModel):
+    topic: str
+    outline: str
+
+
+@router.post("/present")
+def post_present(body: PresentBody) -> dict[str, Any]:
+    """Artifacts page Outline->Presentation button: expand a speaker outline
+    into a presentation script (one slide per bullet, rich Visual specs);
+    the normal Produce button then generates images + thumbnails + PDF."""
+    result = yti_generate.create_present_task(body.topic, body.outline)
+    if result.get("error"):
+        raise HTTPException(status_code=400, detail=result["error"])
+    return result
+
+
+@router.get("/present-states")
+def get_present_states() -> dict[str, Any]:
+    return {"states": yti_generate.present_states()}
+
+
 @router.post("/pipeline-run")
 def post_pipeline_run() -> dict[str, Any]:
     """Artifacts tab '3 More' button: run the twice-daily content pipeline

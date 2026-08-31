@@ -284,3 +284,42 @@ def test_script_completion_clean_passes(conn, tmp_home, gen_kanban):
 
 def test_script_completion_ignores_unknown_tasks(conn, tmp_home, gen_kanban):
     assert yti_generate.handle_script_completion(conn, "t_unknown") is None
+
+
+# ---- outline -> presentation ------------------------------------------------
+
+def test_create_present_task_creates_assigned_task(tmp_home, gen_kanban):
+    result = yti_generate.create_present_task(
+        "Vibe Audit Trends", "1. Problem\n    1. Auth\n2. Fix")
+    assert result.get("ok"), result
+    rec = gen_kanban.created[-1]
+    assert rec["title"] == "Presentation: Vibe Audit Trends"
+    assert rec["assignee"] == "default"
+    assert rec["skills"] == list(yti_generate.PRESENT_SKILLS)
+    assert "youtube-insights:outline-to-presentation" in rec["skills"]
+    # the outline rides in the brief VERBATIM, and images are forbidden
+    assert "1. Problem" in rec["body"] and "    1. Auth" in rec["body"]
+    assert "Do NOT generate images" in rec["body"]
+    assert "script-outline.md" in rec["body"]
+    assert "/presentations/" in result["outDir"]
+
+
+def test_create_present_task_requires_topic_and_outline(tmp_home, gen_kanban):
+    assert yti_generate.create_present_task("", "1. x")["error"] == "topic required"
+    assert yti_generate.create_present_task("T", " ")["error"] == "outline required"
+
+
+def test_create_present_task_dedupes_open_task(tmp_home, gen_kanban):
+    first = yti_generate.create_present_task("Same Talk", "1. a")
+    again = yti_generate.create_present_task("Same Talk", "1. a")
+    assert again.get("already") is True
+    assert again["taskId"] == first["taskId"]
+    assert len(gen_kanban.created) == 1
+
+
+def test_present_states_shape(tmp_home, gen_kanban):
+    yti_generate.create_present_task("Stateful Talk", "1. a")
+    states = yti_generate.present_states()
+    assert len(states) == 1
+    entry = next(iter(states.values()))
+    assert entry["status"] in ("open", "stale", "done")

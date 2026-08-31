@@ -916,6 +916,14 @@
     var topic = topicState[0], setTopic = topicState[1];
     var topicCtxState = useState("");
     var topicCtx = topicCtxState[0], setTopicCtx = topicCtxState[1];
+    var presentStatesState = useState({});
+    var presentStates = presentStatesState[0], setPresentStates = presentStatesState[1];
+    var presentModalState = useState(false);
+    var presentModal = presentModalState[0], setPresentModal = presentModalState[1];
+    var presTopicState = useState("");
+    var presTopic = presTopicState[0], setPresTopic = presTopicState[1];
+    var presOutlineState = useState("");
+    var presOutline = presOutlineState[0], setPresOutline = presOutlineState[1];
     var pipeState = useState({ available: false, running: false });
     var pipeline = pipeState[0], setPipeline = pipeState[1];
     // The cron scheduler starts the execution on its next tick (up to ~1 min
@@ -938,6 +946,8 @@
         .catch(function () {});
       api("/topic-states").then(function (d) { setTopicStates((d && d.states) || {}); })
         .catch(function () {});
+      api("/present-states").then(function (d) { setPresentStates((d && d.states) || {}); })
+        .catch(function () {});
       api("/pipeline-state").then(function (d) { setPipeline(d || {}); })
         .catch(function () {});
     }, []);
@@ -951,7 +961,7 @@
     }
     var hasOpenProduce = anyOpen(produce);
     var hasOpenRun = hasOpenProduce || anyOpen(iterate) || anyOpen(topicStates) ||
-      pipelineRunning;
+      anyOpen(presentStates) || pipelineRunning;
     useEffect(function () {
       if (!hasOpenRun) return undefined;
       var id = window.setInterval(loadTree, 15000);
@@ -1050,6 +1060,17 @@
         .catch(function (e) { alert(String((e && e.message) || e)); });
     }
 
+    function createPresentation() {
+      if (!presTopic.trim() || !presOutline.trim()) return;
+      api("/present", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ topic: presTopic, outline: presOutline }),
+      }).then(function () {
+        setPresentModal(false); setPresTopic(""); setPresOutline(""); loadTree();
+      }).catch(function (e) { alert(String((e && e.message) || e)); });
+    }
+
     function generateTopic() {
       if (!topic.trim()) return;
       api("/generate-topic", {
@@ -1131,6 +1152,7 @@
     var iterChat = iterOpen && iter.sessionId
       ? "/chat?resume=" + encodeURIComponent(iter.sessionId) : null;
     var topicOpen = anyOpen(topicStates);
+    var presentOpen = anyOpen(presentStates);
 
     // Preview header (paperclip deliverables parity): path · mtime · actions
     var previewHead = sel ? h("div", { className: "yti-preview-head" },
@@ -1305,6 +1327,14 @@
               : "Generate a new 3-script set (standard, hot take, contrarian) on a topic of your choice, grounded in the insights database",
             onClick: function () { setTopicModal(true); },
           }, topicOpen ? "Generating…" : "Generate ✨"),
+          h(Button, {
+            size: "sm",
+            disabled: presentOpen,
+            title: presentOpen
+              ? "Expanding — an outline is being turned into a presentation script"
+              : "Turn a talk outline into a presentation: one whiteboard slide per bullet. Expands the outline into a reviewable script; Produce then makes the images, 6 thumbnails, and PDF",
+            onClick: function () { setPresentModal(true); },
+          }, presentOpen ? "Expanding…" : "Outline → Presentation 🖼️"),
           h(Button, { size: "sm", variant: "outline", onClick: loadTree }, "Refresh")
         )
       ),
@@ -1324,6 +1354,34 @@
           h(Button, { size: "sm", variant: "outline",
             onClick: function () { setIterModal(false); } }, "Cancel"),
           h(Button, { size: "sm", onClick: iterateScript }, "Iterate ↻"))
+      ) : null,
+      presentModal ? h(YtiModal, { onClose: function () { setPresentModal(false); } },
+        h("h3", null, "Outline → Presentation"),
+        h("p", { className: "yti-modal-sub" },
+          "Expands your outline into a presentation script — one whiteboard ",
+          "slide per bullet, keeping your order exactly — into today's ",
+          h("code", null, "presentations/"), " folder. Review the script, ",
+          "then press Produce on it for images, 6 thumbnail options, and ",
+          "the PDF."),
+        h("label", null, "Topic / hook"),
+        h("input", {
+          value: presTopic,
+          autoFocus: true,
+          placeholder: "e.g. I audit my clients' vibe-coded apps — here's what I keep finding",
+          onChange: function (e) { setPresTopic(e.target.value); },
+        }),
+        h("label", null, "Outline"),
+        h("textarea", {
+          value: presOutline,
+          rows: 12,
+          placeholder: "1. The problem\n    1. First point\n    2. Second point\n2. Why it happens\n    1. ...\n3. The solution\n    1. ...",
+          onChange: function (e) { setPresOutline(e.target.value); },
+        }),
+        h("div", { className: "yti-modal-actions" },
+          h(Button, { size: "sm", variant: "outline",
+            onClick: function () { setPresentModal(false); } }, "Cancel"),
+          h(Button, { size: "sm", disabled: !presTopic.trim() || !presOutline.trim(),
+            onClick: createPresentation }, "Expand →"))
       ) : null,
       topicModal ? h(YtiModal, { onClose: function () { setTopicModal(false); } },
         h("h3", null, "Generate scripts on a topic"),

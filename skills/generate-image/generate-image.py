@@ -250,12 +250,24 @@ def verify_image(path: Path, prompt: str, expect_text: str | None) -> dict:
     checklist = (
         "You are a strict pre-publication QA reviewer for generated images. "
         "1) Transcribe EVERY piece of rendered text in the image exactly as drawn, "
-        "including partial or garbled words. 2) Flag ANY misspelling, duplicated or "
-        "missing letters, garbled/pseudo-text, or nonsense glyphs. 3) Flag visual "
+        "including partial or garbled words. Do NOT trust your first reading of any "
+        "word — vision models autocorrect misspellings while transcribing, which is "
+        "the worst possible QA failure here. Read every word CHARACTER BY CHARACTER "
+        "as physically drawn (missing, doubled, swapped, or wrong letters included) "
+        "before writing it down. 2) Flag ANY misspelling, duplicated or "
+        "missing letters, garbled/pseudo-text, or nonsense glyphs — in ANY rendered "
+        "text, not only expected labels (margin notes and annotations count). 3) Flag visual "
         "defects: extra limbs/fingers, broken arrows, cut-off elements, illegible "
         "labels, watermark-like artifacts. "
         f"The image was generated from this prompt: {prompt!r}. "
         + (f"The following text labels MUST appear spelled exactly: {expect_text}. "
+           "CRITICAL: do NOT trust your first reading — vision models "
+           "autocorrect misspellings while transcribing, which is the worst "
+           "possible QA failure. For EACH expected label, read the rendered "
+           "word CHARACTER BY CHARACTER as physically drawn (including "
+           "missing, doubled, or swapped letters), write out that "
+           "letter-by-letter reading in \"text\", and compare it to the "
+           "expected spelling before deciding pass/fail. "
            if expect_text else "")
         + 'Reply with ONLY a JSON object: {"pass": true|false, "text": "<all transcribed text>", '
           '"issues": ["<each problem found>"]}. Fail on ANY spelling error or garbled text.'
