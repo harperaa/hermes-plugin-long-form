@@ -76,11 +76,20 @@ lint, and Iterate all work unchanged:
     presenter actually says while the slide is up.
   - `**-> HOOK INTO NEXT**:` a complete spoken sentence bridging slides.
   - `**Visual**:` THE HEART OF THIS SKILL — a rich, self-contained
-    description of the slide image (the metaphor, its elements, every label
-    with exact spelling, spatial arrangement, the annotation line, colors by
-    name). 40-90 words. Someone who never read the outline must be able to
-    paint the slide from this field alone. Exact label text goes in double
-    quotes so image QA can verify spelling.
+    description of the slide image. It MUST contain, in order:
+    1. `Headline: "..."` — the slide's title rendered ON the image as the
+       dominant hand-lettered line: the beat title verbatim when it is
+       ≤ 6 words, else a punchy ≤ 6-word summary of it (Beat "There are
+       many critical and high findings to be addressed" → Headline:
+       "CRITICAL + HIGH FINDINGS"). Without this, viewers can't connect
+       the picture to the point.
+    2. The metaphor AND how it encodes the beat's claim — say what the
+       drawing MEANS, not just what it contains ("one dotted ghost brick
+       in a solid wall = the invented library that never existed").
+    3. Every label with exact spelling in double quotes, spatial
+       arrangement, the margin annotation, and colors by name.
+    60-120 words. Someone who never read the outline must be able to paint
+    the slide — and grasp the point — from this field alone.
 - `## Synthesis` and `## CTA + Close` only if the outline ends with them.
 - `## Production Notes` with `### Thumbnail Options` — **A through F**: SIX
   distinct TITLE-SLIDE concepts (presentations always get six thumbnail

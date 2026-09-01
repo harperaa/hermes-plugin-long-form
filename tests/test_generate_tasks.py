@@ -621,3 +621,13 @@ def test_style_language_injected_into_briefs(tmp_home, gen_kanban):
     yti_generate.create_regen_task(str(img.relative_to(ws)), "fix")
     body = gen_kanban.created[-1]["body"]
     assert "STYLE LANGUAGE" in body and "STUDYING the baseline image" in body
+
+
+def test_produce_brief_requires_beat_headline_and_fidelity(tmp_home, gen_kanban):
+    rel = "youtube/2026-09-01/presentations/hl-deck/script-outline.md"
+    _mk_script(rel)
+    yti_generate.create_produce_task(rel)
+    body = gen_kanban.created[-1]["body"]
+    assert "HEADLINE" in body and "dominant headline" in body
+    assert "MESSAGE FIDELITY" in body and "ENRICH the prompt" in body
+    assert "--expect-text" in body or "expect-text" in body
