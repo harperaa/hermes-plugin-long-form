@@ -428,3 +428,54 @@ def test_produce_completion_sweeps_non_images(conn, tmp_home, gen_kanban):
     body = gen_kanban.created[-1]["body"]
     assert "ONLY generated image files" in body
     assert "portrait-black-shirt.jpg" in body
+
+
+# ---- targeted regeneration --------------------------------------------------
+
+def test_create_regen_task_image(tmp_home, gen_kanban):
+    rel = "youtube/2026-08-31/presentations/deck/assets/05-critical-20260831.jpg"
+    ws = yti_paths.workspace_dir()
+    p = ws / rel
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_bytes(b"jpg")
+    r = yti_generate.create_regen_task(rel, "AUTHENTICATION is misspelled")
+    assert r.get("ok"), r
+    rec = gen_kanban.created[-1]
+    assert rec["title"].startswith("Regenerate image:")
+    assert "AUTHENTICATION is misspelled" in rec["body"]
+    assert "ONE image only" in rec["body"]
+    assert "rebuild" in rec["body"].lower() and "960, 540" in rec["body"]
+    # dedupe while open
+    again = yti_generate.create_regen_task(rel, "same")
+    assert again.get("already") is True
+
+
+def test_create_regen_task_pdf_and_rejects_other(tmp_home, gen_kanban):
+    ws = yti_paths.workspace_dir()
+    pdf = ws / "youtube/2026-08-31/presentations/deck/script-outline.pdf"
+    pdf.parent.mkdir(parents=True, exist_ok=True)
+    pdf.write_bytes(b"%PDF")
+    r = yti_generate.create_regen_task(str(pdf.relative_to(ws)))
+    assert r.get("ok"), r
+    assert gen_kanban.created[-1]["title"].startswith("Rebuild PDF:")
+    assert "Generate NO images" in gen_kanban.created[-1]["body"]
+    md = ws / "youtube/2026-08-31/presentations/deck/notes.md"
+    md.write_text("x")
+    bad = yti_generate.create_regen_task(str(md.relative_to(ws)))
+    assert "error" in bad
+
+
+def test_regen_completion_sweeps(conn, tmp_home, gen_kanban):
+    rel = "youtube/2026-08-31/presentations/deck2/assets/03-x-20260831.jpg"
+    ws = yti_paths.workspace_dir()
+    p = ws / rel
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_bytes(b"jpg")
+    r = yti_generate.create_regen_task(rel, "fix")
+    tid = r["taskId"]
+    (p.parent / "_scratch.sh").write_text("x")
+    (p.parent.parent / "helper.py").write_text("x")
+    gen_kanban.tasks[tid]["status"] = "done"
+    res = yti_generate.handle_produce_completion(conn, tid)
+    assert res and res["swept"] == 2, res
+    assert p.exists()

@@ -924,6 +924,12 @@
     var presTopic = presTopicState[0], setPresTopic = presTopicState[1];
     var presOutlineState = useState("");
     var presOutline = presOutlineState[0], setPresOutline = presOutlineState[1];
+    var regenStatesState = useState({});
+    var regenStates = regenStatesState[0], setRegenStates = regenStatesState[1];
+    var regenModalState = useState(false);
+    var regenModal = regenModalState[0], setRegenModal = regenModalState[1];
+    var regenFeedbackState = useState("");
+    var regenFeedback = regenFeedbackState[0], setRegenFeedback = regenFeedbackState[1];
     var pipeState = useState({ available: false, running: false });
     var pipeline = pipeState[0], setPipeline = pipeState[1];
     // The cron scheduler starts the execution on its next tick (up to ~1 min
@@ -948,6 +954,8 @@
         .catch(function () {});
       api("/present-states").then(function (d) { setPresentStates((d && d.states) || {}); })
         .catch(function () {});
+      api("/regen-states").then(function (d) { setRegenStates((d && d.states) || {}); })
+        .catch(function () {});
       api("/pipeline-state").then(function (d) { setPipeline(d || {}); })
         .catch(function () {});
     }, []);
@@ -961,7 +969,7 @@
     }
     var hasOpenProduce = anyOpen(produce);
     var hasOpenRun = hasOpenProduce || anyOpen(iterate) || anyOpen(topicStates) ||
-      anyOpen(presentStates) || pipelineRunning;
+      anyOpen(presentStates) || anyOpen(regenStates) || pipelineRunning;
     useEffect(function () {
       if (!hasOpenRun) return undefined;
       var id = window.setInterval(loadTree, 15000);
@@ -1060,6 +1068,17 @@
         .catch(function (e) { alert(String((e && e.message) || e)); });
     }
 
+    function regenerateSelected(feedback) {
+      if (!sel) return;
+      api("/regen", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ path: sel.relPath, feedback: feedback || "" }),
+      }).then(function () {
+        setRegenModal(false); setRegenFeedback(""); loadTree();
+      }).catch(function (e) { alert(String((e && e.message) || e)); });
+    }
+
     function createPresentation() {
       if (!presTopic.trim() || !presOutline.trim()) return;
       api("/present", {
@@ -1153,6 +1172,13 @@
       ? "/chat?resume=" + encodeURIComponent(iter.sessionId) : null;
     var topicOpen = anyOpen(topicStates);
     var presentOpen = anyOpen(presentStates);
+    var isAssetImage = sel && /\.(jpg|jpeg|png|webp)$/i.test(sel.name) &&
+      sel.relPath.indexOf("/assets/") !== -1;
+    var isDeckPdf = sel && sel.ext === ".pdf";
+    var regen = sel && regenStates[sel.relPath];
+    var regenOpen = !!regen && regen.status === "open";
+    var regenChat = regenOpen && regen.sessionId
+      ? "/chat?resume=" + encodeURIComponent(regen.sessionId) : null;
 
     // Preview header (paperclip deliverables parity): path · mtime · actions
     var previewHead = sel ? h("div", { className: "yti-preview-head" },
@@ -1177,6 +1203,25 @@
             : "Rewrite this script from its concept doc, steered by your input",
           onClick: function () { setSteering(""); setIterModal(true); },
         }, iterOpen ? "Iterating…" : "Iterate ↻") : null,
+        isAssetImage ? h(Button, {
+          size: "sm",
+          disabled: regenOpen,
+          title: regenOpen
+            ? "Regenerating — a fixed version of this image is being generated"
+            : "Regenerate JUST this image with your feedback (e.g. a misspelling), then rebuild the deck PDF — no other image is touched",
+          onClick: function () { setRegenFeedback(""); setRegenModal(true); },
+        }, regenOpen ? "Regenerating…" : "Regenerate ↻") : null,
+        isDeckPdf ? h(Button, {
+          size: "sm",
+          variant: "outline",
+          disabled: regenOpen,
+          title: regenOpen
+            ? "Rebuilding — the PDF is being reassembled"
+            : "Reassemble this PDF from the newest version of every image (use after regenerating an image)",
+          onClick: function () { regenerateSelected(""); },
+        }, regenOpen ? "Rebuilding…" : "Rebuild PDF") : null,
+        regenChat ? h("a", { className: "yti-gen-link", href: regenChat,
+          onClick: function (e) { e.preventDefault(); window.location.assign(regenChat); } }, "chat ↗") : null,
         iterChat ? h("a", { className: "yti-gen-link", href: iterChat,
           onClick: function (e) { e.preventDefault(); window.location.assign(iterChat); } }, "chat ↗") : null,
         prodChat ? h("a", { className: "yti-gen-link", href: prodChat,
@@ -1354,6 +1399,26 @@
           h(Button, { size: "sm", variant: "outline",
             onClick: function () { setIterModal(false); } }, "Cancel"),
           h(Button, { size: "sm", onClick: iterateScript }, "Iterate ↻"))
+      ) : null,
+      regenModal && sel ? h(YtiModal, { onClose: function () { setRegenModal(false); } },
+        h("h3", null, "Regenerate this image"),
+        h("p", { className: "yti-modal-sub" },
+          "Regenerates ", h("code", null, sel.name), " only — every other ",
+          "image is untouched — then rebuilds the deck PDF with the fix. ",
+          "The old file is kept alongside."),
+        h("label", null, "What's wrong? (your feedback steers the fix)"),
+        h("textarea", {
+          value: regenFeedback,
+          autoFocus: true,
+          placeholder: "e.g. \"AUTHENTICATION\" is misspelled as \"AUTHENTCATION\" on the left sticky note — fix the spelling, keep everything else the same.",
+          onChange: function (e) { setRegenFeedback(e.target.value); },
+        }),
+        h("div", { className: "yti-modal-actions" },
+          h(Button, { size: "sm", variant: "outline",
+            onClick: function () { setRegenModal(false); } }, "Cancel"),
+          h(Button, { size: "sm",
+            onClick: function () { regenerateSelected(regenFeedback); } },
+            "Regenerate ↻"))
       ) : null,
       presentModal ? h(YtiModal, { onClose: function () { setPresentModal(false); } },
         h("h3", null, "Outline → Presentation"),

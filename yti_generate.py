@@ -494,23 +494,186 @@ def _states_for(meta_key: str) -> dict[str, dict[str, Any]]:
 
 _ASSET_IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".webp"}
 
+# ---------------------------------------------------------------------------
+# Targeted regeneration: fix ONE image (with the user's feedback) or rebuild
+# ONE PDF — never re-produce the whole set. The regenerated file sits beside
+# the old one (timestamp suffix), and the PDF is reassembled from the newest
+# image per slot so the fix lands in the deliverable.
+# ---------------------------------------------------------------------------
+
+REGEN_META_KEY = "regen_tasks"
+REGEN_SKILLS = (
+    "youtube-insights:youtube-content-creator",
+    "youtube-insights:generate-image",
+)
+
+_PDF_REBUILD_CONTRACT = [
+    "**PDF rebuild contract** (same geometry as Produce): pdfkit + sharp",
+    "(`npm list sharp pdfkit || npm install --no-save sharp pdfkit`), page",
+    "size exactly [960, 540], margin 0, full-bleed",
+    "`doc.image(p, 0, 0, {fit:[960,540], align:'center', valign:'center'})`.",
+    "Never pass layout:'landscape' with an explicit size array. Page order:",
+    "thumbnails (a..f) first, then beat images by numeric prefix. For every",
+    "slot (thumb letter / numeric prefix) include ONLY the NEWEST file —",
+    "regenerated images carry timestamp suffixes and must supersede their",
+    "older siblings. Verify every MediaBox is `0 0 960 540` before",
+    "completing.",
+]
+
+
+def _build_regen_brief(image_abs: Path, feedback: str) -> str:
+    assets_dir = image_abs.parent
+    script_dir = assets_dir if assets_dir.name != "assets" else assets_dir.parent
+    # recommended/ decks keep per-variant subdirs (assets/<variant>/x.jpg)
+    if script_dir.name != "assets" and script_dir.parent.name == "assets":
+        script_dir = script_dir.parent.parent
+    return "\n".join([
+        "## MANDATORY: Regenerate ONE image from user feedback, then rebuild",
+        "the PDF. Do NOT touch any other image.",
+        "",
+        f"**Image to fix:** {image_abs}",
+        f"**Script folder:** {script_dir}/ (read the script-outline*.md",
+        "matching this image's variant to find its Visual / Thumbnail",
+        "Option spec — the numeric prefix maps to the beat, `thumb-<letter>`",
+        "maps to the Thumbnail Options entry)",
+        "",
+        "### The user's feedback (the reason this image is being redone)",
+        "",
+        "```",
+        (feedback or "").strip() or "(none given — re-roll the same spec)",
+        "```",
+        "",
+        "### Steps",
+        "1. Read the script's Visual/Thumbnail spec for THIS image and the",
+        "   old image itself; understand exactly what the feedback calls out.",
+        "2. Regenerate ONE image via the `youtube-insights:generate-image`",
+        "   skill with the same conventions Produce used: beat images pass",
+        "   the whiteboard baseline as `--input`; speaker thumbnails use the",
+        "   $HERMES_HOME/media portrait; always pass `--expect-text` with",
+        "   every rendered label (exact spelling). Fold the feedback into",
+        "   the prompt EXPLICITLY (e.g. spell a previously-misspelled word",
+        "   letter by letter). Save into the SAME folder — the skill's",
+        "   timestamp suffix keeps the old file; never delete it.",
+        "3. Rebuild the deck PDF beside the script (same stem as the",
+        "   script file).",
+    ] + _PDF_REBUILD_CONTRACT + [
+        "4. Attach the new image + rebuilt PDF to THIS kanban task with",
+        "   `kanban_attach`, then `kanban_complete` naming both files.",
+        "",
+        "### CRITICAL RULES",
+        "- ONE image only. Never regenerate the whole set, never re-run",
+        "  Produce, never touch other images.",
+        "- No scratch files in the output folders (a validator sweeps them).",
+    ])
+
+
+def _build_pdf_rebuild_brief(pdf_abs: Path) -> str:
+    script_dir = pdf_abs.parent
+    return "\n".join([
+        "## MANDATORY: Rebuild ONE deck PDF from the newest images on disk.",
+        "Generate NO images — this is pure reassembly.",
+        "",
+        f"**PDF:** {pdf_abs}",
+        f"**Images:** {script_dir}/assets/ (and its variant subfolders)",
+        "",
+    ] + _PDF_REBUILD_CONTRACT + [
+        "",
+        "Attach the rebuilt PDF to THIS kanban task with `kanban_attach`,",
+        "then `kanban_complete`. No scratch files in the output folders",
+        "(a validator sweeps them).",
+    ])
+
+
+def create_regen_task(rel_path: str, feedback: str = "") -> dict[str, Any]:
+    """Create (or reuse a still-open) targeted-regeneration task for one
+    image (regen + PDF rebuild) or one PDF (rebuild only)."""
+    kb = _kanban()
+    if kb is None:
+        return {"error": "kanban unavailable"}
+    try:
+        from . import yti_workspace
+    except ImportError:
+        import yti_workspace  # type: ignore
+    workspace = yti_paths.workspace_dir()
+    target = yti_workspace.resolve_inside_workspace(workspace, rel_path or "")
+    if target is None or not target.exists():
+        return {"error": f"file not found in workspace: {rel_path}"}
+    is_pdf = target.suffix.lower() == ".pdf"
+    if not is_pdf and target.suffix.lower() not in _ASSET_IMAGE_EXTS:
+        return {"error": "regeneration works on asset images or deck PDFs"}
+    key = rel_path
+    conn = yti_store.connect()
+    try:
+        raw = yti_store.get_meta(conn, REGEN_META_KEY)
+        try:
+            mapping = json.loads(raw) if raw else {}
+            if not isinstance(mapping, dict):
+                mapping = {}
+        except ValueError:
+            mapping = {}
+        entry = mapping.get(key) or {}
+        existing = entry.get("taskId")
+        with kb.connect_closing() as conn_kb:
+            if existing and _kanban_task_open(kb, conn_kb, existing):
+                age = _age_minutes(entry.get("createdAt"))
+                if age is not None and age < STALE_MINUTES:
+                    return {"ok": True, "taskId": existing, "already": True}
+            task_id = kb.create_task(
+                conn_kb,
+                title=(f"Rebuild PDF: {target.name}" if is_pdf
+                       else f"Regenerate image: {target.name}"),
+                body=(_build_pdf_rebuild_brief(target) if is_pdf
+                      else _build_regen_brief(target, feedback)),
+                assignee=resolve_kanban_assignee(),
+                created_by="youtube-insights",
+                workspace_kind="scratch",
+                skills=list(REGEN_SKILLS),
+                priority=10,
+            )
+        mapping[key] = {"taskId": task_id, "createdAt": _now_iso()}
+        yti_store.set_meta(conn, REGEN_META_KEY, json.dumps(mapping))
+    except Exception as exc:
+        return {"error": f"could not create the regeneration task: {exc}"}
+    finally:
+        conn.close()
+    kick_dispatcher()
+    return {"ok": True, "taskId": task_id}
+
+
+def regen_states() -> dict[str, dict[str, Any]]:
+    """Per-file regeneration state for the Artifacts page."""
+    return _states_for(REGEN_META_KEY)
+
 
 def handle_produce_completion(conn, kanban_task_id: str) -> Optional[dict[str, Any]]:
     """kanban_task_completed hook: when a produce task finishes, sweep its
     assets/ folder — workers sometimes leave scratch scripts and logs there,
     but the Artifacts tab should show ONLY images. Deterministic cleanup;
     never touches images, the script, or the PDF."""
-    raw = yti_store.get_meta(conn, PRODUCE_META_KEY)
-    try:
-        mapping = json.loads(raw) if raw else {}
-    except ValueError:
-        return None
-    if not isinstance(mapping, dict):
-        return None
+    for meta_key in (PRODUCE_META_KEY, REGEN_META_KEY):
+        raw = yti_store.get_meta(conn, meta_key)
+        try:
+            mapping = json.loads(raw) if raw else {}
+        except ValueError:
+            continue
+        if not isinstance(mapping, dict):
+            continue
+        hit = _sweep_for_task(mapping, kanban_task_id)
+        if hit is not None:
+            return hit
+    return None
+
+
+def _sweep_for_task(mapping: dict, kanban_task_id: str) -> Optional[dict[str, Any]]:
     for key, entry in mapping.items():
         if not isinstance(entry, dict) or entry.get("taskId") != kanban_task_id:
             continue
-        script_dir = (yti_paths.workspace_dir() / key).parent
+        p = yti_paths.workspace_dir() / key
+        # keys are script paths (produce) or asset/pdf paths (regen):
+        # the deck folder is everything above any assets/ segment.
+        parts = list(p.parent.parts)
+        script_dir = Path(*parts[:parts.index("assets")]) \
+            if "assets" in parts else p.parent
         removed = []
         assets = script_dir / "assets"
         if assets.is_dir():

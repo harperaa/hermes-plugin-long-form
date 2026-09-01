@@ -237,6 +237,27 @@ def get_present_states() -> dict[str, Any]:
     return {"states": yti_generate.present_states()}
 
 
+class RegenBody(BaseModel):
+    path: str
+    feedback: str = ""
+
+
+@router.post("/regen")
+def post_regen(body: RegenBody) -> dict[str, Any]:
+    """Artifacts page targeted fix: regenerate ONE asset image from user
+    feedback (then rebuild its deck PDF), or rebuild ONE PDF from the
+    newest images — never the whole set."""
+    result = yti_generate.create_regen_task(body.path, body.feedback)
+    if result.get("error"):
+        raise HTTPException(status_code=400, detail=result["error"])
+    return result
+
+
+@router.get("/regen-states")
+def get_regen_states() -> dict[str, Any]:
+    return {"states": yti_generate.regen_states()}
+
+
 @router.post("/pipeline-run")
 def post_pipeline_run() -> dict[str, Any]:
     """Artifacts tab '3 More' button: run the twice-daily content pipeline
