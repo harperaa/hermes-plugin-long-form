@@ -1323,21 +1323,54 @@
           else produced[dir] = 1;
         }
       });
-      // Outline->presentation expansions spin too: keys are "{date}/{slug}"
-      // and the deck lands at youtube/{date}/presentations/{slug}. Decorate
-      // every prefix INCLUDING the deck folder itself, so the nearest
-      // EXISTING ancestor spins even before the worker creates the folder.
-      Object.keys(presentStates || {}).forEach(function (key) {
-        if ((presentStates[key] || {}).status !== "open") return;
-        var bits = key.split("/");
-        if (bits.length < 2) return;
-        var rel = "youtube/" + bits[0] + "/presentations/" +
-          bits.slice(1).join("/");
+      // EVERY background action spins the tree, not just Produce. Decorate
+      // every prefix INCLUDING the target itself, so the nearest EXISTING
+      // ancestor spins even before a worker creates the folder.
+      function spinPath(rel) {
         var parts = rel.split("/");
         for (var i = 2; i <= parts.length; i++) {
           producing[parts.slice(0, i).join("/")] = 1;
         }
+      }
+      // Outline->presentation expansions: keys are "{date}/{slug}",
+      // deck lands at youtube/{date}/presentations/{slug}.
+      Object.keys(presentStates || {}).forEach(function (key) {
+        if ((presentStates[key] || {}).status !== "open") return;
+        var bits = key.split("/");
+        if (bits.length >= 2)
+          spinPath("youtube/" + bits[0] + "/presentations/" +
+                   bits.slice(1).join("/"));
       });
+      // Topic generation (Generate ✨): keys are "{date}/{slug}",
+      // scripts land at youtube/{date}/recommended/{slug}.
+      Object.keys(topicStates || {}).forEach(function (key) {
+        if ((topicStates[key] || {}).status !== "open") return;
+        var bits = key.split("/");
+        if (bits.length >= 2)
+          spinPath("youtube/" + bits[0] + "/recommended/" +
+                   bits.slice(1).join("/"));
+      });
+      // Iterate ↻: keys are the script's own relPath — spin its folders.
+      Object.keys(iterate || {}).forEach(function (rel) {
+        if ((iterate[rel] || {}).status !== "open") return;
+        spinPath(rel.split("/").slice(0, -1).join("/"));
+      });
+      // Regenerate ↻ / Rebuild PDF: keys are the image/pdf relPath.
+      Object.keys(regenStates || {}).forEach(function (rel) {
+        if ((regenStates[rel] || {}).status !== "open") return;
+        spinPath(rel.split("/").slice(0, -1).join("/"));
+      });
+      // 3 More 🔁 (pipeline): no per-run path — spin today's recommended
+      // folder (browser-local AND UTC date, they can differ near midnight).
+      if (pipelineRunning) {
+        var d = new Date();
+        var pad = function (n) { return (n < 10 ? "0" : "") + n; };
+        var localDay = d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" +
+          pad(d.getDate());
+        var utcDay = d.toISOString().slice(0, 10);
+        spinPath("youtube/" + localDay + "/recommended");
+        if (utcDay !== localDay) spinPath("youtube/" + utcDay + "/recommended");
+      }
       return { producing: producing, produced: produced };
     })();
 
