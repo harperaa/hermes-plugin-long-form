@@ -164,6 +164,19 @@ The SAME beat rewritten to pass — one thread of talk, ~200 words for 80 second
 
 Every produced script is checked mechanically against this contract by the `yt_lint_script` tool (word budgets vs timestamps, fragment lines, fragment hooks) — run it on every script you write and fix every finding before calling the script done.
 
+**The operator's voice (MANDATORY check before writing any spoken line).**
+Look for `$HERMES_HOME/plugins-data/youtube-insights/voice-profile.md`
+(default HERMES_HOME ~/.hermes; /opt/data in the container). When it exists,
+it holds VERBATIM samples of the operator's own recorded speech — write every
+spoken line the way THIS person actually talks: their rhythm, sentence
+length, transitions, recurring phrases, formality, humor. Mimic patterns,
+never the samples' subject matter. Also read `$HERMES_HOME/SOUL.md` and
+`$HERMES_HOME/memories/USER.md` (when present) for tone. HARD PROVENANCE
+RULE: the voice comes ONLY from those files — never imitate the style of
+competitor transcripts, the insight base, prior generated scripts, or any
+other speaker quoted anywhere. When no profile exists, the Sound-human rules
+below stand alone.
+
 **Sound human — kill the AI voice.** Spoken lines must pass as words a real person would say on camera, unscripted-sounding even though they're scripted. Concretely:
 
 * **Banned AI-isms** — these words and constructions never appear in a spoken line: delve, dive into / deep dive, unpack, unlock, leverage (as a verb), robust, seamless, elevate, empower, game-changer / game-changing, revolutionize, "in today's fast-paced world", "in the ever-evolving landscape of", "it's important to note", "at the end of the day" (as filler), "whether you're a X or a Y", tapestry, journey (metaphorical), navigate (metaphorical), harness, foster, myriad, plethora.

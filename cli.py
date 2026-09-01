@@ -173,7 +173,7 @@ PIPELINE_PROMPT_V3 = (
     "finish by printing that summary for human review."
 )
 
-PIPELINE_PROMPT = (
+PIPELINE_PROMPT_V4 = (
     "Content pipeline: turn YouTube competitive intelligence into concepts "
     "and record-ready scripts for human review. Prerequisite: the youtube-"
     "intelligence-refresh job should have run so transcripts and insights "
@@ -233,6 +233,14 @@ PIPELINE_PROMPT = (
     "(title, angle, the ICP problem each unlocks, evidence, formats "
     "produced, file paths) to youtube/{today}/recommended/SUMMARY.md and "
     "finish by printing that summary for human review."
+)
+
+PIPELINE_PROMPT = PIPELINE_PROMPT_V4 + (
+    " VOICE: before writing any spoken line, follow the "
+    "youtube-content-creator skill's operator-voice check "
+    "(voice-profile.md + SOUL.md + memories/USER.md when present) — every "
+    "script must sound like the operator, never like competitor "
+    "transcripts or the insight base."
 )
 
 

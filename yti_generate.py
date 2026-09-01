@@ -1604,7 +1604,7 @@ def handle_script_completion(conn, kanban_task_id: str) -> Optional[dict[str, An
                 fix_id = kb.create_task(
                     conn_kb,
                     title=f"Fix script format: {key.rsplit('/', 1)[-1]}",
-                    body=_build_fix_brief(findings),
+                    body=_with_voice(_build_fix_brief(findings)),
                     assignee=resolve_kanban_assignee(),
                     created_by="youtube-insights",
                     workspace_kind="scratch",
