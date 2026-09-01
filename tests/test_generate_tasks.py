@@ -513,3 +513,40 @@ def test_custom_style_upload_and_precedence(tmp_home, gen_kanban):
     # falls back to default when selection points at a removed file
     yti_generate.selected_baseline_path().unlink()
     assert yti_generate.selected_baseline_path().name == "00-default-whiteboard.png"
+
+
+# ---- voice projection -------------------------------------------------------
+
+def test_voice_fallback_without_honcho(tmp_home, gen_kanban):
+    import yti_voice
+    assert yti_voice.honcho_config() is None
+    lines = "\n".join(yti_voice.voice_brief_lines())
+    assert "SOUL.md" in lines and "USER.md" in lines
+    assert "No recorded-voice profile" in lines
+    # every script-writing brief carries the VOICE block either way
+    r = yti_generate.create_present_task("Voice Talk", "1. A\n    1. B")
+    body = gen_kanban.created[-1]["body"]
+    assert "### VOICE" in body and "SOUL.md" in body
+
+
+def test_voice_profile_lines_when_present(tmp_home, gen_kanban):
+    import yti_voice
+    yti_voice._write_profile([
+        "So here's the thing about auth, and I say this in every audit "
+        "I run: nobody budgets for the boring parts.",
+        "Look, the framework will happily let you ship the happy path "
+        "and that is exactly the trap I keep seeing.",
+    ])
+    lines = "\n".join(yti_voice.voice_brief_lines())
+    assert "VERBATIM samples" in lines
+    assert "HARD PROVENANCE RULE" in lines
+    text = yti_voice.profile_path().read_text()
+    assert "boring parts" in text and text.startswith("# Voice Profile")
+
+
+def test_voice_profile_char_budget(tmp_home):
+    import yti_voice
+    yti_voice._write_profile(["old " * 50] * 200 + ["NEWEST sample " * 5])
+    text = yti_voice.profile_path().read_text()
+    assert len(text) < yti_voice.MAX_PROFILE_CHARS + 1000
+    assert "NEWEST sample" in text  # newest wins the budget

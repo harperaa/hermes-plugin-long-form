@@ -231,7 +231,7 @@ def create_generation_task(video_id: str) -> dict[str, Any]:
             task_id = kb.create_task(
                 conn_kb,
                 title=generation_task_title(video.get("title") or video_id),
-                body=_build_brief(video, yti_paths.workspace_dir()),
+                body=_with_voice(_build_brief(video, yti_paths.workspace_dir())),
                 assignee=resolve_kanban_assignee(),
                 created_by="youtube-insights",
                 workspace_kind="scratch",
@@ -435,6 +435,21 @@ def selected_baseline_path() -> Path:
     if p is None:
         p = style_path(DEFAULT_STYLE_ID)
     return p or (_baselines_dir() / f"{DEFAULT_STYLE_ID}.png")
+
+
+def _with_voice(brief: str) -> str:
+    """Append the VOICE block (operator's recorded-speech profile when
+    available; SOUL.md/USER.md tone consult always) to a script-writing
+    brief. Best-effort refresh first; never fails the brief."""
+    try:
+        try:
+            from . import yti_voice
+        except ImportError:
+            import yti_voice  # type: ignore
+        yti_voice.refresh_voice_profile()
+        return brief + "\n\n" + "\n".join(yti_voice.voice_brief_lines())
+    except Exception:
+        return brief
 
 
 PRODUCE_META_KEY = "produce_tasks"
@@ -911,7 +926,7 @@ def create_iterate_task(rel_path: str, steering: str = "") -> dict[str, Any]:
             task_id = kb.create_task(
                 conn_kb,
                 title=f"Iterate: {script_abs.stem} ({script_abs.parent.name})",
-                body=_build_iterate_brief(script_abs, steering),
+                body=_with_voice(_build_iterate_brief(script_abs, steering)),
                 assignee=resolve_kanban_assignee(),
                 created_by="youtube-insights",
                 workspace_kind="scratch",
@@ -1055,7 +1070,7 @@ def create_topic_task(topic: str, context: str = "") -> dict[str, Any]:
             task_id = kb.create_task(
                 conn_kb,
                 title=f"Topic Scripts: {topic}",
-                body=_build_topic_brief(topic, context, out_dir),
+                body=_with_voice(_build_topic_brief(topic, context, out_dir)),
                 assignee=resolve_kanban_assignee(),
                 created_by="youtube-insights",
                 workspace_kind="scratch",
@@ -1215,7 +1230,7 @@ def create_present_task(topic: str, outline: str) -> dict[str, Any]:
             task_id = kb.create_task(
                 conn_kb,
                 title=f"Presentation: {topic}",
-                body=_build_present_brief(topic, outline, out_dir),
+                body=_with_voice(_build_present_brief(topic, outline, out_dir)),
                 assignee=resolve_kanban_assignee(),
                 created_by="youtube-insights",
                 workspace_kind="scratch",
@@ -1313,7 +1328,7 @@ def handle_present_completion(conn, kanban_task_id: str) -> Optional[dict[str, A
                 fix_id = kb.create_task(
                     conn_kb,
                     title=f"Fix presentation: {key.rsplit('/', 1)[-1]}",
-                    body=_build_present_fix_brief(entry, problems),
+                    body=_with_voice(_build_present_fix_brief(entry, problems)),
                     assignee=resolve_kanban_assignee(),
                     created_by="youtube-insights",
                     workspace_kind="scratch",
