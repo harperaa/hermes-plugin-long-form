@@ -1243,11 +1243,12 @@
             ? "Producing — images, thumbnails, and PDF are being generated"
             : "Generate a full image set + thumbnails + PDF. Re-producing makes a NEW numbered set (assets/2, 3…) with its own N.-prefixed PDF — earlier sets are kept",
           onClick: produceScript,
-          className: "yti-produce-btn",
+          className: "yti-produce-btn" + (prodOpen ? " yti-busy" : ""),
         }, prodOpen ? "Producing…" : "Produce 🎥") : null,
         isScript ? h(Button, {
           size: "sm",
           variant: "outline",
+          className: iterOpen ? "yti-busy" : undefined,
           disabled: iterOpen,
           title: iterOpen
             ? "Iterating — the script is being rewritten from your steering"
@@ -1256,6 +1257,7 @@
         }, iterOpen ? "Iterating…" : "Iterate ↻") : null,
         isAssetImage ? h(Button, {
           size: "sm",
+          className: regenOpen ? "yti-busy" : undefined,
           disabled: regenOpen,
           title: regenOpen
             ? "Regenerating — a fixed version of this image is being generated"
@@ -1265,6 +1267,7 @@
         isDeckPdf ? h(Button, {
           size: "sm",
           variant: "outline",
+          className: regenOpen ? "yti-busy" : undefined,
           disabled: regenOpen,
           title: regenOpen
             ? "Rebuilding — the PDF is being reassembled"
@@ -1495,6 +1498,7 @@
         h("div", { className: "yti-actions" },
           pipeline.available ? h(Button, {
             size: "sm",
+            className: pipelineRunning ? "yti-busy" : undefined,
             disabled: pipelineRunning,
             title: pipelineRunning
               ? "Running — the content pipeline is finding gaps and writing 3 new topic script sets"
@@ -1503,6 +1507,7 @@
           }, pipelineRunning ? "Running…" : "3 More 🔁") : null,
           h(Button, {
             size: "sm",
+            className: topicOpen ? "yti-busy" : undefined,
             disabled: topicOpen,
             title: topicOpen
               ? "Generating — a topic script set is being written into today's recommended folder"
@@ -1511,6 +1516,7 @@
           }, topicOpen ? "Generating…" : "Generate ✨"),
           h(Button, {
             size: "sm",
+            className: presentOpen ? "yti-busy" : undefined,
             disabled: presentOpen,
             title: presentOpen
               ? "Expanding — an outline is being turned into a presentation script"

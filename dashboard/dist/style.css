@@ -601,3 +601,13 @@
 }
 
 .yti-modal-wide { max-width: min(83vw, 1260px); width: min(83vw, 1260px); }
+
+/* ---- busy buttons pulse while their background run is working ---- */
+@keyframes yti-busy-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+.yti-busy { animation: yti-busy-pulse 1.5s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .yti-busy { animation: none; opacity: 0.7; }
+}
