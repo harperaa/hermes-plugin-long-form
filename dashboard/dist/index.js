@@ -1452,13 +1452,13 @@
           "Upload your own…",
           h("input", { type: "file", accept: "image/*", style: { display: "none" },
                        onChange: function (e) { uploadStyle(e.target); } })),
-        // large preview, right-aligned into the header whitespace
+        // preview beside the selector — 2in tall so the style is legible
         stylePrev ? h("img", {
           src: stylePrev,
           alt: "selected style preview",
           title: "The selected style baseline — every generated image anchors to this look",
-          style: { marginLeft: "auto", height: 110, maxWidth: 300,
-                   objectFit: "contain", borderRadius: 6,
+          style: { height: 192, maxWidth: 460, objectFit: "contain",
+                   borderRadius: 8, marginLeft: 6,
                    border: "1px solid color-mix(in srgb, currentColor 25%, transparent)" },
         }) : null
       ),
