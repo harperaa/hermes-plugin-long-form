@@ -42,7 +42,8 @@ python3 "$GEN_IMG" --prompt "<prompt>" --out "<output-path>.jpg" --aspect-ratio 
 # Sketchnote beat visuals: ALWAYS anchor to the bundled baseline reference
 # (image-to-image via the xAI edits endpoint) so the style stays locked:
 python3 "$GEN_IMG" --prompt "<prompt>" --out "<output-path>.jpg" --aspect-ratio 16:9 \
-    --input "<baseline named by the task brief>" --expect-text "..."
+    --input "<baseline named by the task brief>" --expect-text "..." \
+    --context "<beat title + its spoken lines, condensed>"
 
 # Higher-quality variant (slower):
 python3 "$GEN_IMG" --prompt "<prompt>" --out "<output-path>.jpg" --aspect-ratio 16:9 --model grok-imagine-image-quality
@@ -68,6 +69,10 @@ illegible labels, and auto-regenerates with a corrective prompt (up to
 
 1. **Always pass `--expect-text`** with the exact labels/title the image must
    render — the verifier checks them letter-for-letter.
+1b. **Always pass `--context`** for beat/slide images: the beat title plus its
+   spoken lines condensed to 1-2 sentences. The verifier FAILS any image a
+   viewer would not understand as illustrating that script text (headline
+   present, elements meaningful for the message).
 2. **Never pass `--no-verify`** for deliverables. It exists only for throwaway
    experiments.
 3. If the script exits with a QA failure after retries, do NOT deliver the

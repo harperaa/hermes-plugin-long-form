@@ -241,7 +241,8 @@ def generate(prompt: str, out: Path, n: int, model: str,
 VERIFY_MODEL = os.environ.get("YTI_VERIFY_MODEL", "grok-4.5")
 
 
-def verify_image(path: Path, prompt: str, expect_text: str | None) -> dict:
+def verify_image(path: Path, prompt: str, expect_text: str | None,
+                 context: str | None = None) -> dict:
     """Vision-QA a generated image: transcribe rendered text, flag misspellings
     and visual defects. Returns {"pass": bool, "issues": [...], "text": "..."}."""
     provider, token = resolve_provider()
@@ -269,6 +270,14 @@ def verify_image(path: Path, prompt: str, expect_text: str | None) -> dict:
            "letter-by-letter reading in \"text\", and compare it to the "
            "expected spelling before deciding pass/fail. "
            if expect_text else "")
+        + (f"4) CONTEXT FIT: this image illustrates the following script "
+           f"passage: {context!r}. Judge whether a viewer seeing ONLY the "
+           "image would understand it as illustrating that passage: the "
+           "headline/topic must be present and the elements must make "
+           "sense for its message. FAIL (add an issue starting with "
+           "'context:') if the image does not describe or fit the script "
+           "text. "
+           if context else "")
         + 'Reply with ONLY a JSON object: {"pass": true|false, "text": "<all transcribed text>", '
           '"issues": ["<each problem found>"]}. Fail on ANY spelling error or garbled text.'
     )
@@ -321,6 +330,10 @@ def main() -> None:
                          "the sketchnote style")
     ap.add_argument("--expect-text", default=None,
                     help="Comma-separated labels that must appear spelled exactly")
+    ap.add_argument("--context", default=None,
+                    help="The script text this image illustrates (beat title + "
+                         "condensed spoken lines) — the QA gate fails images "
+                         "that don't make sense for it")
     ap.add_argument("--no-verify", action="store_true",
                     help="Skip the vision QA gate (NOT recommended)")
     ap.add_argument("--retries", type=int, default=2,
@@ -353,7 +366,8 @@ def main() -> None:
             return
         failures: list[tuple[Path, dict]] = []
         for path in written:
-            verdict = verify_image(path, args.prompt, args.expect_text)
+            verdict = verify_image(path, args.prompt, args.expect_text,
+                                   args.context)
             if verdict.get("pass"):
                 print(f"saved: {path} (QA pass; text: {verdict.get('text', '')[:120]!r})")
             else:
