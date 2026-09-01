@@ -13,7 +13,7 @@ the bundled reference as the source image (`--input`, xAI `images/edits`) —
 the directive text plus the source image together carry the style.
 
 **Default: `sketchnote` — the channel's signature style.** It matches the
-bundled `youtube-baseline-reference.png` (in the `generate-image` and
+operator-selected baseline (catalog in the `generate-image` skill's `baselines/` dir, default `00-default-whiteboard.png`; also in the
 `youtube-content-creator` skill directories); always verify generated beat
 images against that reference.
 
@@ -21,7 +21,7 @@ images against that reference.
 
 ### sketchnote — Sketchnote on paper (DEFAULT)
 - **Recommended for:** Explainer / educational — the channel's signature style
-- **Directive:** Sketchnote-on-paper beat visual: warm cream paper (~#FAF6EC), faint pencil grid, muted pastel palette (pale sky blue, mint, buttercream, dusty coral, manila tan) with charcoal linework, thin hand-drawn frame with corner brackets, hand-lettered titles. Verify every beat image against youtube-baseline-reference.png.
+- **Directive:** Sketchnote-on-paper beat visual: warm cream paper (~#FAF6EC), faint pencil grid, muted pastel palette (pale sky blue, mint, buttercream, dusty coral, manila tan) with charcoal linework, thin hand-drawn frame with corner brackets, hand-lettered titles. Verify every beat image against the SELECTED baseline the task brief names — the selected style OVERRIDES this directive's palette wording when they differ.
 
 ### whiteboard — Whiteboard diagram
 - **Recommended for:** Technical / architecture breakdowns

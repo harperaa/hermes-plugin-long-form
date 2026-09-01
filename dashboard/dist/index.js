@@ -930,6 +930,8 @@
     var regenModal = regenModalState[0], setRegenModal = regenModalState[1];
     var regenFeedbackState = useState("");
     var regenFeedback = regenFeedbackState[0], setRegenFeedback = regenFeedbackState[1];
+    var stylesState = useState({ styles: [], selected: "" });
+    var styleCat = stylesState[0], setStyleCat = stylesState[1];
     var pipeState = useState({ available: false, running: false });
     var pipeline = pipeState[0], setPipeline = pipeState[1];
     // The cron scheduler starts the execution on its next tick (up to ~1 min
@@ -956,6 +958,9 @@
         .catch(function () {});
       api("/regen-states").then(function (d) { setRegenStates((d && d.states) || {}); })
         .catch(function () {});
+      api("/styles").then(function (d) {
+        if (d && d.styles) setStyleCat(d);
+      }).catch(function () {});
       api("/pipeline-state").then(function (d) { setPipeline(d || {}); })
         .catch(function () {});
     }, []);
@@ -1066,6 +1071,34 @@
       api("/pipeline-run", { method: "POST" })
         .then(function () { setKickedAt(Date.now()); loadTree(); })
         .catch(function (e) { alert(String((e && e.message) || e)); });
+    }
+
+    function selectStyle(id) {
+      api("/styles/select", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: id }),
+      }).then(function () {
+        setStyleCat(Object.assign({}, styleCat, { selected: id }));
+      }).catch(function (e) { alert(String((e && e.message) || e)); });
+    }
+
+    function uploadStyle(fileEl) {
+      var f = fileEl && fileEl.files && fileEl.files[0];
+      if (!f) return;
+      var reader = new FileReader();
+      reader.onload = function () {
+        var b64 = String(reader.result || "").split(",")[1] || "";
+        api("/styles/upload", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ filename: f.name, dataBase64: b64 }),
+        }).then(function () {
+          fileEl.value = "";
+          api("/styles").then(function (d) { if (d && d.styles) setStyleCat(d); });
+        }).catch(function (e) { alert(String((e && e.message) || e)); });
+      };
+      reader.readAsDataURL(f);
     }
 
     function regenerateSelected(feedback) {
@@ -1382,6 +1415,33 @@
           }, presentOpen ? "Expanding…" : "Outline → Presentation 🖼️"),
           h(Button, { size: "sm", variant: "outline", onClick: loadTree }, "Refresh")
         )
+      ),
+      // Image style: the baseline every generated beat/slide image anchors to
+      h("div", { style: { display: "flex", alignItems: "center", gap: 10,
+                          margin: "6px 0 10px", fontSize: 13 } },
+        h("span", { style: { opacity: .75 } }, "Image style:"),
+        styleCat.selected ? h("img", {
+          src: "/api/plugins/youtube-insights/styles/preview?id=" +
+            encodeURIComponent(styleCat.selected) + "&v=" + encodeURIComponent(styleCat.selected),
+          alt: "style preview",
+          style: { height: 34, borderRadius: 4, border: "1px solid color-mix(in srgb, currentColor 25%, transparent)" },
+        }) : null,
+        h("select", {
+          value: styleCat.selected,
+          title: "Every generated slide/beat image anchors to this style (image-to-image). Applies to Produce, Regenerate, and future runs until changed.",
+          style: { fontSize: 13, padding: "3px 6px", borderRadius: 6,
+                   background: "transparent", color: "inherit",
+                   border: "1px solid color-mix(in srgb, currentColor 25%, transparent)" },
+          onChange: function (e) { selectStyle(e.target.value); },
+        }, (styleCat.styles || []).map(function (s) {
+          return h("option", { key: s.id, value: s.id,
+                               style: { color: "#111" } }, s.name);
+        })),
+        h("label", { style: { cursor: "pointer", textDecoration: "underline", opacity: .8 },
+                     title: "Upload your own example image — it becomes the style anchor for every generation until you change it" },
+          "Upload your own…",
+          h("input", { type: "file", accept: "image/*", style: { display: "none" },
+                       onChange: function (e) { uploadStyle(e.target); } }))
       ),
       iterModal && sel ? h(YtiModal, { onClose: function () { setIterModal(false); } },
         h("h3", null, "Iterate on this script"),

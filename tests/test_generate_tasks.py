@@ -479,3 +479,37 @@ def test_regen_completion_sweeps(conn, tmp_home, gen_kanban):
     res = yti_generate.handle_produce_completion(conn, tid)
     assert res and res["swept"] == 2, res
     assert p.exists()
+
+
+# ---- image style selection --------------------------------------------------
+
+def test_style_catalog_and_selection(tmp_home, gen_kanban):
+    cat = yti_generate.style_catalog()
+    ids = [s["id"] for s in cat["styles"]]
+    assert "00-default-whiteboard" in ids
+    assert len(ids) >= 21  # default + 20 bundled styles
+    assert cat["selected"] == "00-default-whiteboard"
+    assert yti_generate.select_style("14-chalkboard")["ok"]
+    assert yti_generate.style_catalog()["selected"] == "14-chalkboard"
+    assert "error" in yti_generate.select_style("nope")
+    # brief carries the selected baseline path
+    from pathlib import Path as _P
+    rel = "youtube/2026-08-31/presentations/styled/script-outline.md"
+    _mk_script(rel)
+    yti_generate.create_produce_task(rel)
+    assert "14-chalkboard" in gen_kanban.created[-1]["body"]
+
+
+def test_custom_style_upload_and_precedence(tmp_home, gen_kanban):
+    assert "error" in yti_generate.save_custom_style(b"", "png")
+    assert "error" in yti_generate.save_custom_style(b"x", "exe")
+    r = yti_generate.save_custom_style(b"imgbytes", "jpg")
+    assert r.get("ok") and r["selected"] == "custom"
+    p = yti_generate.selected_baseline_path()
+    assert p.name == "custom-style.jpg" and p.read_bytes() == b"imgbytes"
+    # replacing swaps extension cleanly
+    yti_generate.save_custom_style(b"png2", "png")
+    assert yti_generate.selected_baseline_path().name == "custom-style.png"
+    # falls back to default when selection points at a removed file
+    yti_generate.selected_baseline_path().unlink()
+    assert yti_generate.selected_baseline_path().name == "00-default-whiteboard.png"

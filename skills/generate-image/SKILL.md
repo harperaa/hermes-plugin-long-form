@@ -42,7 +42,7 @@ python3 "$GEN_IMG" --prompt "<prompt>" --out "<output-path>.jpg" --aspect-ratio 
 # Sketchnote beat visuals: ALWAYS anchor to the bundled baseline reference
 # (image-to-image via the xAI edits endpoint) so the style stays locked:
 python3 "$GEN_IMG" --prompt "<prompt>" --out "<output-path>.jpg" --aspect-ratio 16:9 \
-    --input "$SKILL_DIR/youtube-baseline-reference.png" --expect-text "..."
+    --input "<baseline named by the task brief>" --expect-text "..."
 
 # Higher-quality variant (slower):
 python3 "$GEN_IMG" --prompt "<prompt>" --out "<output-path>.jpg" --aspect-ratio 16:9 --model grok-imagine-image-quality
@@ -50,10 +50,13 @@ python3 "$GEN_IMG" --prompt "<prompt>" --out "<output-path>.jpg" --aspect-ratio 
 
 **Image-to-image IS supported** via `--input <path-or-url>` (routes to the xAI
 `images/edits` endpoint): the source image anchors composition/style and the
-prompt directs the transform. Use `youtube-baseline-reference.png` for
-sketchnote beats AND presentation slides (one template for both — the
-operator's chosen anchor) and `whiteboard-background.png` for whiteboard
-diagrams.
+prompt directs the transform. Beat/slide images anchor to the operator's
+SELECTED style baseline — the task brief names the exact file (the catalog
+lives in this skill's `baselines/` dir, default
+`baselines/00-default-whiteboard.png`; a `custom-style.*` upload on the data
+volume overrides when selected). Match the named baseline's look in your
+prompts — it OVERRIDES any hardcoded style wording in this document. Use
+`whiteboard-background.png` for whiteboard architecture diagrams.
 
 ## Mandatory QA gate — spelling and quality (never skip)
 
@@ -162,13 +165,13 @@ the look drifts.
 
 **This is the required style for every image used inside a YouTube video** — beat visuals, in-video diagrams, explainer cards. It is **distinct from the whiteboard architecture-diagram style above**. Thumbnails are also distinct (see "Whiteboard vs Non-Whiteboard" section).
 
-The baseline reference is `youtube-baseline-reference.png` — a polished sketchnote-on-paper composition titled "VIBE SHIP MEETS AUDIT" (cream paper, faint pencil grid, thin black frame with corner brackets, pastel corner scribbles, hand-lettered black title, pastel-filled doodle icons, stick figures with expressive faces, cloud thought bubbles, a bold cross-hatched block arrow). It is the operator's chosen template for BOTH video beat images and presentation slides. Match it.
+The DEFAULT baseline is `baselines/00-default-whiteboard.png` — a polished sketchnote-on-paper composition titled "VIBE SHIP MEETS AUDIT" (cream paper, faint pencil grid, thin black frame with corner brackets, pastel corner scribbles, hand-lettered black title, pastel-filled doodle icons, stick figures with expressive faces, cloud thought bubbles, a bold cross-hatched block arrow). It is the operator's chosen template for BOTH video beat images and presentation slides. Match it.
 
 ### Style Anchor — verify against the baseline reference
 
-The baseline reference `youtube-baseline-reference.png` is bundled in this
-skill's directory. Anchor every beat image to it TWICE: pass it as the
-source image (`--input "$SKILL_DIR/youtube-baseline-reference.png"`, which
+The baseline catalog is bundled in this skill's `baselines/` directory;
+the task brief names the selected file. Anchor every beat image to it TWICE: pass it as the
+source image (`--input "<selected baseline>"`, which
 routes to xAI `images/edits` image-to-image) AND prefix the **Style
 Preamble** below to every beat prompt verbatim. After each generation, VIEW
 the output side-by-side with the baseline reference; if the canvas, palette,
@@ -179,7 +182,7 @@ interchangeable.
 
 ```bash
 python3 "$GEN_IMG" --prompt "<style preamble + beat prompt>" --out "<output-path>.jpg" \
-    --aspect-ratio 16:9 --input "$SKILL_DIR/youtube-baseline-reference.png" \
+    --aspect-ratio 16:9 --input "<selected baseline from the task brief>" \
     --expect-text "<title and any labels that must appear letter-perfect>"
 ```
 
@@ -289,7 +292,7 @@ Closing tagline at the very bottom, full width, bold script-leaning hand-letteri
 
 Generous white space. No watermarks. No scaffolding words." \
     --out "03-beat1-throughput-shift-$(date +%Y%m%d-%H%M).jpg" \
-    --input "$SKILL_DIR/youtube-baseline-reference.png" --aspect-ratio 16:9 \
+    --input "<selected baseline from the task brief>" --aspect-ratio 16:9 \
     --expect-text "AGENTS DON'T REPLACE DEVELOPERS,Solo Developer,Agent-Augmented Team,40 hrs / feature,4 hrs / feature,10x the throughput.,Examples,The bottleneck was never the keyboard."
 ```
 

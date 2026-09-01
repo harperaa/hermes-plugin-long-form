@@ -335,6 +335,108 @@ def generation_states() -> dict[str, dict[str, Any]]:
 # PDF — run by a single hermes worker on an existing script-outline file.
 # ---------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------
+# Image style: the baseline reference every beat/slide image anchors to
+# (image-to-image). A catalog of bundled styles lives in the generate-image
+# skill's baselines/ dir; the operator can also upload their OWN example,
+# stored on the data volume and used until changed.
+# ---------------------------------------------------------------------------
+
+STYLE_META_KEY = "image_style"
+DEFAULT_STYLE_ID = "00-default-whiteboard"
+_STYLE_EXTS = (".png", ".jpg", ".jpeg", ".webp")
+_CUSTOM_STYLE_STEM = "custom-style"
+
+
+def _baselines_dir() -> Path:
+    return Path(__file__).resolve().parent / "skills" / "generate-image" / "baselines"
+
+
+def _custom_style_file() -> Optional[Path]:
+    for ext in _STYLE_EXTS:
+        p = yti_paths.data_dir() / f"{_CUSTOM_STYLE_STEM}{ext}"
+        if p.exists():
+            return p
+    return None
+
+
+def style_catalog() -> dict[str, Any]:
+    """Bundled styles + the operator's custom upload + current selection."""
+    styles = []
+    d = _baselines_dir()
+    if d.is_dir():
+        for p in sorted(d.iterdir()):
+            if p.suffix.lower() in _STYLE_EXTS:
+                name = p.stem.split("-", 1)[-1].replace("-", " ").title() \
+                    if "-" in p.stem else p.stem
+                styles.append({"id": p.stem, "name": name})
+    if _custom_style_file() is not None:
+        styles.append({"id": "custom", "name": "My Uploaded Style"})
+    conn = yti_store.connect()
+    try:
+        raw = yti_store.get_meta(conn, STYLE_META_KEY)
+    finally:
+        conn.close()
+    selected = (raw or "").strip() or DEFAULT_STYLE_ID
+    if selected not in {s["id"] for s in styles}:
+        selected = DEFAULT_STYLE_ID
+    return {"styles": styles, "selected": selected}
+
+
+def select_style(style_id: str) -> dict[str, Any]:
+    style_id = (style_id or "").strip()
+    valid = {s["id"] for s in style_catalog()["styles"]}
+    if style_id not in valid:
+        return {"error": f"unknown style: {style_id}"}
+    conn = yti_store.connect()
+    try:
+        yti_store.set_meta(conn, STYLE_META_KEY, style_id)
+    finally:
+        conn.close()
+    return {"ok": True, "selected": style_id}
+
+
+def save_custom_style(payload: bytes, ext: str) -> dict[str, Any]:
+    """Store the operator's own example image and select it — used for
+    every generation until changed."""
+    ext = (ext or "").lower().lstrip(".")
+    if f".{ext}" not in _STYLE_EXTS:
+        return {"error": f"unsupported image type: .{ext}"}
+    if not payload or len(payload) > 15 * 1024 * 1024:
+        return {"error": "image must be non-empty and under 15 MB"}
+    old = _custom_style_file()
+    if old is not None:
+        try:
+            old.unlink()
+        except OSError:
+            pass
+    dst = yti_paths.data_dir() / f"{_CUSTOM_STYLE_STEM}.{ext}"
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    dst.write_bytes(payload)
+    return select_style("custom")
+
+
+def style_path(style_id: str) -> Optional[Path]:
+    """Resolve a style id to its file (None when missing)."""
+    if style_id == "custom":
+        return _custom_style_file()
+    d = _baselines_dir()
+    for ext in _STYLE_EXTS:
+        p = d / f"{style_id}{ext}"
+        if p.exists():
+            return p
+    return None
+
+
+def selected_baseline_path() -> Path:
+    """The baseline image every beat/slide generation anchors to right now."""
+    sel = style_catalog()["selected"]
+    p = style_path(sel)
+    if p is None:
+        p = style_path(DEFAULT_STYLE_ID)
+    return p or (_baselines_dir() / f"{DEFAULT_STYLE_ID}.png")
+
+
 PRODUCE_META_KEY = "produce_tasks"
 PRODUCE_SKILLS = (
     "youtube-insights:youtube-content-creator",
@@ -368,8 +470,11 @@ def _build_produce_brief(script_abs: Path) -> str:
         "   via the",
         "   `youtube-insights:generate-image` skill (grok imagine + its",
         "   mandatory verify_image QA and baseline-reference check). Beat",
-        "   images MUST pass the baseline as the source image:",
-        "   `--input \"<generate-image skill dir>/youtube-baseline-reference.png\"`",
+        "   images MUST pass the operator's SELECTED style baseline as the",
+        "   source image:",
+        f"   `--input \"{selected_baseline_path()}\"`",
+        "   and match that reference's visual style in every prompt (its",
+        "   look OVERRIDES any style wording in skill docs)",
         "   (image-to-image via xAI images/edits) — thumbnails do NOT take the",
         "   baseline input. Its Absolute Rules apply: never substitute",
         "   PIL/canvas/ImageMagick or any hand-rolled generator. Save",
@@ -548,8 +653,11 @@ def _build_regen_brief(image_abs: Path, feedback: str) -> str:
         "   old image itself; understand exactly what the feedback calls out.",
         "2. Regenerate ONE image via the `youtube-insights:generate-image`",
         "   skill with the same conventions Produce used: beat images pass",
-        "   the baseline as `--input` (`<generate-image skill dir>/",
-        "   youtube-baseline-reference.png`); speaker thumbnails use the",
+        "   the operator's SELECTED style baseline as `--input`",
+        f"   (`{selected_baseline_path()}`) and match its visual style —",
+        "   UNLESS the old image visibly follows a different baseline style,",
+        "   in which case match the OLD image's style so one regenerated",
+        "   slide doesn't clash with its deck; speaker thumbnails use the",
         "   $HERMES_HOME/media portrait; always pass `--expect-text` with",
         "   every rendered label (exact spelling). Fold the feedback into",
         "   the prompt EXPLICITLY (e.g. spell a previously-misspelled word",

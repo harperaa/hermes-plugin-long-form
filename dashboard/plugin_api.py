@@ -258,6 +258,56 @@ def get_regen_states() -> dict[str, Any]:
     return {"states": yti_generate.regen_states()}
 
 
+@router.get("/styles")
+def get_styles() -> dict[str, Any]:
+    """Image-style catalog (bundled baselines + custom upload) + selection."""
+    return yti_generate.style_catalog()
+
+
+class StyleSelectBody(BaseModel):
+    id: str
+
+
+@router.post("/styles/select")
+def post_style_select(body: StyleSelectBody) -> dict[str, Any]:
+    result = yti_generate.select_style(body.id)
+    if result.get("error"):
+        raise HTTPException(status_code=400, detail=result["error"])
+    return result
+
+
+class StyleUploadBody(BaseModel):
+    filename: str
+    dataBase64: str
+
+
+@router.post("/styles/upload")
+def post_style_upload(body: StyleUploadBody) -> dict[str, Any]:
+    """Store the operator's own style example — selected and used for every
+    generation until changed."""
+    import base64 as _b64
+    ext = (body.filename or "").rsplit(".", 1)[-1] if "." in (body.filename or "") else ""
+    try:
+        payload = _b64.b64decode(body.dataBase64 or "", validate=True)
+    except Exception:
+        raise HTTPException(status_code=400, detail="invalid base64 payload")
+    result = yti_generate.save_custom_style(payload, ext)
+    if result.get("error"):
+        raise HTTPException(status_code=400, detail=result["error"])
+    return result
+
+
+@router.get("/styles/preview")
+def get_style_preview(id: str):
+    """The style's example image, for the picker preview."""
+    p = yti_generate.style_path((id or "").strip())
+    if FileResponse is None or p is None:
+        raise HTTPException(status_code=404, detail="style not found")
+    mime = "image/png" if p.suffix.lower() == ".png" else "image/jpeg"
+    return FileResponse(str(p), media_type=mime,
+                        headers={"Cache-Control": "no-cache"})
+
+
 @router.post("/pipeline-run")
 def post_pipeline_run() -> dict[str, Any]:
     """Artifacts tab '3 More' button: run the twice-daily content pipeline

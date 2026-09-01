@@ -317,7 +317,7 @@ def main() -> None:
     ap.add_argument("--input", default=None, dest="input_image",
                     help="Starting image (local path or URL) — routes to the "
                          "images/edits endpoint for image-to-image; use the "
-                         "bundled youtube-baseline-reference.png to anchor "
+                         "selected style baseline (see baselines/) to anchor "
                          "the sketchnote style")
     ap.add_argument("--expect-text", default=None,
                     help="Comma-separated labels that must appear spelled exactly")
