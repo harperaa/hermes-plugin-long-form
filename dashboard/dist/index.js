@@ -873,7 +873,7 @@
       className: "yti-modal-overlay",
       onClick: function (e) { if (e.target === e.currentTarget) props.onClose(); },
     },
-      h("div", { className: "yti-modal" }, props.children)
+      h("div", { className: "yti-modal" + (props.wide ? " yti-modal-wide" : "") }, props.children)
     );
   }
 
@@ -934,6 +934,8 @@
     var styleCat = stylesState[0], setStyleCat = stylesState[1];
     var stylePrevState = useState(null);
     var stylePrev = stylePrevState[0], setStylePrev = stylePrevState[1];
+    var styleZoomState = useState(false);
+    var styleZoom = styleZoomState[0], setStyleZoom = styleZoomState[1];
     // A plain <img> can't carry the dashboard auth header — fetch the
     // preview authed and show it as a blob URL (process-diagram pattern).
     useEffect(function () {
@@ -1402,8 +1404,45 @@
 
     return h("div", { className: "yti-artifacts" },
       h("h1", { className: "yti-title yti-title-block" }, "Artifacts"),
-      h("div", { className: "yti-artifacts-head" },
-        h("h2", null, "Workspace Deliverables"),
+      h("div", { className: "yti-artifacts-head", style: { alignItems: "flex-start" } },
+        // left column: title with the style controls tucked beneath it —
+        // the selector lives in the header whitespace, not its own row
+        h("div", { style: { display: "flex", flexDirection: "column",
+                            gap: 10, minWidth: 0 } },
+          h("h2", { style: { margin: 0 } }, "Workspace Deliverables"),
+          h("div", { style: { display: "flex", alignItems: "center", gap: 10,
+                              flexWrap: "wrap", fontSize: 13 } },
+            h("span", { style: { opacity: .75 } }, "Image style:"),
+            h("select", {
+              value: styleCat.selected,
+              title: "Every generated slide/beat image anchors to this style (image-to-image). Applies to Produce, Regenerate, and future runs until changed.",
+              style: { fontSize: 13, padding: "3px 6px", borderRadius: 6,
+                       background: "transparent", color: "inherit",
+                       border: "1px solid color-mix(in srgb, currentColor 25%, transparent)" },
+              onChange: function (e) { selectStyle(e.target.value); },
+            }, (styleCat.styles || []).map(function (s) {
+              return h("option", { key: s.id, value: s.id,
+                                   style: { color: "#111" } }, s.name);
+            })),
+            h("label", { style: { cursor: "pointer", textDecoration: "underline", opacity: .8 },
+                         title: "Upload your own example image — it becomes the style anchor for every generation until you change it" },
+              "Upload your own…",
+              h("input", { type: "file", accept: "image/*", style: { display: "none" },
+                           onChange: function (e) { uploadStyle(e.target); } }))
+          )
+        ),
+        // preview fills the remaining header whitespace, top-aligned and big;
+        // shrinks at narrow widths; click to inspect full-size
+        stylePrev ? h("img", {
+          src: stylePrev,
+          alt: "selected style preview",
+          title: "The selected style baseline — every generated image anchors to this look. Click to enlarge.",
+          onClick: function () { setStyleZoom(true); },
+          style: { maxHeight: 192, maxWidth: 460, minWidth: 0,
+                   flex: "0 1 auto", objectFit: "contain", cursor: "zoom-in",
+                   margin: "0 16px", borderRadius: 8,
+                   border: "1px solid color-mix(in srgb, currentColor 25%, transparent)" },
+        }) : null,
         h("div", { className: "yti-actions" },
           pipeline.available ? h(Button, {
             size: "sm",
@@ -1432,36 +1471,6 @@
           h(Button, { size: "sm", variant: "outline", onClick: loadTree }, "Refresh")
         )
       ),
-      // Image style: the baseline every generated beat/slide image anchors to
-      h("div", { style: { display: "flex", alignItems: "center", gap: 10,
-                          margin: "6px 0 10px", fontSize: 13 } },
-        h("span", { style: { opacity: .75 } }, "Image style:"),
-        h("select", {
-          value: styleCat.selected,
-          title: "Every generated slide/beat image anchors to this style (image-to-image). Applies to Produce, Regenerate, and future runs until changed.",
-          style: { fontSize: 13, padding: "3px 6px", borderRadius: 6,
-                   background: "transparent", color: "inherit",
-                   border: "1px solid color-mix(in srgb, currentColor 25%, transparent)" },
-          onChange: function (e) { selectStyle(e.target.value); },
-        }, (styleCat.styles || []).map(function (s) {
-          return h("option", { key: s.id, value: s.id,
-                               style: { color: "#111" } }, s.name);
-        })),
-        h("label", { style: { cursor: "pointer", textDecoration: "underline", opacity: .8 },
-                     title: "Upload your own example image — it becomes the style anchor for every generation until you change it" },
-          "Upload your own…",
-          h("input", { type: "file", accept: "image/*", style: { display: "none" },
-                       onChange: function (e) { uploadStyle(e.target); } })),
-        // preview beside the selector — 2in tall so the style is legible
-        stylePrev ? h("img", {
-          src: stylePrev,
-          alt: "selected style preview",
-          title: "The selected style baseline — every generated image anchors to this look",
-          style: { height: 192, maxWidth: 460, objectFit: "contain",
-                   borderRadius: 8, marginLeft: 6,
-                   border: "1px solid color-mix(in srgb, currentColor 25%, transparent)" },
-        }) : null
-      ),
       iterModal && sel ? h(YtiModal, { onClose: function () { setIterModal(false); } },
         h("h3", null, "Iterate on this script"),
         h("p", { className: "yti-modal-sub" },
@@ -1478,6 +1487,20 @@
           h(Button, { size: "sm", variant: "outline",
             onClick: function () { setIterModal(false); } }, "Cancel"),
           h(Button, { size: "sm", onClick: iterateScript }, "Iterate ↻"))
+      ) : null,
+      styleZoom && stylePrev ? h(YtiModal, { wide: true, onClose: function () { setStyleZoom(false); } },
+        h("h3", null, "Selected image style"),
+        h("p", { className: "yti-modal-sub" },
+          "Every generated slide and beat image anchors to this look."),
+        h("img", {
+          src: stylePrev,
+          alt: "selected style, full size",
+          style: { display: "block", maxWidth: "100%", maxHeight: "82vh",
+                   objectFit: "contain", borderRadius: 8 },
+        }),
+        h("div", { className: "yti-modal-actions" },
+          h(Button, { size: "sm", variant: "outline",
+            onClick: function () { setStyleZoom(false); } }, "Close"))
       ) : null,
       regenModal && sel ? h(YtiModal, { onClose: function () { setRegenModal(false); } },
         h("h3", null, "Regenerate this image"),
