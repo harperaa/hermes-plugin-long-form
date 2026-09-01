@@ -67,13 +67,26 @@ Use the normal script format (the content-creator contract) so Produce,
 lint, and Iterate all work unchanged:
 
 - `# [Talk title]`, `## Metadata`, `## The Story Arc` — brief, presentation
-  framing (target length = talk length; default ~1 min per slide).
+  framing (target length = slides x ~2:15 each at ~150 wpm).
 - `## Hook (0:00-0:XX)` — the hook slide. Its `**Visual**` is slide 1.
+  150-250 spoken words.
 - `## Beat N: [SLIDE TITLE] (X:XX-X:XX)` — one beat PER SLIDE, in outline
-  order (dividers are beats too). Timestamps = cumulative talk timing.
+  order (dividers are beats too). Timestamps = cumulative talk timing at
+  the standard ~150 WORDS PER MINUTE.
+  - WORD BUDGET (the contract that keeps the talk substantial): each
+    beat carries 300-400 spoken words — roughly 2:00-2:40 of talk time,
+    and its timestamps MUST match that math (a 300-word beat spans ~2:00,
+    not 0:30). A completion validator counts words per beat and REOPENS
+    scripts with thin beats.
   - Spoken bullets = the speaker's TALKING POINTS for that slide: full
-    conversational sentences (15-35 words each, 2-4 per slide) — what the
-    presenter actually says while the slide is up.
+    conversational sentences (15-35 words each, typically 9-14 bullets to
+    land the budget) — what the presenter actually says while the slide
+    is up. TEACH, don't just assert: state the claim, then take time to
+    EXPLAIN the concept in plain language (what it is, how it works, why
+    it happens — define any term a newcomer wouldn't know), then ground
+    it with a concrete example or story and the numbers, then land the
+    so-what. A listener who has never heard the concept should leave the
+    slide understanding it, not just believing it.
   - `**-> HOOK INTO NEXT**:` a complete spoken sentence bridging slides.
   - `**Visual**:` THE HEART OF THIS SKILL — a rich, self-contained
     description of the slide image. It MUST contain, in order:

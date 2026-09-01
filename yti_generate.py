@@ -1268,9 +1268,12 @@ def _build_present_brief(topic: str, outline: str, out_dir: Path) -> str:
         f"  - {out_dir}/concepts.md   (PRESENTATION MODE header, topic,",
         "    outline verbatim, slide map, visual language)",
         f"  - {out_dir}/script-outline.md   (standard script format: Hook +",
-        "    one Beat per slide in outline order, talking-point spoken",
-        "    lines, a rich **Visual** per slide with quoted label text,",
-        "    Production Notes with SIX Thumbnail Options A-F)",
+        "    one Beat per slide in outline order; EVERY beat carries",
+        "    300-400 spoken words (~150 wpm, so timestamps span ~2:00-2:40",
+        "    each) that EXPLAIN the concept — define it, how it works, an",
+        "    example, the so-what — not just assert it; a rich **Visual**",
+        "    per slide with Headline + quoted label text; Production Notes",
+        "    with SIX Thumbnail Options A-F)",
         "",
     ] + contract + [
         "### Step 2 — Format gate (yt_lint_script, NOT optional)",
@@ -1360,6 +1363,33 @@ def present_states() -> dict[str, dict[str, Any]]:
     return _states_for(PRESENT_META_KEY)
 
 
+_BEAT_HEAD_RE = re.compile(r"^## (Beat \d+[^\n]*)$", re.MULTILINE)
+PRESENT_MIN_BEAT_WORDS = 220     # hard floor; the skill's target is 300-400
+
+
+def _thin_beats(text: str) -> list[str]:
+    """Beat sections whose SPOKEN word count sits far below the budget.
+    Spoken lines are plain '- ' bullets (production directions in brackets
+    and **-marked fields don't count) — mirrors the linter's classifier."""
+    heads = list(_BEAT_HEAD_RE.finditer(text))
+    thin: list[str] = []
+    for i, m in enumerate(heads):
+        end = heads[i + 1].start() if i + 1 < len(heads) else len(text)
+        words = 0
+        for line in text[m.end():end].splitlines():
+            line = line.strip()
+            if not line.startswith("- "):
+                continue
+            body = line[2:].strip()
+            if body.startswith("**") or body.startswith("["):
+                continue
+            words += len(body.split())
+        if words < PRESENT_MIN_BEAT_WORDS:
+            thin.append(f"{m.group(1).split('(')[0].strip()} has only "
+                        f"{words} spoken words")
+    return thin
+
+
 def _build_present_fix_brief(entry: dict[str, Any], problems: list[str]) -> str:
     out_dir = entry.get("outDir") or ""
     return "\n".join([
@@ -1424,6 +1454,14 @@ def handle_present_completion(conn, kanban_task_id: str) -> Optional[dict[str, A
                     "truncated")
         if not (out_dir / "concepts.md").exists():
             problems.append(f"concepts.md was never written in {out_dir}")
+        if script.exists():
+            thin = _thin_beats(script.read_text())
+            if thin:
+                problems.append(
+                    "beats far below the 300-400 spoken-word budget "
+                    "(~150 wpm x ~2min per slide) — expand them to EXPLAIN "
+                    "their concepts, not just assert them: "
+                    + "; ".join(thin[:6]))
         if problems:
             retries = int(entry.get("presentRetries") or 0)
             if retries >= PRESENT_MAX_RETRIES:

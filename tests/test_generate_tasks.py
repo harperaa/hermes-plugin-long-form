@@ -377,10 +377,11 @@ def test_present_completion_clean_passes_no_chain(conn, tmp_home, gen_kanban):
     out = Path(r["outDir"])
     out.mkdir(parents=True, exist_ok=True)
     (out / "concepts.md").write_text("**PRESENTATION MODE**")
+    fat_lines = "- word word word word word word word word word word word word word word word word word word word word word word word word word\n" * 10   # 250 spoken words per beat
     (out / "script-outline.md").write_text(
         "# T\n## Hook (0:00-1:00)\n- **Visual**: x\n"
-        "## Beat 1: A (1:00-2:00)\n- line\n- **Visual**: x\n"
-        "## Beat 2: B (2:00-3:00)\n- line\n- **Visual**: x\n")
+        "## Beat 1: A (1:00-3:00)\n" + fat_lines + "- **Visual**: x\n"
+        "## Beat 2: B (3:00-5:00)\n" + fat_lines + "- **Visual**: x\n")
     gen_kanban.tasks[tid]["status"] = "done"
     n_before = len(gen_kanban.created)
     res = yti_generate.handle_present_completion(conn, tid)
@@ -631,3 +632,21 @@ def test_produce_brief_requires_beat_headline_and_fidelity(tmp_home, gen_kanban)
     assert "HEADLINE" in body and "dominant headline" in body
     assert "MESSAGE FIDELITY" in body and "ENRICH the prompt" in body
     assert "--expect-text" in body or "expect-text" in body
+
+
+def test_present_completion_bounces_thin_beats(conn, tmp_home, gen_kanban):
+    r = yti_generate.create_present_task("Thin Deck", "1. A\n    1. B")
+    tid = r["taskId"]
+    out = Path(r["outDir"])
+    out.mkdir(parents=True, exist_ok=True)
+    (out / "concepts.md").write_text("**PRESENTATION MODE**")
+    (out / "script-outline.md").write_text(
+        "# T\n## Hook (0:00-1:00)\n- **Visual**: x\n"
+        "## Beat 1: A (1:00-1:30)\n- short line here\n- **Visual**: x\n"
+        "## Beat 2: B (1:30-2:00)\n- another short one\n- **Visual**: x\n")
+    gen_kanban.tasks[tid]["status"] = "done"
+    res = yti_generate.handle_present_completion(conn, tid)
+    assert res and res.get("fixTask"), res
+    fix_body = gen_kanban.created[-1]["body"]
+    assert "300-400 spoken-word budget" in fix_body
+    assert "EXPLAIN" in fix_body
