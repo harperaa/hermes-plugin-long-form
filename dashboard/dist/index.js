@@ -1323,6 +1323,21 @@
           else produced[dir] = 1;
         }
       });
+      // Outline->presentation expansions spin too: keys are "{date}/{slug}"
+      // and the deck lands at youtube/{date}/presentations/{slug}. Decorate
+      // every prefix INCLUDING the deck folder itself, so the nearest
+      // EXISTING ancestor spins even before the worker creates the folder.
+      Object.keys(presentStates || {}).forEach(function (key) {
+        if ((presentStates[key] || {}).status !== "open") return;
+        var bits = key.split("/");
+        if (bits.length < 2) return;
+        var rel = "youtube/" + bits[0] + "/presentations/" +
+          bits.slice(1).join("/");
+        var parts = rel.split("/");
+        for (var i = 2; i <= parts.length; i++) {
+          producing[parts.slice(0, i).join("/")] = 1;
+        }
+      });
       return { producing: producing, produced: produced };
     })();
 
