@@ -21,6 +21,9 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 from typing import Any, Optional
+import logging
+
+logger = logging.getLogger("youtube-insights.voice")
 
 try:
     from . import yti_paths, yti_store
@@ -154,7 +157,8 @@ def refresh_voice_profile(budget_seconds: float = 8.0) -> dict[str, Any]:
         now = time.time()
         if st.get("updatedAt") and now - st["updatedAt"] < REFRESH_SECONDS \
                 and profile_path().exists():
-            return {"available": profile_path().exists(), "fresh": True}
+            logger.debug("voice profile fresh (cache <6h)")
+            return {"available": True, "fresh": True}
         done = set(st.get("done") or [])
         samples = list(st.get("samples") or [])
         deadline = now + budget_seconds
@@ -177,6 +181,10 @@ def refresh_voice_profile(budget_seconds: float = 8.0) -> dict[str, Any]:
                 break
         if scanned or not profile_path().exists():
             _write_profile(samples)
+        logger.info(
+            "voice profile: scanned %d new session(s) (%d/%d done), "
+            "%d samples, %.1fs", scanned, len(done), len(sessions),
+            len(samples), time.time() - now)
         st = {"done": sorted(done), "samples": samples[-400:],
               "updatedAt": now}
         yti_store.set_meta(conn, VOICE_STATE_KEY, json.dumps(st))
