@@ -1440,7 +1440,8 @@
           onClick: function () { setStyleZoom(true); },
           style: { maxHeight: 192, maxWidth: 460, minWidth: 0,
                    flex: "0 1 auto", objectFit: "contain", cursor: "zoom-in",
-                   margin: "0 16px", borderRadius: 8,
+                   marginLeft: 12, marginRight: "auto", marginTop: -56,
+                   borderRadius: 8,
                    border: "1px solid color-mix(in srgb, currentColor 25%, transparent)" },
         }) : null,
         h("div", { className: "yti-actions" },
@@ -1495,7 +1496,7 @@
         h("img", {
           src: stylePrev,
           alt: "selected style, full size",
-          style: { display: "block", maxWidth: "100%", maxHeight: "82vh",
+          style: { display: "block", maxWidth: "100%", maxHeight: "74vh",
                    objectFit: "contain", borderRadius: 8 },
         }),
         h("div", { className: "yti-modal-actions" },
