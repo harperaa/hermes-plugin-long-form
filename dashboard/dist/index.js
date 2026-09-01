@@ -932,6 +932,22 @@
     var regenFeedback = regenFeedbackState[0], setRegenFeedback = regenFeedbackState[1];
     var stylesState = useState({ styles: [], selected: "" });
     var styleCat = stylesState[0], setStyleCat = stylesState[1];
+    var stylePrevState = useState(null);
+    var stylePrev = stylePrevState[0], setStylePrev = stylePrevState[1];
+    // A plain <img> can't carry the dashboard auth header — fetch the
+    // preview authed and show it as a blob URL (process-diagram pattern).
+    useEffect(function () {
+      if (!styleCat.selected) return undefined;
+      var revoke = null;
+      SDK.authedFetch("/api/plugins/youtube-insights/styles/preview?id=" +
+          encodeURIComponent(styleCat.selected))
+        .then(function (r) { return r.ok ? r.blob() : null; })
+        .then(function (b) {
+          if (b) { revoke = URL.createObjectURL(b); setStylePrev(revoke); }
+        })
+        .catch(function () {});
+      return function () { if (revoke) URL.revokeObjectURL(revoke); };
+    }, [styleCat.selected]);
     var pipeState = useState({ available: false, running: false });
     var pipeline = pipeState[0], setPipeline = pipeState[1];
     // The cron scheduler starts the execution on its next tick (up to ~1 min
@@ -1420,12 +1436,6 @@
       h("div", { style: { display: "flex", alignItems: "center", gap: 10,
                           margin: "6px 0 10px", fontSize: 13 } },
         h("span", { style: { opacity: .75 } }, "Image style:"),
-        styleCat.selected ? h("img", {
-          src: "/api/plugins/youtube-insights/styles/preview?id=" +
-            encodeURIComponent(styleCat.selected) + "&v=" + encodeURIComponent(styleCat.selected),
-          alt: "style preview",
-          style: { height: 34, borderRadius: 4, border: "1px solid color-mix(in srgb, currentColor 25%, transparent)" },
-        }) : null,
         h("select", {
           value: styleCat.selected,
           title: "Every generated slide/beat image anchors to this style (image-to-image). Applies to Produce, Regenerate, and future runs until changed.",
@@ -1441,7 +1451,16 @@
                      title: "Upload your own example image — it becomes the style anchor for every generation until you change it" },
           "Upload your own…",
           h("input", { type: "file", accept: "image/*", style: { display: "none" },
-                       onChange: function (e) { uploadStyle(e.target); } }))
+                       onChange: function (e) { uploadStyle(e.target); } })),
+        // large preview, right-aligned into the header whitespace
+        stylePrev ? h("img", {
+          src: stylePrev,
+          alt: "selected style preview",
+          title: "The selected style baseline — every generated image anchors to this look",
+          style: { marginLeft: "auto", height: 110, maxWidth: 300,
+                   objectFit: "contain", borderRadius: 6,
+                   border: "1px solid color-mix(in srgb, currentColor 25%, transparent)" },
+        }) : null
       ),
       iterModal && sel ? h(YtiModal, { onClose: function () { setIterModal(false); } },
         h("h3", null, "Iterate on this script"),
