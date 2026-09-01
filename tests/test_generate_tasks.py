@@ -550,3 +550,74 @@ def test_voice_profile_char_budget(tmp_home):
     text = yti_voice.profile_path().read_text()
     assert len(text) < yti_voice.MAX_PROFILE_CHARS + 1000
     assert "NEWEST sample" in text  # newest wins the budget
+
+
+# ---- produce set versioning -------------------------------------------------
+
+def test_first_produce_targets_set_one(tmp_home, gen_kanban):
+    rel = "youtube/2026-08-31/presentations/v-deck/script-outline.md"
+    _mk_script(rel)
+    yti_generate.create_produce_task(rel)
+    body = gen_kanban.created[-1]["body"]
+    assert "assets/1/" in body and "1.script-outline.pdf" in body
+    assert "(set" not in gen_kanban.created[-1]["title"]
+
+
+def test_reproduce_migrates_legacy_and_targets_set_two(tmp_home, gen_kanban):
+    rel = "youtube/2026-08-31/presentations/v2-deck/script-outline.md"
+    script = _mk_script(rel)
+    assets = script.parent / "assets"
+    assets.mkdir()
+    (assets / "01-hook.jpg").write_bytes(b"a")
+    (assets / "thumb-a-x.jpg").write_bytes(b"b")
+    (script.parent / "script-outline.pdf").write_bytes(b"%PDF")
+    yti_generate.create_produce_task(rel)
+    # legacy set migrated to assets/1/, old pdf renamed 1.<stem>.pdf
+    assert (assets / "1" / "01-hook.jpg").exists()
+    assert (assets / "1" / "thumb-a-x.jpg").exists()
+    assert not (script.parent / "script-outline.pdf").exists()
+    assert (script.parent / "1.script-outline.pdf").exists()
+    body = gen_kanban.created[-1]["body"]
+    assert "assets/2/" in body and "2.script-outline.pdf" in body
+    assert "(set 2)" in gen_kanban.created[-1]["title"]
+
+
+def test_reproduce_numbered_targets_next(tmp_home, gen_kanban):
+    rel = "youtube/2026-08-31/presentations/v3-deck/script-outline.md"
+    script = _mk_script(rel)
+    for n in ("1", "2"):
+        d = script.parent / "assets" / n
+        d.mkdir(parents=True)
+        (d / "x.jpg").write_bytes(b"i")
+    yti_generate.create_produce_task(rel)
+    body = gen_kanban.created[-1]["body"]
+    assert "assets/3/" in body and "3.script-outline.pdf" in body
+
+
+def test_versioned_pdf_rebuild_scopes_to_its_set(tmp_home, gen_kanban):
+    ws = yti_paths.workspace_dir()
+    pdf = ws / "youtube/2026-08-31/presentations/v4-deck/2.script-outline.pdf"
+    pdf.parent.mkdir(parents=True, exist_ok=True)
+    pdf.write_bytes(b"%PDF")
+    yti_generate.create_regen_task(str(pdf.relative_to(ws)))
+    body = gen_kanban.created[-1]["body"]
+    assert "assets/2/" in body and "ONLY" in body
+
+
+def test_style_language_injected_into_briefs(tmp_home, gen_kanban):
+    yti_generate.select_style("14-chalkboard")
+    rel = "youtube/2026-08-31/presentations/lang-deck/script-outline.md"
+    _mk_script(rel)
+    yti_generate.create_produce_task(rel)
+    body = gen_kanban.created[-1]["body"]
+    assert "STYLE LANGUAGE" in body and "14-chalkboard" in body
+    assert "chalk" in body.lower()  # the actual vocabulary rides along
+    # custom style falls back to study-the-image guidance
+    yti_generate.save_custom_style(b"img", "png")
+    ws = yti_paths.workspace_dir()
+    img = ws / "youtube/2026-08-31/presentations/lang-deck/assets/1/01-x.jpg"
+    img.parent.mkdir(parents=True, exist_ok=True)
+    img.write_bytes(b"j")
+    yti_generate.create_regen_task(str(img.relative_to(ws)), "fix")
+    body = gen_kanban.created[-1]["body"]
+    assert "STYLE LANGUAGE" in body and "STUDYING the baseline image" in body

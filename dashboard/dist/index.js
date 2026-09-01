@@ -1241,7 +1241,7 @@
           disabled: prodOpen,
           title: prodOpen
             ? "Producing — images, thumbnails, and PDF are being generated"
-            : "Generate all beat images, 3 thumbnails, and the production PDF into this script's assets folder",
+            : "Generate a full image set + thumbnails + PDF. Re-producing makes a NEW numbered set (assets/2, 3…) with its own N.-prefixed PDF — earlier sets are kept",
           onClick: produceScript,
           className: "yti-produce-btn",
         }, prodOpen ? "Producing…" : "Produce 🎥") : null,

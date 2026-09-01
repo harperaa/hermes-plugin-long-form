@@ -428,6 +428,39 @@ def style_path(style_id: str) -> Optional[Path]:
     return None
 
 
+def style_prompt(style_id: str) -> str:
+    """The PROMPT VOCABULARY for a style — the language every image prompt
+    must open with so the words match the selected baseline's look."""
+    try:
+        data = json.loads((_baselines_dir() / "styles.json").read_text())
+        text = (data.get(style_id) or "").strip()
+        if text:
+            return text
+    except (OSError, ValueError):
+        pass
+    return ("Match the baseline reference image's style exactly: study its "
+            "palette, textures, lettering, linework, and composition, and "
+            "name them explicitly in every prompt.")
+
+
+def selected_style_block() -> list[str]:
+    """Brief lines binding prompt LANGUAGE to the selected style."""
+    sel = style_catalog()["selected"]
+    return [
+        "",
+        f"### STYLE LANGUAGE (selected style: {sel})",
+        "Open EVERY image-generation prompt with this style vocabulary —",
+        "it REPLACES any sketchnote/whiteboard/cream-paper preamble found",
+        "in skill docs (those describe the default style only):",
+        "",
+        f"> {style_prompt(sel)}",
+        "",
+        "The baseline reference image is the final authority: extend or",
+        "correct this vocabulary from what you actually see in it, and keep",
+        "every image in the deck inside that one visual world.",
+    ]
+
+
 def selected_baseline_path() -> Path:
     """The baseline image every beat/slide generation anchors to right now."""
     sel = style_catalog()["selected"]
@@ -459,10 +492,48 @@ PRODUCE_SKILLS = (
 )
 
 
-def _build_produce_brief(script_abs: Path) -> str:
+def _numbered_versions(assets: Path) -> list[int]:
+    if not assets.is_dir():
+        return []
+    return sorted(int(p.name) for p in assets.iterdir()
+                  if p.is_dir() and p.name.isdigit())
+
+
+def _next_produce_version(script_dir: Path, stem: str) -> int:
+    """Version number for the NEXT produce run, migrating a legacy
+    unversioned set into assets/1/ first (its PDF becomes 1.<stem>.pdf).
+    Each produce run gets its own assets/<N>/ + <N>.<stem>.pdf — earlier
+    sets are never overwritten."""
+    assets = script_dir / "assets"
+    if not assets.is_dir():
+        return 1
+    nums = _numbered_versions(assets)
+    legacy = [p for p in assets.iterdir()
+              if p.name.split(".")[-1].lower() in
+              {e.lstrip(".") for e in _ASSET_IMAGE_EXTS}
+              or (p.is_dir() and not p.name.isdigit())]
+    if legacy and not nums:
+        v1 = assets / "1"
+        v1.mkdir(exist_ok=True)
+        for p in legacy:
+            try:
+                p.rename(v1 / p.name)
+            except OSError:
+                pass
+        old_pdf = script_dir / f"{stem}.pdf"
+        if old_pdf.exists():
+            try:
+                old_pdf.rename(script_dir / f"1.{stem}.pdf")
+            except OSError:
+                pass
+        nums = [1]
+    return (max(nums) + 1) if nums else 1
+
+
+def _build_produce_brief(script_abs: Path, version: int = 1) -> str:
     script_dir = script_abs.parent
-    assets_dir = script_dir / "assets"
-    pdf_path = script_dir / (script_abs.stem + ".pdf")
+    assets_dir = script_dir / "assets" / str(version)
+    pdf_path = script_dir / f"{version}.{script_abs.stem}.pdf"
     return "\n".join([
         "## MANDATORY: Produce graphics + production PDF for ONE approved script.",
         "",
@@ -502,6 +573,7 @@ def _build_produce_brief(script_abs: Path) -> str:
         "   task with `kanban_attach`; leave every file in place (they appear",
         "   on the YouTube Insights Artifacts tab). Then `kanban_complete`",
         "   with a summary listing every file produced.",
+    ] + selected_style_block() + [
         "",
         "### OUTPUT HYGIENE (mechanically enforced after you complete)",
         f"- {assets_dir}/ may contain ONLY generated image files when you",
@@ -550,17 +622,21 @@ def create_produce_task(rel_path: str) -> dict[str, Any]:
                 age = _age_minutes(entry.get("createdAt"))
                 if age is not None and age < STALE_MINUTES:
                     return {"ok": True, "taskId": existing, "already": True}
+            version = _next_produce_version(script_abs.parent,
+                                            script_abs.stem)
             task_id = kb.create_task(
                 conn_kb,
-                title=f"Produce: {script_abs.stem}",
-                body=_build_produce_brief(script_abs),
+                title=f"Produce: {script_abs.stem}"
+                      + (f" (set {version})" if version > 1 else ""),
+                body=_build_produce_brief(script_abs, version),
                 assignee=resolve_kanban_assignee(),
                 created_by="youtube-insights",
                 workspace_kind="scratch",
                 skills=list(PRODUCE_SKILLS),
                 priority=10,
             )
-        mapping[rel_path] = {"taskId": task_id, "createdAt": _now_iso()}
+        mapping[rel_path] = {"taskId": task_id, "createdAt": _now_iso(),
+                             "version": version}
         yti_store.set_meta(conn, PRODUCE_META_KEY, json.dumps(mapping))
     except Exception as exc:
         return {"error": f"could not create the produce task: {exc}"}
@@ -678,11 +754,14 @@ def _build_regen_brief(image_abs: Path, feedback: str) -> str:
         "   the prompt EXPLICITLY (e.g. spell a previously-misspelled word",
         "   letter by letter). Save into the SAME folder — the skill's",
         "   timestamp suffix keeps the old file; never delete it.",
-        "3. Rebuild the deck PDF beside the script (same stem as the",
-        "   script file).",
+        "3. Rebuild THIS IMAGE'S VERSION of the deck PDF: for an image",
+        "   under assets/<N>/ the PDF is <N>.<script-stem>.pdf beside the",
+        "   script, and its pages come ONLY from assets/<N>/ (legacy flat",
+        "   assets/ keeps <script-stem>.pdf).",
     ] + _PDF_REBUILD_CONTRACT + [
         "4. Attach the new image + rebuilt PDF to THIS kanban task with",
         "   `kanban_attach`, then `kanban_complete` naming both files.",
+    ] + selected_style_block() + [
         "",
         "### CRITICAL RULES",
         "- ONE image only. Never regenerate the whole set, never re-run",
@@ -693,12 +772,18 @@ def _build_regen_brief(image_abs: Path, feedback: str) -> str:
 
 def _build_pdf_rebuild_brief(pdf_abs: Path) -> str:
     script_dir = pdf_abs.parent
+    # versioned PDFs ("2.script-outline.pdf") rebuild from their own
+    # numbered set (assets/2/); legacy names use the whole assets tree
+    head = pdf_abs.name.split(".", 1)[0]
+    images_dir = (script_dir / "assets" / head) if head.isdigit() \
+        else (script_dir / "assets")
     return "\n".join([
         "## MANDATORY: Rebuild ONE deck PDF from the newest images on disk.",
         "Generate NO images — this is pure reassembly.",
         "",
         f"**PDF:** {pdf_abs}",
-        f"**Images:** {script_dir}/assets/ (and its variant subfolders)",
+        f"**Images:** {images_dir}/ (and its variant subfolders) — ONLY",
+        "this folder; other numbered sets belong to other PDFs.",
         "",
     ] + _PDF_REBUILD_CONTRACT + [
         "",
