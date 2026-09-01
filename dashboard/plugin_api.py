@@ -15,6 +15,11 @@ from typing import Any, Optional
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
+try:
+    from fastapi.responses import FileResponse
+except ImportError:  # pragma: no cover - fastapi always ships it
+    FileResponse = None  # type: ignore
+
 # The dashboard imports this file standalone (spec_from_file_location), so the
 # plugin package isn't importable by name — put the plugin root on sys.path
 # and use the yti_-prefixed module names directly.
