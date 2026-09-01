@@ -51,7 +51,9 @@ python3 "$GEN_IMG" --prompt "<prompt>" --out "<output-path>.jpg" --aspect-ratio 
 **Image-to-image IS supported** via `--input <path-or-url>` (routes to the xAI
 `images/edits` endpoint): the source image anchors composition/style and the
 prompt directs the transform. Use `youtube-baseline-reference.png` for
-sketchnote beats and `whiteboard-background.png` for whiteboard diagrams.
+sketchnote beats AND presentation slides (one template for both — the
+operator's chosen anchor) and `whiteboard-background.png` for whiteboard
+diagrams.
 
 ## Mandatory QA gate — spelling and quality (never skip)
 
@@ -160,7 +162,7 @@ the look drifts.
 
 **This is the required style for every image used inside a YouTube video** — beat visuals, in-video diagrams, explainer cards. It is **distinct from the whiteboard architecture-diagram style above**. Thumbnails are also distinct (see "Whiteboard vs Non-Whiteboard" section).
 
-The baseline reference is `youtube-baseline-reference.png` — a polished sketchnote-on-paper composition titled "SELL OUTCOMES, NOT TOOLS". Match it.
+The baseline reference is `youtube-baseline-reference.png` — a polished sketchnote-on-paper composition titled "VIBE SHIP MEETS AUDIT" (cream paper, faint pencil grid, thin black frame with corner brackets, pastel corner scribbles, hand-lettered black title, pastel-filled doodle icons, stick figures with expressive faces, cloud thought bubbles, a bold cross-hatched block arrow). It is the operator's chosen template for BOTH video beat images and presentation slides. Match it.
 
 ### Style Anchor — verify against the baseline reference
 
