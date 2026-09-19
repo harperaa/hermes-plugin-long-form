@@ -55,6 +55,18 @@ CRON_PROMPT = (
     "regenerated."
 )
 
+# Third routine: the free Tier-0 research snapshot (spec P4/§3.3). Exact daily
+# view trajectories for every followed/tracked channel; costs nothing.
+SNAPSHOT_NAME = "youtube-research-snapshot"
+SNAPSHOT_SCHEDULE = "30 3 * * *"
+SNAPSHOT_PROMPT = (
+    "Run the free daily YouTube research snapshot: call the yt_research tool "
+    "with action 'snapshot' exactly once. It records exact view counts for the "
+    "latest uploads of every followed and tracked channel into the research "
+    "history (no credits are spent). Do not run any other yt_research action. "
+    "Finish with one line: channels snapshotted, videos, new videos, errors."
+)
+
 # Second routine, ported from paperclip's "YouTube Content Pipeline"
 # (0 6,18 * * *). Scope-reduced: gap analysis + concepts + scripts for
 # human review. Only the graphics stage moved out (runs post-approval).
@@ -255,7 +267,8 @@ def setup(subparser) -> None:
     sub = subparser.add_subparsers(dest="yti_cmd")
     p_cron = sub.add_parser("setup-cron",
                             help="Install the scheduled jobs: intelligence refresh "
-                                 "(daily 03:00) and content pipeline (06:00/18:00)")
+                                 "(daily 03:00), content pipeline (06:00/18:00) and "
+                                 "the free research snapshot (03:30)")
     p_cron.add_argument("--apply", action="store_true",
                         help="Create the job now (default: print the command)")
     p_cron.add_argument("--schedule", default=CRON_SCHEDULE,
@@ -270,6 +283,7 @@ def handle(args) -> int:
         jobs = [
             (args.schedule, CRON_PROMPT, CRON_NAME),
             (PIPELINE_SCHEDULE, PIPELINE_PROMPT, PIPELINE_NAME),
+            (SNAPSHOT_SCHEDULE, SNAPSHOT_PROMPT, SNAPSHOT_NAME),
         ]
         rc = 0
         for schedule, prompt, name in jobs:
@@ -283,7 +297,7 @@ def handle(args) -> int:
                 shown = " ".join(f'"{a}"' if " " in a else a for a in argv)
                 print(f"# {name} ({schedule})\n  {shown}\n")
         if not args.apply:
-            print("Re-run with --apply to create both jobs now.")
+            print("Re-run with --apply to create all three jobs now.")
         return rc
 
     try:

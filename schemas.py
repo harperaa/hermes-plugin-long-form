@@ -155,3 +155,25 @@ YT_LINT_SCRIPT = {
         "required": ["path"],
     },
 }
+
+
+YT_RESEARCH = {
+    "type": "object",
+    "properties": {
+        "action": {
+            "type": "string",
+            "enum": ["status", "snapshot", "crawl", "enrich", "transcripts", "comments", "score",
+                     "packaging", "formats", "profile", "report", "pipeline", "doctor", "gaps"],
+            "description": "Research engine action. 'snapshot' is the free daily RSS history job "
+                           "(run it every day); 'pipeline' runs the whole batch; 'gaps' returns the "
+                           "D4 cross-niche format gap report.",
+        },
+        "params": {
+            "type": "object",
+            "description": "Job parameters: crawl {max_credits, niches, dry_run, resume}; enrich "
+                           "{max_results}; transcripts {max}; comments {max_videos, max_per_video}; "
+                           "profile {channel}; report {only:[D1..D5]}.",
+        },
+    },
+    "required": ["action"],
+}

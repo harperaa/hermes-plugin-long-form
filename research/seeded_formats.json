@@ -1,0 +1,58 @@
+[
+  {
+    "id": "so-fast-it-feels-like-cheating",
+    "label": "how to {outcome} so fast it feels like cheating",
+    "pattern": "(?i)\\bhow to (?P<outcome>.+?) so fast it feels like cheating\\b",
+    "psychology": "a wanted outcome, faster than plausible; reads as unfair advantage"
+  },
+  {
+    "id": "if-you-dont-understand-x-y",
+    "label": "if you don't understand {mechanism}, you don't understand {outcome}",
+    "pattern": "(?i)\\bif you (?:don't|do not|dont|don’t) understand (?P<mechanism>.+?),? you (?:don't|do not|dont|don’t) understand (?P<outcome>.+)",
+    "psychology": "pattern interrupt + curiosity + loss framing; bridges an unvalued mechanism to a wanted outcome"
+  },
+  {
+    "id": "new-era-has-begun",
+    "label": "the new era of {subject} has just begun",
+    "pattern": "(?i)\\bthe new era of (?P<subject>.+?) (?:has (?:just )?begun|is here)\\b",
+    "psychology": "shift/urgency frame"
+  },
+  {
+    "id": "new-rules-of",
+    "label": "the new rules of {subject}",
+    "pattern": "(?i)\\bthe new rules? of (?P<subject>.+)",
+    "psychology": "shift frame; implies the viewer's model is stale"
+  },
+  {
+    "id": "n-attempts-and-learned",
+    "label": "I {did} {N} {things} and learned this",
+    "pattern": "(?i)\\bi (?:made|sent|did|ran|built|tried|tested|read|watched) (?P<n>[\\d,\\.]+\\s*(?:k|m)?) (?P<thing>.+?) (?:and|then) learn(?:ed|t) (?:this|these)\\b",
+    "psychology": "earned authority through volume",
+    "known_discriminator": "point_count >= 15"
+  },
+  {
+    "id": "brutally-honest-in-n-minutes",
+    "label": "brutally honest advice about {subject} in {n} minutes",
+    "pattern": "(?i)\\bbrutally honest (?:advice|truth) about (?P<subject>.+?) in (?P<n>\\d+) minutes?\\b",
+    "psychology": "compression promise + candour signal"
+  },
+  {
+    "id": "about-to-change-nobody-realises",
+    "label": "{subject} is about to change forever and nobody even realises",
+    "pattern": "(?i)(?P<subject>.+?) is about to change forever,? and nobody (?:even )?reali[sz]es",
+    "psychology": "shift frame + insider framing"
+  },
+  {
+    "id": "speedrunning",
+    "label": "speedrunning {outcome} [show everything]",
+    "pattern": "(?i)\\bspeed[- ]?run(?:ning)? (?P<outcome>.+)",
+    "psychology": "validated in gaming, transfers to any 'prove it end to end' audience"
+  },
+  {
+    "id": "dollar-vs-dollar",
+    "label": "${low} vs ${high} {subject}",
+    "pattern": "(?i)\\$(?P<low>[\\d,\\.]+\\s*[km]?)\\s*(?:vs\\.?|versus)\\s*\\$(?P<high>[\\d,\\.]+\\s*[km]?)\\s*(?P<subject>.+)",
+    "psychology": "price-anchored comparison; curiosity about what money buys",
+    "caution": "strongly audience-dependent; validate before transferring"
+  }
+]

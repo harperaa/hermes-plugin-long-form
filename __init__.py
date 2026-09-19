@@ -31,6 +31,7 @@ _TOOLS = (
     ("yt_search_insights", schemas.YT_SEARCH_INSIGHTS,
      tools.yt_search_insights, None),
     ("yt_lint_script", schemas.YT_LINT_SCRIPT, tools.yt_lint_script, None),
+    ("yt_research", schemas.YT_RESEARCH, tools.yt_research, None),
 )
 
 

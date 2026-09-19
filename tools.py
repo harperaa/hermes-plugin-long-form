@@ -182,3 +182,43 @@ def yt_lint_script(args: dict, **kwargs) -> str:
         return json.dumps(yti_lint.lint_file(p))
     except Exception as exc:  # noqa: BLE001
         return _err(str(exc))
+
+
+def yt_research(args: dict, **kwargs) -> str:
+    """Niche research engine (crawl → outliers → formats → gaps → teardown).
+    Runs the job inline and returns its summary; the dashboard's YouTube
+    Research tab shows the same data."""
+    try:
+        from . import yti_rs_jobs, yti_rs_db, yti_rs_config, yti_rs_formats
+    except ImportError:  # pragma: no cover
+        import yti_rs_jobs, yti_rs_db, yti_rs_config, yti_rs_formats  # type: ignore
+    action = str(args.get("action") or "status").strip()
+    params = args.get("params") or {}
+    try:
+        if action == "status":
+            conn = yti_rs_db.connect()
+            try:
+                cfg = yti_rs_config.load_config(conn)
+                return json.dumps({"counts": yti_rs_db.counts(conn), "niches": [n["name"] for n in cfg["niches"]],
+                                   "job": {k: v for k, v in yti_rs_jobs.state().items() if k != "log"},
+                                   "secrets": yti_rs_config.get_secrets().present()})
+            finally:
+                conn.close()
+        if action == "doctor":
+            return json.dumps(yti_rs_jobs.doctor(run_sample=bool(params.get("runSample"))))
+        if action == "gaps":
+            conn = yti_rs_db.connect()
+            try:
+                g = yti_rs_formats.gap_report(conn, yti_rs_config.load_config(conn), params.get("min_wilson"))
+                for key in ("gaps", "near_gaps"):
+                    g[key] = [{k: v for k, v in r.items() if k not in ("discriminators",)} for r in g[key][:15]]
+                return json.dumps(g)
+            finally:
+                conn.close()
+        if action not in yti_rs_jobs.JOBS:
+            return _err(f"unknown action {action}")
+        lines: list[str] = []
+        result = yti_rs_jobs.run_sync(action, params, lines.append)
+        return json.dumps({"ok": True, "action": action, "result": result, "log": lines[-40:]}, default=str)
+    except Exception as exc:  # noqa: BLE001
+        return _err(str(exc))

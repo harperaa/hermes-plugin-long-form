@@ -5,7 +5,7 @@ description: >
   channels, pull transcripts, rank videos by views-per-hour (VPH), mine
   transcripts into a deduplicated insight knowledge base, and turn insights
   into concepts, scripts, and Grok-generated beat images. Dashboard tab with
-  Trends, Insights, and Artifacts pages.
+  YouTube Research, Trends, Insights, and Artifacts pages.
 author: Allen Harper
 kind: standalone
 manifest_version: 1
@@ -14,6 +14,10 @@ requires_env:
   - name: TRANSCRIPT_API_KEY
     description: "API key for transcriptapi.com (YouTube transcripts + channel metadata)"
     url: "https://transcriptapi.com"
+    secret: true
+  - name: APIFY_API_TOKEN
+    description: "Apify token — exact views/likes/comments and comment bodies for the research shortlist (optional; Tier 2/3 only)"
+    url: "https://console.apify.com/account/integrations"
     secret: true
   - name: GEMINI_API_KEY
     description: "Google Gemini API key — image generation fallback, only used when no xAI credential is connected"
@@ -30,6 +34,7 @@ provides_tools:
   - yt_add_insight
   - yt_search_insights
   - yt_lint_script
+  - yt_research
 
 provides_hooks:
   - kanban_task_completed

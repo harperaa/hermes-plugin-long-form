@@ -611,3 +611,69 @@
 @media (prefers-reduced-motion: reduce) {
   .yti-busy { animation: none; opacity: 0.7; }
 }
+
+/* ---- Research tab ---------------------------------------------------- */
+.yti-rs-nav { display: flex; gap: 6px; flex-wrap: wrap; margin: 4px 0 14px; }
+.yti-rs-pill { background: transparent; border: 1px solid var(--color-border); border-radius: 999px; color: var(--color-muted-foreground); font-size: 12.5px; font-weight: 600; padding: 5px 12px; cursor: pointer; }
+.yti-rs-pill:hover { color: inherit; }
+.yti-rs-pill-on { color: inherit; border-color: var(--color-ring); background: color-mix(in srgb, var(--color-ring) 14%, transparent); }
+.yti-rs-h3 { margin: 0 0 6px; font-size: 15px; font-weight: 700; }
+.yti-rs-h4 { margin: 12px 0 6px; font-size: 13.5px; font-weight: 700; }
+.yti-rs-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.yti-rs-row { display: flex; gap: 12px; flex-wrap: wrap; }
+.yti-rs-flex1 { flex: 1; min-width: 280px; }
+.yti-rs-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 12px; }
+.yti-rs-grid-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); margin-top: 8px; }
+.yti-rs-field { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: var(--color-muted-foreground); }
+.yti-rs-field-wide { grid-column: 1 / -1; }
+.yti-rs-field input, .yti-rs-field textarea { width: 100%; box-sizing: border-box; background: transparent; color: inherit; border: 1px solid var(--color-border); border-radius: 6px; padding: 6px 8px; font-size: 13px; font-family: inherit; }
+.yti-rs-field textarea { resize: vertical; }
+.yti-rs-niche { border: 1px solid var(--color-border); border-radius: 8px; padding: 10px 12px; margin-top: 10px; }
+.yti-rs-niche-target { border-color: var(--color-ring); }
+.yti-rs-niche-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; font-size: 12px; }
+.yti-rs-radio { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; }
+.yti-rs-remove { cursor: pointer; color: var(--color-muted-foreground); }
+.yti-rs-remove:hover { color: #ef4444; }
+.yti-rs-secrets { font-size: 13px; line-height: 1.8; }
+.yti-rs-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; background: #6b7280; }
+.yti-rs-dot.on { background: #22c55e; }
+.yti-rs-dot.off { background: #ef4444; }
+.yti-rs-doctor { margin-top: 8px; border-top: 1px solid var(--color-border); padding-top: 8px; }
+.yti-rs-check { font-size: 12.5px; padding: 3px 0; word-break: break-word; }
+.yti-rs-steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; }
+.yti-rs-step { border: 1px solid var(--color-border); border-radius: 8px; padding: 10px; display: flex; flex-direction: column; gap: 6px; font-size: 13px; }
+.yti-rs-step > div:last-child { margin-top: auto; }
+.yti-rs-inline { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.yti-rs-mini { width: 150px; background: transparent; color: inherit; border: 1px solid var(--color-border); border-radius: 6px; padding: 5px 8px; font-size: 12.5px; }
+.yti-rs-log { font-family: var(--font-mono, monospace); font-size: 11.5px; line-height: 1.45; background: color-mix(in srgb, currentColor 6%, transparent); border-radius: 6px; padding: 10px; max-height: 320px; overflow: auto; white-space: pre-wrap; color: inherit; margin: 8px 0 0; }
+.yti-rs-result { font-family: var(--font-mono, monospace); font-size: 11.5px; background: color-mix(in srgb, #22c55e 8%, transparent); border-radius: 6px; padding: 8px 10px; max-height: 220px; overflow: auto; white-space: pre-wrap; margin: 6px 0 0; }
+.yti-rs-table { font-size: 12.5px; }
+.yti-rs-table th, .yti-rs-table td { padding: 6px 8px; }
+.yti-rs-thumb { width: 64px; height: 36px; }
+.yti-rs-badge { display: inline-block; border: 1px solid; border-radius: 999px; padding: 1px 8px; font-size: 11px; font-weight: 600; white-space: nowrap; }
+.yti-rs-filter { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-bottom: 10px; }
+.yti-rs-clickable { cursor: pointer; }
+.yti-rs-clickable:hover td { background: color-mix(in srgb, currentColor 5%, transparent); }
+.yti-rs-weak { opacity: 0.7; }
+.yti-rs-detail { font-size: 12.5px; background: color-mix(in srgb, currentColor 4%, transparent); }
+.yti-rs-detail > div { margin-bottom: 4px; }
+.yti-rs-caution { color: #f59e0b; }
+.yti-rs-ul { margin: 4px 0 6px; padding-left: 18px; font-size: 12.5px; line-height: 1.5; }
+.yti-rs-gap { margin-bottom: 10px; }
+.yti-rs-kvs { display: flex; gap: 14px; flex-wrap: wrap; margin: 8px 0; }
+.yti-rs-kv-k { font-size: 11px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--color-muted-foreground); }
+.yti-rs-kv-v { font-size: 13.5px; font-weight: 600; }
+.yti-rs-teardown { display: flex; gap: 12px; align-items: flex-start; }
+.yti-rs-chanlist { width: 320px; flex-shrink: 0; }
+.yti-rs-scroll { max-height: 62vh; overflow: auto; margin-top: 6px; }
+.yti-rs-star { width: 16px; color: var(--color-muted-foreground); cursor: pointer; }
+.yti-rs-star.on { color: #f59e0b; }
+.yti-rs-chart { width: 100%; height: 160px; display: block; margin: 8px 0; background: color-mix(in srgb, currentColor 4%, transparent); border-radius: 6px; }
+.yti-rs-chart-label { font-size: 10px; fill: var(--color-muted-foreground, #9aa0b4); }
+.yti-rs-dd { border-top: 1px solid var(--color-border); padding: 8px 0; font-size: 13px; }
+.yti-rs-report { margin-top: 10px; border-top: 1px solid var(--color-border); padding-top: 10px; }
+@media (max-width: 900px) {
+  .yti-rs-teardown { flex-direction: column; }
+  .yti-rs-chanlist { width: 100%; }
+  .yti-rs-grid-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}

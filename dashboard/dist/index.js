@@ -1,8 +1,10 @@
 /**
  * youtube-insights — Hermes Dashboard Plugin
  *
- * Trends + Insights pages, ported from the original paperclip plugin with the
- * same layout, panels, and functions, restyled onto the hermes design system.
+ * Research + Trends + Insights + Artifacts pages. Trends/Insights are ported
+ * from the original paperclip plugin with the same layout, panels, and
+ * functions, restyled onto the hermes design system; Research is the niche
+ * teardown engine (crawl → outliers → formats → gap report → teardown).
  *
  * Plain IIFE, no build step. Uses window.__HERMES_PLUGIN_SDK__ for React and
  * shared UI primitives; all backend calls go through SDK.fetchJSON so auth
@@ -213,8 +215,6 @@
   function TrendsView() {
     const [data, setData] = useState(null);
     const [channels, setChannels] = useState([]);
-    const [newChannel, setNewChannel] = useState("");
-    const [showChannels, setShowChannels] = useState(false);
     const [sortField, setSortField] = useState("vph");
     const [sortAsc, setSortAsc] = useState(false);
     const [page, setPage] = useState(0);
@@ -298,26 +298,6 @@
         .finally(function () { setAnalyzing(false); });
     };
 
-    const handleAddChannel = function (e) {
-      e.preventDefault();
-      const handle = newChannel.trim();
-      if (!handle) return;
-      api("/channels", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ handle: handle }),
-      }).then(function (d) {
-        setChannels((d && d.channels) || []);
-        setNewChannel("");
-      }).catch(function (e2) { setNotice({ tone: "error", text: String(e2) }); });
-    };
-
-    const handleRemoveChannel = function (handle) {
-      api("/channels/" + encodeURIComponent(handle), { method: "DELETE" })
-        .then(function (d) { setChannels((d && d.channels) || []); })
-        .catch(function () {});
-    };
-
     const toggleSort = function (field) {
       if (sortField === field) setSortAsc(!sortAsc);
       else { setSortField(field); setSortAsc(false); }
@@ -380,35 +360,8 @@
         h(StatCard, { value: formatNumber(topVph), label: "Top VPH" })
       ),
 
-      // Channel management
-      h("div", { className: "yti-card yti-channels-card" },
-        h("div", {
-          className: "yti-channels-toggle",
-          onClick: function () { setShowChannels(!showChannels); },
-        }, (showChannels ? "▼" : "▶") + " Tracked Channels (" + channels.length + ")"),
-        showChannels ? h("div", { className: "yti-channels-body" },
-          h("div", { className: "yti-chip-row" },
-            channels.map(function (ch) {
-              return h("span", { key: ch, className: "yti-chip yti-chip-channel" },
-                ch,
-                h("span", {
-                  className: "yti-chip-remove",
-                  title: "Stop tracking " + ch,
-                  onClick: function () { handleRemoveChannel(ch); },
-                }, "✕")
-              );
-            })
-          ),
-          h("form", { className: "yti-add-channel", onSubmit: handleAddChannel },
-            h(Input, {
-              value: newChannel,
-              placeholder: "@ChannelHandle",
-              onChange: function (e) { setNewChannel(e.target.value); },
-            }),
-            h(Button, { size: "sm", type: "submit" }, "Add")
-          )
-        ) : null
-      ),
+      // Channel management (shared with the Research tab)
+      h(ChannelManager, { channels: channels, onChannels: setChannels }),
 
       // Video table
       loading
@@ -1679,11 +1632,664 @@
   }
 
   // -------------------------------------------------------------------------
-  // Root page: Trends | Insights | Artifacts sub-tabs
+  // Shared followed-channel manager (Trends + Research use the same list and
+  // the same /channels endpoints, so the two tabs can never drift).
+  // -------------------------------------------------------------------------
+  function ChannelManager(props) {
+    const [channels, setChannels] = useState(props.channels || []);
+    const [newChannel, setNewChannel] = useState("");
+    const [open, setOpen] = useState(!!props.defaultOpen);
+    const [err, setErr] = useState(null);
+    const publish = function (list) {
+      setChannels(list);
+      if (props.onChannels) props.onChannels(list);
+    };
+    useEffect(function () {
+      api("/channels").then(function (d) { publish((d && d.channels) || []); }).catch(function () {});
+    }, []);   // eslint-disable-line
+    const add = function (e) {
+      e.preventDefault();
+      const handle = newChannel.trim();
+      if (!handle) return;
+      api("/channels", { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ handle: handle }) })
+        .then(function (d) { publish((d && d.channels) || []); setNewChannel(""); setErr(null); })
+        .catch(function (e2) { setErr(String(e2)); });
+    };
+    const remove = function (handle) {
+      api("/channels/" + encodeURIComponent(handle), { method: "DELETE" })
+        .then(function (d) { publish((d && d.channels) || []); }).catch(function () {});
+    };
+    return h("div", { className: "yti-card yti-channels-card" },
+      h("div", { className: "yti-channels-toggle", onClick: function () { setOpen(!open); } },
+        (open ? "▼" : "▶") + " " + (props.title || "Tracked Channels") + " (" + channels.length + ")"),
+      open ? h("div", { className: "yti-channels-body" },
+        props.hint ? h("div", { className: "yti-subtle", style: { marginBottom: 8 } }, props.hint) : null,
+        h("div", { className: "yti-chip-row" },
+          channels.map(function (ch) {
+            return h("span", { key: ch, className: "yti-chip yti-chip-channel" }, ch,
+              h("span", { className: "yti-chip-remove", title: "Stop following " + ch,
+                onClick: function () { remove(ch); } }, "✕"));
+          })),
+        h("form", { className: "yti-add-channel", onSubmit: add },
+          h(Input, { value: newChannel, placeholder: "@ChannelHandle",
+            onChange: function (e) { setNewChannel(e.target.value); } }),
+          h(Button, { size: "sm", type: "submit" }, "Add")),
+        err ? h("div", { className: "yti-notice yti-notice-error" }, err) : null
+      ) : null);
+  }
+
+  // -------------------------------------------------------------------------
+  // Research tab — niche crawl, outliers, formats, gap report, teardown
+  // -------------------------------------------------------------------------
+  const CLASS_COLOR = { strong_hit: "#22c55e", hit: "#84cc16", normal: "#9ca3af", under: "#ef4444", immature: "#6b7280" };
+  const RS_PANELS = [["setup", "Setup"], ["run", "Run"], ["outliers", "Outliers"], ["formats", "Formats"],
+    ["gaps", "Gap Report"], ["teardown", "Teardown"], ["budget", "Budget & Reports"]];
+
+  function fmtMult(x) { return x == null ? "—" : Number(x).toFixed(2) + "×"; }
+  function fmtPct(x) { return x == null ? "—" : Math.round(x) + ""; }
+  function fmtDate(iso) { return iso ? String(iso).slice(0, 10) : "—"; }
+  function post(path, body) {
+    return api(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body || {}) });
+  }
+  function ClassBadge(props) {
+    const c = props.cls || "immature";
+    return h("span", { className: "yti-rs-badge", style: { borderColor: CLASS_COLOR[c] || "#6b7280", color: CLASS_COLOR[c] || "#6b7280" } }, c);
+  }
+  function KV(props) {
+    return h("div", { className: "yti-rs-kv" }, h("div", { className: "yti-rs-kv-k" }, props.k), h("div", { className: "yti-rs-kv-v" }, props.v));
+  }
+  function Field(props) {
+    return h("label", { className: "yti-rs-field" + (props.wide ? " yti-rs-field-wide" : "") },
+      h("span", null, props.label),
+      props.textarea
+        ? h("textarea", { value: props.value, rows: props.rows || 3, placeholder: props.placeholder,
+            onChange: function (e) { props.onChange(e.target.value); } })
+        : h("input", { value: props.value, type: props.type || "text", placeholder: props.placeholder, step: props.step,
+            onChange: function (e) { props.onChange(e.target.value); } }));
+  }
+
+  // ---- Setup ---------------------------------------------------------------
+  function ResearchSetup(props) {
+    const ov = props.overview;
+    const [cfg, setCfg] = useState(null);
+    const [saving, setSaving] = useState(false);
+    const [msg, setMsg] = useState(null);
+    const [doctor, setDoctor] = useState(null);
+    const [doctoring, setDoctoring] = useState(false);
+    const [advanced, setAdvanced] = useState(false);
+    useEffect(function () { if (ov && ov.config && !cfg) setCfg(JSON.parse(JSON.stringify(ov.config))); }, [ov]);  // eslint-disable-line
+    if (!cfg) return h("div", { className: "yti-empty" }, "Loading…");
+    const niches = cfg.niches || [];
+    const setNiche = function (i, patch) {
+      const next = niches.slice();
+      next[i] = Object.assign({}, next[i], patch);
+      setCfg(Object.assign({}, cfg, { niches: next }));
+    };
+    const terms = function (v) { return Array.isArray(v) ? v.join("\n") : (v || ""); };
+    const addNiche = function () {
+      setCfg(Object.assign({}, cfg, { niches: niches.concat([{ name: "", is_target: niches.length === 0,
+        signal_half_life_days: 365, seed_terms: [], outcome_terms: [], mechanism_terms: [] }]) }));
+    };
+    const removeNiche = function (i) {
+      setCfg(Object.assign({}, cfg, { niches: niches.filter(function (_, j) { return j !== i; }) }));
+    };
+    const setNum = function (section, key) {
+      return function (v) {
+        const sec = Object.assign({}, cfg[section]);
+        sec[key] = v === "" ? "" : Number(v);
+        setCfg(Object.assign({}, cfg, (function (o) { o[section] = sec; return o; })({})));
+      };
+    };
+    const save = function () {
+      setSaving(true); setMsg(null);
+      api("/research/config", { method: "PUT", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ config: cfg }) })
+        .then(function (d) { setCfg(d.config); setMsg({ tone: "ok", text: "Saved." }); props.reload(); })
+        .catch(function (e) { setMsg({ tone: "error", text: String((e && e.message) || e) }); })
+        .finally(function () { setSaving(false); });
+    };
+    const runDoctor = function (sample) {
+      setDoctoring(true);
+      post("/research/doctor", { runSample: !!sample }).then(setDoctor)
+        .catch(function (e) { setDoctor({ checks: [{ name: "doctor", ok: false, detail: String(e) }] }); })
+        .finally(function () { setDoctoring(false); });
+    };
+    const sec = (ov && ov.secrets) || {};
+    return h("div", null,
+      h("div", { className: "yti-rs-row" },
+        h("div", { className: "yti-card yti-rs-flex1" },
+          h("h3", { className: "yti-rs-h3" }, "Providers"),
+          h("div", { className: "yti-rs-secrets" },
+            h("span", { className: "yti-rs-dot " + (sec.transcriptapi ? "on" : "off") }), "TRANSCRIPT_API_KEY ",
+            h("span", { className: "yti-muted" }, sec.transcriptapi ? "set — Tier 0/1/3 (discovery, transcripts, free daily snapshots)" : "missing — required"),
+            h("br"),
+            h("span", { className: "yti-rs-dot " + (sec.apify ? "on" : "off") }), "APIFY_API_TOKEN ",
+            h("span", { className: "yti-muted" }, sec.apify ? "set — Tier 2/3 (exact metrics, comments)" : "missing — precision + comments stages are skipped")),
+          h("div", { className: "yti-subtle", style: { marginTop: 8 } }, "Keys live only in the environment / ",
+            h("a", { href: "/env" }, "Keys page"), ". They are never written to config, logs, or URLs."),
+          h("div", { className: "yti-actions", style: { marginTop: 8 } },
+            h(Button, { size: "sm", variant: "outline", disabled: doctoring, onClick: function () { runDoctor(false); } }, doctoring ? "Checking…" : "Doctor"),
+            h(Button, { size: "sm", variant: "outline", disabled: doctoring || !sec.apify, title: "Also runs one Apify result to verify field names (costs one result)",
+              onClick: function () { runDoctor(true); } }, "Doctor + actor sample")),
+          doctor ? h("div", { className: "yti-rs-doctor" },
+            (doctor.checks || []).map(function (c, i) {
+              return h("div", { key: i, className: "yti-rs-check" },
+                h("span", { className: "yti-rs-dot " + (c.ok ? "on" : "off") }), h("b", null, c.name), " ",
+                h("span", { className: "yti-muted" }, typeof c.detail === "object" ? JSON.stringify(c.detail) : String(c.detail || "")));
+            }),
+            (doctor.config_problems || []).map(function (p, i) {
+              return h("div", { key: "p" + i, className: "yti-rs-check" }, h("span", { className: "yti-rs-dot off" }), "config: ", p);
+            })) : null)),
+      h("div", { className: "yti-card", style: { marginTop: 12 } },
+        h("div", { className: "yti-rs-head" },
+          h("h3", { className: "yti-rs-h3" }, "Niches"),
+          h("div", { className: "yti-actions" },
+            h(Button, { size: "sm", variant: "outline", onClick: addNiche }, "+ Niche"),
+            h(Button, { size: "sm", disabled: saving, onClick: save }, saving ? "Saving…" : "Save config"))),
+        h("div", { className: "yti-subtle" },
+          "One target niche plus adjacent niches that share viewer INTENT (not subject matter). Seed terms in the ",
+          "market's own problem language (\"lose visceral fat\", not \"visceral adiposity reduction\"). ",
+          "Outcome terms = what they already want; mechanism terms = what you actually do. The D4 gap report only ",
+          "exists when ≥2 niches are crawled."),
+        msg ? h("div", { className: "yti-notice " + (msg.tone === "error" ? "yti-notice-error" : "yti-notice-ok") }, msg.text) : null,
+        (ov && ov.configProblems && ov.configProblems.length) ? h("div", { className: "yti-notice yti-notice-error" }, ov.configProblems.join(" · ")) : null,
+        niches.length === 0 ? h("div", { className: "yti-empty" }, "No niches yet — add your target niche to begin.") : null,
+        niches.map(function (n, i) {
+          return h("div", { key: i, className: "yti-rs-niche" + (n.is_target ? " yti-rs-niche-target" : "") },
+            h("div", { className: "yti-rs-niche-head" },
+              h("label", { className: "yti-rs-radio" },
+                h("input", { type: "radio", name: "target", checked: !!n.is_target,
+                  onChange: function () { setCfg(Object.assign({}, cfg, { niches: niches.map(function (x, j) { return Object.assign({}, x, { is_target: j === i }); }) })); } }),
+                " target"),
+              h("span", { className: "yti-rs-remove", onClick: function () { removeNiche(i); }, title: "Remove niche" }, "✕")),
+            h("div", { className: "yti-rs-grid" },
+              h(Field, { label: "Name", value: n.name || "", placeholder: "e.g. ai-security", onChange: function (v) { setNiche(i, { name: v }); } }),
+              h(Field, { label: "Signal half-life (days)", type: "number", value: n.signal_half_life_days == null ? "" : n.signal_half_life_days,
+                placeholder: "fast 90-150 · mid 300-400 · evergreen 540-730", onChange: function (v) { setNiche(i, { signal_half_life_days: v }); } }),
+              h(Field, { label: "Seed terms (one per line)", textarea: true, rows: 4, value: terms(n.seed_terms), wide: true,
+                placeholder: "how to secure ai agents\nprompt injection explained", onChange: function (v) { setNiche(i, { seed_terms: v.split("\n") }); } }),
+              h(Field, { label: "Outcome terms", textarea: true, rows: 3, value: terms(n.outcome_terms), placeholder: "get hired\nmore clients",
+                onChange: function (v) { setNiche(i, { outcome_terms: v.split("\n") }); } }),
+              h(Field, { label: "Mechanism terms", textarea: true, rows: 3, value: terms(n.mechanism_terms), placeholder: "threat modeling\nred teaming",
+                onChange: function (v) { setNiche(i, { mechanism_terms: v.split("\n") }); } })));
+        }),
+        h("div", { className: "yti-channels-toggle", style: { marginTop: 10 }, onClick: function () { setAdvanced(!advanced); } },
+          (advanced ? "▼" : "▶") + " Advanced: crawl / scoring / formats / budget"),
+        advanced ? h("div", { className: "yti-rs-grid yti-rs-grid-4" },
+          [["crawl", "max_depth"], ["crawl", "search_pages_per_term"], ["crawl", "channel_pages_per_channel"], ["crawl", "outliers_to_expand_per_node"],
+           ["crawl", "prune_after_barren_nodes"], ["crawl", "recommendations_per_video"], ["crawl", "min_subscribers"], ["crawl", "max_subscribers"],
+           ["scoring", "baseline_window"], ["scoring", "min_baseline_videos"], ["scoring", "hit_multiple"], ["scoring", "strong_multiple"],
+           ["scoring", "underperformer_multiple"], ["scoring", "breakout_watch_max_age_days"], ["scoring", "breakout_watch_comment_pct"],
+           ["formats", "min_support"], ["formats", "min_distinct_channels"], ["formats", "min_distinct_niches"], ["formats", "gap_min_wilson_lb"],
+           ["formats", "min_actionable_n"], ["budget", "transcriptapi_credits"], ["budget", "crawl_default_credits"], ["budget", "apify_max_results"],
+           ["apify", "max_comments_per_video"]].map(function (pair) {
+            const s = pair[0], k = pair[1];
+            return h(Field, { key: s + k, label: s + "." + k, type: "number", step: "any", value: cfg[s][k] == null ? "" : cfg[s][k], onChange: setNum(s, k) });
+          })) : null));
+  }
+
+  // ---- Run -------------------------------------------------------------------
+  function ResearchRun(props) {
+    const ov = props.overview;
+    const job = (ov && ov.job) || {};
+    const [live, setLive] = useState(null);
+    const [maxCredits, setMaxCredits] = useState("");
+    const [plan, setPlan] = useState(null);
+    const [msg, setMsg] = useState(null);
+    const running = !!(live ? live.running : job.running);
+    useEffect(function () {
+      if (!running) return undefined;
+      const id = window.setInterval(function () {
+        api("/research/job").then(function (s) { setLive(s); if (!s.running) { window.clearInterval(id); props.reload(); } }).catch(function () {});
+      }, 2500);
+      return function () { window.clearInterval(id); };
+    }, [running]);  // eslint-disable-line
+    const st = live || job;
+    const run = function (name, params) {
+      setMsg(null); setPlan(null);
+      post("/research/run", { job: name, params: params || {} })
+        .then(function (r) {
+          if (r && r.dryRun) { setPlan(r.plan); return; }
+          if (r && r.alreadyRunning) { setMsg({ tone: "error", text: "A job is already running (" + r.job + ")." }); return; }
+          setLive({ running: true, job: name, log: [] });
+        })
+        .catch(function (e) { setMsg({ tone: "error", text: String((e && e.message) || e) }); });
+    };
+    const btn = function (label, name, params, title, variant) {
+      return h(Button, { size: "sm", variant: variant || "outline", disabled: running, title: title,
+        className: running && st.job === name ? "yti-busy" : "",
+        onClick: function () { run(name, params); } }, running && st.job === name ? label + "…" : label);
+    };
+    const cp = function (v) { return v ? Number(v) : undefined; };
+    const noNiche = !(ov && ov.niches && ov.niches.length);
+    const sec = (ov && ov.secrets) || {};
+    return h("div", null,
+      noNiche ? h("div", { className: "yti-notice yti-notice-error" }, "Configure a niche with seed terms on the Setup panel before crawling. Snapshot works without one (it uses the followed channels).") : null,
+      msg ? h("div", { className: "yti-notice " + (msg.tone === "error" ? "yti-notice-error" : "yti-notice-ok") }, msg.text) : null,
+      h("div", { className: "yti-card" },
+        h("h3", { className: "yti-rs-h3" }, "Pipeline"),
+        h("div", { className: "yti-rs-steps" },
+          h("div", { className: "yti-rs-step" }, h("b", null, "Tier 0 · History (free)"),
+            h("div", { className: "yti-muted yti-small" }, "Exact daily views for every followed + tracked channel. Cron this daily; it is the moat."),
+            btn("Snapshot", "snapshot", {}, "Free RSS snapshot of the latest ~15 uploads per tracked channel")),
+          h("div", { className: "yti-rs-step" }, h("b", null, "Tier 1 · Discovery"),
+            h("div", { className: "yti-muted yti-small" }, "Depth-first crawl on approximate data (1 credit per ~20-100 rows). Barren branches are pruned."),
+            h("div", { className: "yti-rs-inline" },
+              h("input", { className: "yti-rs-mini", placeholder: "max credits (" + (ov && ov.config ? ov.config.budget.crawl_default_credits : 150) + ")", value: maxCredits,
+                onChange: function (e) { setMaxCredits(e.target.value); } }),
+              btn("Dry run", "crawl", { dry_run: true }, "Plan the calls and projected credits without spending anything"),
+              btn("Crawl", "crawl", { max_credits: cp(maxCredits) }, "Run the DFS crawl", "default"))),
+          h("div", { className: "yti-rs-step" }, h("b", null, "Tier 2 · Precision"),
+            h("div", { className: "yti-muted yti-small" }, "Apify exact views / likes / comments / duration / subscribers for the shortlist only."),
+            btn("Enrich", "enrich", {}, sec.apify ? "Enrich hits with exact numbers" : "APIFY_API_TOKEN missing")),
+          h("div", { className: "yti-rs-step" }, h("b", null, "Tier 3 · Depth"),
+            h("div", { className: "yti-muted yti-small" }, "Transcripts (packaging + structure) and comments (satisfaction + sentiment) for the shortlist."),
+            h("div", { className: "yti-rs-inline" },
+              btn("Transcripts", "transcripts", {}, "Free caption check first; one credit per transcript"),
+              btn("Comments", "comments", {}, sec.apify ? "Apify comment bodies" : "APIFY_API_TOKEN missing"))),
+          h("div", { className: "yti-rs-step" }, h("b", null, "Analysis"),
+            h("div", { className: "yti-muted yti-small" }, "Recompute every derived score from raw rows; mine + validate formats; write D1–D5."),
+            h("div", { className: "yti-rs-inline" },
+              btn("Score", "score", {}, "Baselines, maturity projection, robust z, decay, classification, satisfaction proxies"),
+              btn("Packaging", "packaging", {}, "Transcript-derived features"),
+              btn("Formats", "formats", {}, "Seeded + mined formats, Wilson ranking, discriminators, D4 gaps"),
+              btn("Report", "report", {}, "Write D1–D5 markdown into the workspace (Artifacts tab)")))),
+        h("div", { className: "yti-rs-inline", style: { marginTop: 10 } },
+          btn("Run everything", "pipeline", { max_credits: cp(maxCredits) }, "Snapshot → crawl → score → enrich → transcripts → comments → score → packaging → formats → report", "default"),
+          h("span", { className: "yti-muted yti-small" }, "Every step is idempotent and resumable."))),
+      plan ? h("div", { className: "yti-card", style: { marginTop: 12 } },
+        h("h3", { className: "yti-rs-h3" }, "Dry run — projected Tier-1 credits"),
+        h("table", { className: "yti-table yti-rs-table" }, h("thead", null, h("tr", null,
+          h("th", null, "niche"), h("th", { className: "yti-right" }, "seed terms"), h("th", { className: "yti-right" }, "search calls"),
+          h("th", { className: "yti-right" }, "channel calls (worst)"), h("th", { className: "yti-right" }, "rec calls (worst)"), h("th", { className: "yti-right" }, "credits (worst)"))),
+          h("tbody", null, (plan.niches || []).map(function (n) {
+            return h("tr", { key: n.niche }, h("td", null, n.niche), h("td", { className: "yti-right" }, n.seed_terms), h("td", { className: "yti-right" }, n.search_calls),
+              h("td", { className: "yti-right" }, n.channel_calls_worst), h("td", { className: "yti-right" }, n.recommendation_calls_worst), h("td", { className: "yti-right yti-strong" }, n.credits_worst_case));
+          }))),
+        h("div", { className: "yti-subtle", style: { marginTop: 6 } }, "Total worst case: " + plan.credits_worst_case + " credits. " + plan.note)) : null,
+      h("div", { className: "yti-card", style: { marginTop: 12 } },
+        h("div", { className: "yti-rs-head" },
+          h("h3", { className: "yti-rs-h3" }, "Job " + (st.job ? "· " + st.job : ""),
+            running ? h("span", { className: "yti-gen-spinner", style: { marginLeft: 8 } }) : null),
+          h("span", { className: "yti-muted yti-small" }, st.started ? "started " + formatAgo(st.started) : "idle")),
+        st.error ? h("div", { className: "yti-notice yti-notice-error" }, st.error) : null,
+        st.result && !running ? h("pre", { className: "yti-rs-result" }, JSON.stringify(st.result, null, 1).slice(0, 4000)) : null,
+        h("pre", { className: "yti-rs-log" }, (st.log || []).slice(-60).join("\n") || "no output yet")),
+      (ov && ov.crawlRuns && ov.crawlRuns.length) ? h("div", { className: "yti-card", style: { marginTop: 12 } },
+        h("h3", { className: "yti-rs-h3" }, "Crawl runs"),
+        h("table", { className: "yti-table yti-rs-table" }, h("thead", null, h("tr", null,
+          h("th", null, "run"), h("th", null, "status"), h("th", { className: "yti-right" }, "nodes"), h("th", { className: "yti-right" }, "new videos"),
+          h("th", { className: "yti-right" }, "new outliers"), h("th", { className: "yti-right" }, "credits"), h("th", null, "stop reason"), h("th", null, ""))),
+          h("tbody", null, ov.crawlRuns.map(function (r) {
+            const s = r.stats || {};
+            return h("tr", { key: r.run_id }, h("td", { className: "yti-small" }, r.run_id), h("td", null, r.status),
+              h("td", { className: "yti-right" }, s.nodes), h("td", { className: "yti-right" }, s.videos_new), h("td", { className: "yti-right" }, s.outliers_new),
+              h("td", { className: "yti-right" }, s.credits), h("td", { className: "yti-small yti-muted" }, s.stop_reason || ""),
+              h("td", null, r.status === "paused" ? h(Button, { size: "sm", variant: "outline", disabled: running,
+                onClick: function () { run("crawl", { resume: r.run_id, max_credits: cp(maxCredits) }); } }, "Resume") : null));
+          })))) : null,
+      (ov && ov.history && ov.history.length) ? h("div", { className: "yti-card", style: { marginTop: 12 } },
+        h("h3", { className: "yti-rs-h3" }, "Recent jobs"),
+        ov.history.slice(0, 8).map(function (hst, i) {
+          return h("div", { key: i, className: "yti-rs-check" },
+            h("span", { className: "yti-rs-dot " + (hst.error ? "off" : "on") }), h("b", null, hst.job), " ",
+            h("span", { className: "yti-muted yti-small" }, formatAgo(hst.finished || hst.started) + " · " + (hst.error || JSON.stringify(hst.result || {}).slice(0, 160))));
+        })) : null);
+  }
+
+  // ---- Outliers (D2) + Demand map (D1) -----------------------------------------
+  function ResearchOutliers(props) {
+    const ov = props.overview;
+    const [niche, setNiche] = useState("");
+    const [classes, setClasses] = useState(["strong_hit", "hit"]);
+    const [sort, setSort] = useState("projected_multiple");
+    const [data, setData] = useState(null);
+    const [demand, setDemand] = useState(null);
+    const [showDemand, setShowDemand] = useState(false);
+    useEffect(function () {
+      const p = new URLSearchParams({ niche: niche, classes: classes.join(","), sort: sort, limit: "150" });
+      api("/research/outliers?" + p.toString()).then(setData).catch(function () { setData({ rows: [], total: 0, counts: {} }); });
+    }, [niche, classes, sort]);
+    useEffect(function () { if (showDemand && !demand) api("/research/demand").then(setDemand).catch(function () {}); }, [showDemand]);  // eslint-disable-line
+    const toggle = function (c) { setClasses(classes.indexOf(c) >= 0 ? classes.filter(function (x) { return x !== c; }) : classes.concat([c])); };
+    const rows = (data && data.rows) || [];
+    const counts = (data && data.counts) || {};
+    return h("div", null,
+      h("div", { className: "yti-rs-filter" },
+        h("select", { className: "yti-select", value: niche, onChange: function (e) { setNiche(e.target.value); } },
+          h("option", { value: "" }, "All niches"),
+          ((ov && ov.niches) || []).concat(["followed"]).map(function (n) { return h("option", { key: n, value: n }, n); })),
+        ["strong_hit", "hit", "normal", "under", "immature"].map(function (c) {
+          return h("button", { key: c, className: "yti-filter-chip" + (classes.indexOf(c) >= 0 ? " yti-filter-chip-on" : ""),
+            onClick: function () { toggle(c); } }, c + (counts[c] != null ? " " + counts[c] : ""));
+        }),
+        h("select", { className: "yti-select", value: sort, onChange: function (e) { setSort(e.target.value); } },
+          [["projected_multiple", "× projected"], ["z", "robust z"], ["views", "views"], ["age", "age"], ["vs", "satisfaction"], ["weight", "signal weight"]].map(function (o) {
+            return h("option", { key: o[0], value: o[0] }, "sort: " + o[1]); })),
+        h("button", { className: "yti-filter-chip" + (showDemand ? " yti-filter-chip-on" : ""), onClick: function () { setShowDemand(!showDemand); } }, "D1 Demand map")),
+      showDemand ? h("div", { className: "yti-card", style: { marginBottom: 12 } },
+        h("h3", { className: "yti-rs-h3" }, "D1 — Demand map"),
+        !demand ? h("div", { className: "yti-empty" }, "Loading…") :
+        h("div", null,
+          h("div", { className: "yti-subtle" }, "Subjects with proven pull: title terms across " + demand.hit_videos + " hit videos, weighted by projected multiple × signal weight (≥2 channels)."),
+          Object.keys(demand.subjects || {}).map(function (n) {
+            return h("div", { key: n, style: { marginBottom: 8 } }, h("b", null, n), h("div", { className: "yti-chip-row" },
+              demand.subjects[n].map(function (s) { return h("span", { key: s.term, className: "yti-chip", title: "weight " + s.weight + " · " + s.channels + " channels" }, s.term + " " + s.weight); })));
+          }),
+          (demand.search_terms || []).length ? h("div", null, h("b", null, "Search terms by outlier yield"), h("div", { className: "yti-chip-row" },
+            demand.search_terms.slice(0, 30).map(function (t, i) { return h("span", { key: i, className: "yti-chip" }, t.term + " · " + t.yield); }))) : null,
+          (demand.requests || []).length ? h("div", { style: { marginTop: 8 } }, h("b", null, "Viewer requests mined from comments"),
+            h("ul", { className: "yti-rs-ul" }, demand.requests.map(function (r, i) { return h("li", { key: i }, r.topic + " (" + r.n + ")"); }))) : null)) : null,
+      data == null ? h("div", { className: "yti-empty" }, "Loading…") :
+      rows.length === 0 ? h("div", { className: "yti-empty" }, "No scored videos match. Crawl, then Score, on the Run panel.") :
+      h("div", { className: "yti-table-wrap" },
+        h("div", { className: "yti-subtle" }, data.total + " videos · ≈ marks approximate Tier-1 numbers · raw = date too coarse to project"),
+        h("table", { className: "yti-table yti-rs-table" },
+          h("thead", null, h("tr", null, h("th", null, ""), h("th", null, "Title"), h("th", null, "Channel"), h("th", null, "Niche"), h("th", null, "Class"),
+            h("th", { className: "yti-right yti-strong" }, "× proj"), h("th", { className: "yti-right" }, "× raw"), h("th", { className: "yti-right" }, "z"),
+            h("th", { className: "yti-right" }, "Views"), h("th", { className: "yti-right" }, "Age d"), h("th", { className: "yti-right" }, "Weight"),
+            h("th", { className: "yti-right" }, "VS %"), h("th", null, "Flags"))),
+          h("tbody", null, rows.map(function (r) {
+            const flags = [];
+            if (r.views_approx) flags.push("views≈");
+            if (r.published_approx) flags.push("date≈");
+            if (r.raw_only) flags.push("raw");
+            if (r.organic_flag === "suspect_paid") flags.push("⚠ paid?");
+            if (r.breakout_watch) flags.push("🚀 breakout");
+            if (r.fade_watch) flags.push("fade");
+            if (r.precision_tier >= 2) flags.push("exact");
+            return h("tr", { key: r.video_id },
+              h("td", null, r.thumbnail_url ? h("img", { className: "yti-thumb yti-rs-thumb", src: r.thumbnail_url, alt: "" }) : null),
+              h("td", null, h("a", { className: "yti-video-link", href: "https://www.youtube.com/watch?v=" + r.video_id, target: "_blank", rel: "noopener" }, r.title)),
+              h("td", { className: "yti-muted yti-small" }, r.handle || r.channel_title || r.channel_id),
+              h("td", { className: "yti-muted yti-small" }, r.niche),
+              h("td", null, h(ClassBadge, { cls: r["class"] })),
+              h("td", { className: "yti-right yti-strong" }, fmtMult(r.projected_multiple)),
+              h("td", { className: "yti-right yti-muted" }, fmtMult(r.multiple)),
+              h("td", { className: "yti-right yti-muted" }, r.log_mad_z == null ? "—" : Number(r.log_mad_z).toFixed(1)),
+              h("td", { className: "yti-right" }, formatNumber(r.views)),
+              h("td", { className: "yti-right yti-muted" }, r.age_days == null ? "—" : Math.round(r.age_days)),
+              h("td", { className: "yti-right yti-muted" }, r.signal_weight == null ? "—" : Number(r.signal_weight).toFixed(2)),
+              h("td", { className: "yti-right yti-muted" }, fmtPct(r.vs_percentile)),
+              h("td", { className: "yti-small yti-muted" }, flags.join(" ")));
+          })))));
+  }
+
+  // ---- Formats (D3) ------------------------------------------------------------
+  function DiscriminatorList(props) {
+    const ds = props.items || [];
+    if (!ds.length) return h("div", { className: "yti-muted yti-small" }, "No discriminator splits with both arms n ≥ 5 yet (needs transcripts + packaging).");
+    return h("ul", { className: "yti-rs-ul" }, ds.slice(0, props.max || 8).map(function (d, i) {
+      return h("li", { key: i }, d.feature + " = " + d.value + ": " + d.hit_rate_with.toFixed(2) + " (n=" + d.n_with + ") vs " +
+        d.hit_rate_without.toFixed(2) + " (n=" + d.n_without + ") → Δ " + (d.diff >= 0 ? "+" : "") + d.diff.toFixed(2));
+    }));
+  }
+  function ExampleList(props) {
+    return h("ul", { className: "yti-rs-ul" }, (props.items || []).map(function (e) {
+      return h("li", { key: e.video_id }, h("b", null, e.multiple + "× "), h("a", { className: "yti-video-link", href: "https://www.youtube.com/watch?v=" + e.video_id, target: "_blank", rel: "noopener" }, e.title),
+        h("span", { className: "yti-muted" }, " (" + e.niche + (e.approx ? ", ≈" : "") + ")"));
+    }));
+  }
+  function ResearchFormats(props) {
+    const [data, setData] = useState(null);
+    const [open, setOpen] = useState(null);
+    const [kind, setKind] = useState("");
+    useEffect(function () { api("/research/formats").then(setData).catch(function () { setData({ formats: [] }); }); }, []);
+    if (!data) return h("div", { className: "yti-empty" }, "Loading…");
+    const rows = data.formats.filter(function (f) { return !kind || f.kind === kind; });
+    return h("div", null,
+      h("div", { className: "yti-rs-filter" },
+        ["", "seeded", "mined"].map(function (k) { return h("button", { key: k, className: "yti-filter-chip" + (kind === k ? " yti-filter-chip-on" : ""), onClick: function () { setKind(k); } }, k || "all"); }),
+        h("span", { className: "yti-muted yti-small" }, "Ranked by Wilson 95% lower bound of hit rate (P2) — a 2-for-2 format cannot outrank a 40-for-60 one. n < " + data.minActionableN + " is not actionable.")),
+      rows.length === 0 ? h("div", { className: "yti-empty" }, "No formats yet — run Formats on the Run panel (after Score).") :
+      h("div", { className: "yti-table-wrap" }, h("table", { className: "yti-table yti-rs-table" },
+        h("thead", null, h("tr", null, h("th", null, "Format"), h("th", null, "Kind"), h("th", { className: "yti-right yti-strong" }, "Wilson LB"),
+          h("th", { className: "yti-right" }, "Hits / n"), h("th", { className: "yti-right" }, "Under"), h("th", { className: "yti-right" }, "Median ×"),
+          h("th", { className: "yti-right" }, "Weighted hit"), h("th", { className: "yti-right" }, "Channels"), h("th", null, "Niches"), h("th", { className: "yti-right" }, "Target uses"))),
+        h("tbody", null, rows.map(function (f) {
+          const isOpen = open === f.format_id;
+          const weak = (f.n_total || 0) < data.minActionableN;
+          return [h("tr", { key: f.format_id, className: "yti-rs-clickable" + (weak ? " yti-rs-weak" : ""), onClick: function () { setOpen(isOpen ? null : f.format_id); } },
+            h("td", null, (isOpen ? "▼ " : "▶ ") + f.label, f.caution ? h("span", { className: "yti-rs-caution", title: f.caution }, " ⚠") : null),
+            h("td", { className: "yti-muted yti-small" }, f.kind),
+            h("td", { className: "yti-right yti-strong" }, f.wilson_lb == null ? "—" : Number(f.wilson_lb).toFixed(3)),
+            h("td", { className: "yti-right" }, (f.n_hits || 0) + " / " + (f.n_total || 0)),
+            h("td", { className: "yti-right yti-muted" }, f.n_under || 0),
+            h("td", { className: "yti-right" }, fmtMult(f.median_multiple)),
+            h("td", { className: "yti-right yti-muted" }, f.weighted_hit_rate == null ? "—" : Number(f.weighted_hit_rate).toFixed(2)),
+            h("td", { className: "yti-right yti-muted" }, f.distinct_channels || 0),
+            h("td", { className: "yti-small yti-muted" }, (f.niches || []).join(", ")),
+            h("td", { className: "yti-right" }, f.target_niche_uses || 0)),
+          isOpen ? h("tr", { key: f.format_id + "-d" }, h("td", { colSpan: 10, className: "yti-rs-detail" },
+            f.psychology ? h("div", null, h("b", null, "Psychology: "), f.psychology) : null,
+            f.caution ? h("div", null, h("b", null, "Caution: "), f.caution) : null,
+            f.known_discriminator ? h("div", null, h("b", null, "Known discriminator: "), f.known_discriminator) : null,
+            f.skeleton ? h("div", null, h("b", null, "Skeleton: "), h("code", null, f.skeleton)) : null,
+            h("div", { style: { marginTop: 6 } }, h("b", null, "Strongest examples")), h(ExampleList, { items: f.examples }),
+            h("div", { style: { marginTop: 6 } }, h("b", null, "Discriminators (hit rate with vs without)")), h(DiscriminatorList, { items: f.discriminators }))) : null];
+        }))))
+    );
+  }
+
+  // ---- Gap report (D4) ------------------------------------------------------------
+  function GapCard(props) {
+    const r = props.row;
+    return h("div", { className: "yti-card yti-rs-gap" + (r.actionable ? "" : " yti-rs-weak") },
+      h("div", { className: "yti-rs-head" }, h("h4", { className: "yti-rs-h4" }, r.label),
+        h("span", { className: "yti-muted yti-small" }, r.actionable ? "actionable" : "⚠ n < minimum — not actionable")),
+      r.psychology ? h("div", { className: "yti-small" }, h("b", null, "Psychology: "), r.psychology) : null,
+      r.caution ? h("div", { className: "yti-small yti-rs-caution" }, h("b", null, "Caution: "), r.caution) : null,
+      h("div", { className: "yti-rs-kvs" },
+        h(KV, { k: "Wilson LB", v: Number(r.wilson_lb).toFixed(3) }), h(KV, { k: "hits / n", v: r.n_hits + " / " + r.n_total }),
+        h(KV, { k: "under", v: r.n_under }), h(KV, { k: "median ×", v: fmtMult(r.median_multiple) }),
+        h(KV, { k: "proven in", v: (r.niches || []).join(", ") }), h(KV, { k: "target uses", v: r.target_niche_uses })),
+      h(ExampleList, { items: r.examples }),
+      r.known_discriminator ? h("div", { className: "yti-small" }, h("b", null, "Known discriminator: "), r.known_discriminator) : null,
+      h(DiscriminatorList, { items: r.discriminators, max: 4 }));
+  }
+  function ResearchGaps(props) {
+    const [data, setData] = useState(null);
+    useEffect(function () { api("/research/gaps").then(setData).catch(function () { setData({ gaps: [], near_gaps: [] }); }); }, []);
+    if (!data) return h("div", { className: "yti-empty" }, "Loading…");
+    return h("div", null,
+      h("div", { className: "yti-notice yti-notice-ok" }, data.caveat),
+      h("div", { className: "yti-subtle" }, "Target niche: " + (data.target_niche || "not configured") + " · gap = proven in ≥2 niches, Wilson LB ≥ " + data.min_wilson_lb + ", zero uses in the target. Recommendations are refused below n = " + data.min_actionable_n + "."),
+      data.gaps.length === 0 ? h("div", { className: "yti-empty" }, "No gap formats yet — the report needs ≥2 crawled niches plus Score and Formats runs.") :
+        data.gaps.map(function (r) { return h(GapCard, { key: r.format_id, row: r }); }),
+      data.near_gaps.length ? h("div", null, h("h3", { className: "yti-rs-h3", style: { marginTop: 16 } }, "Near-gaps (1–2 uses in the target)"),
+        data.near_gaps.map(function (r) { return h(GapCard, { key: r.format_id, row: r }); })) : null);
+  }
+
+  // ---- Teardown (D5) -----------------------------------------------------------------
+  function SeriesChart(props) {
+    const pts = (props.series || []).filter(function (p) { return p.views > 0; });
+    if (pts.length < 3) return null;
+    const W = 720, H = 160, pad = 24;
+    const ys = pts.map(function (p) { return Math.log10(p.views); });
+    const min = Math.min.apply(null, ys), max = Math.max.apply(null, ys), rng = (max - min) || 1;
+    const x = function (i) { return pad + (i / (pts.length - 1)) * (W - 2 * pad); };
+    const y = function (v) { return H - pad - ((v - min) / rng) * (H - 2 * pad); };
+    const cps = props.changepoints || [];
+    return h("svg", { className: "yti-rs-chart", viewBox: "0 0 " + W + " " + H, preserveAspectRatio: "none" },
+      cps.map(function (c, i) { return h("line", { key: i, x1: x(c.index), x2: x(c.index), y1: pad / 2, y2: H - pad / 2, stroke: "#f59e0b", strokeDasharray: "4 3" }); }),
+      pts.map(function (p, i) {
+        const col = CLASS_COLOR[p["class"]] || "#9ca3af";
+        return h("circle", { key: p.video_id, cx: x(i), cy: y(ys[i]), r: 3, fill: col },
+          h("title", null, fmtDate(p.published_at) + " · " + formatNumber(p.views) + " · " + (p["class"] || "") + " · " + p.title));
+      }),
+      h("text", { x: pad, y: 12, className: "yti-rs-chart-label" }, "log10 views by upload (● class colour, dashed = changepoint)"));
+  }
+  function ResearchTeardown(props) {
+    const ov = props.overview;
+    const [channels, setChannels] = useState(null);
+    const [sel, setSel] = useState("");
+    const [prof, setProf] = useState(null);
+    const [busy, setBusy] = useState(false);
+    const [q, setQ] = useState("");
+    const [msg, setMsg] = useState(null);
+    const loadChannels = function () { api("/research/channels?limit=500").then(function (d) { setChannels(d.channels || []); }).catch(function () { setChannels([]); }); };
+    useEffect(loadChannels, []);
+    const load = function (id) {
+      if (!id) return;
+      setProf(null);
+      api("/research/profile?channel=" + encodeURIComponent(id)).then(setProf).catch(function (e) { setMsg(String((e && e.message) || e)); });
+    };
+    useEffect(function () { if (sel) load(sel); }, [sel]);  // eslint-disable-line
+    const running = !!(ov && ov.job && ov.job.running);
+    const runProfile = function () {
+      if (!sel) return;
+      setBusy(true); setMsg(null);
+      post("/research/run", { job: "profile", params: { channel: sel } }).then(function (r) {
+        if (r && r.alreadyRunning) { setMsg("A job is already running."); setBusy(false); return; }
+        const id = window.setInterval(function () {
+          api("/research/job").then(function (s) { if (!s.running) { window.clearInterval(id); setBusy(false); if (s.error) setMsg(s.error); load(sel); loadChannels(); } }).catch(function () {});
+        }, 2000);
+      }).catch(function (e) { setMsg(String(e)); setBusy(false); });
+    };
+    const track = function (ch, on) {
+      post("/research/channels/track", { channelId: ch.channel_id, tracked: on }).then(loadChannels).catch(function () {});
+    };
+    const list = (channels || []).filter(function (c) { return !q || ((c.handle || "") + " " + (c.title || "")).toLowerCase().indexOf(q.toLowerCase()) >= 0; });
+    const p = prof && prof.profile;
+    return h("div", { className: "yti-rs-teardown" },
+      h("div", { className: "yti-card yti-rs-chanlist" },
+        h("div", { className: "yti-rs-head" }, h("h3", { className: "yti-rs-h3" }, "Channels (" + ((channels || []).length) + ")"),
+          h("input", { className: "yti-artifact-search", placeholder: "filter…", value: q, onChange: function (e) { setQ(e.target.value); } })),
+        h("div", { className: "yti-subtle" }, "★ tracked = included in the free daily snapshot. Followed channels are always snapshotted."),
+        channels == null ? h("div", { className: "yti-empty" }, "Loading…") :
+        h("div", { className: "yti-rs-scroll" }, list.map(function (c) {
+          return h("div", { key: c.channel_id, className: "yti-tree-row" + (sel === c.channel_id ? " yti-tree-active" : ""), onClick: function () { setSel(c.channel_id); } },
+            h("span", { className: "yti-rs-star" + (c.is_tracked ? " on" : ""), title: c.is_tracked ? "Stop tracking" : "Track daily (free)",
+              onClick: function (e) { e.stopPropagation(); track(c, !c.is_tracked); } }, c.is_tracked ? "★" : "☆"),
+            h("span", { className: "yti-tree-name" }, c.handle || c.title || c.channel_id),
+            h("span", { className: "yti-tree-size" }, (c.hits ? c.hits + " hits · " : "") + c.videos + " v" + (c.profiled ? " · D5" : "")));
+        }))),
+      h("div", { className: "yti-card yti-rs-flex1" },
+        !sel ? h("div", { className: "yti-empty" }, "Pick a channel. The teardown needs ≥10 dated long-form uploads (Snapshot gives the newest 15 exactly; a crawl or Enrich gives the back-catalogue).") :
+        h("div", null,
+          h("div", { className: "yti-rs-head" },
+            h("h3", { className: "yti-rs-h3" }, (prof && prof.channel && (prof.channel.handle || prof.channel.title)) || sel),
+            h(Button, { size: "sm", disabled: busy || running, className: busy ? "yti-busy" : "", onClick: runProfile }, busy ? "Profiling…" : (p ? "Re-run teardown" : "Run teardown"))),
+          msg ? h("div", { className: "yti-notice yti-notice-error" }, msg) : null,
+          prof ? h(SeriesChart, { series: prof.series, changepoints: p ? [{ index: p.changepoint_index }].filter(function (c) { return c.index != null; }) : [] }) : null,
+          !prof ? h("div", { className: "yti-empty" }, "Loading…") :
+          !p ? h("div", { className: "yti-subtle" }, prof.series.length + " dated long-form uploads known. Run the teardown to detect the inflection point and diff the cohorts.") :
+          h("div", null,
+            h("div", { className: "yti-rs-kvs" },
+              h(KV, { k: "uploads", v: p.n_videos }),
+              h(KV, { k: "changepoint", v: p.changepoint_date ? fmtDate(p.changepoint_date) + " (p=" + p.changepoint_p + ")" : "none (p > 0.05)" }),
+              h(KV, { k: "lift ratio", v: p.lift_ratio == null ? "—" : Number(p.lift_ratio).toFixed(2) + "×" }),
+              h(KV, { k: "coherence", v: p.coherence_score == null ? "—" : Number(p.coherence_score).toFixed(3) }),
+              h(KV, { k: "computed", v: formatAgo(p.computed_at) })),
+            (p.off_topic_hits || []).length ? h("div", { className: "yti-notice yti-notice-error" }, "Off-topic hits (poor model to double down on): " + p.off_topic_hits.map(function (o) { return o.title; }).join(" · ")) : null,
+            (p.cohort_diff || []).length ? h("div", null, h("h4", { className: "yti-rs-h4" }, "Cohort diff (before → after, by effect size)"),
+              h("table", { className: "yti-table yti-rs-table" }, h("thead", null, h("tr", null, h("th", null, "feature"), h("th", null, "before"), h("th", null, "after"), h("th", { className: "yti-right" }, "n"), h("th", { className: "yti-right" }, "effect"))),
+                h("tbody", null, p.cohort_diff.slice(0, 30).map(function (d, i) {
+                  const fmt = function (v) { return typeof v === "object" ? JSON.stringify(v) : String(v); };
+                  return h("tr", { key: i }, h("td", null, d.feature), h("td", { className: "yti-small" }, fmt(d.before)), h("td", { className: "yti-small" }, fmt(d.after)),
+                    h("td", { className: "yti-right yti-muted" }, d.n_before + "/" + d.n_after), h("td", { className: "yti-right yti-strong" }, d.effect));
+                })))) : h("div", { className: "yti-subtle" }, "No significant changepoint — no cohort diff."),
+            (p.doubling_down || []).length ? h("div", null, h("h4", { className: "yti-rs-h4" }, "Doubling-down candidates"),
+              p.doubling_down.map(function (c) {
+                return h("div", { key: c.video_id, className: "yti-rs-dd" },
+                  h("b", null, c.multiple + "× "), h("a", { className: "yti-video-link", href: "https://www.youtube.com/watch?v=" + c.video_id, target: "_blank", rel: "noopener" }, c.title),
+                  h("div", { className: "yti-small yti-muted" }, JSON.stringify(c.profile)),
+                  (c.formats || []).map(function (f) {
+                    return h("div", { key: f.format_id, className: "yti-small" }, "format: " + f.label + " · slots " + JSON.stringify(f.slots),
+                      (f.proven_elsewhere || []).length ? h("ul", { className: "yti-rs-ul" }, f.proven_elsewhere.map(function (o, i) { return h("li", { key: i }, "proven in " + o.niche + " at " + o.multiple + "× with " + JSON.stringify(o.slots)); })) : null);
+                  }),
+                  h("div", { className: "yti-small yti-muted" }, c.framing));
+              })) : null,
+            p.llm_teardown ? h("div", { className: "yti-md" }, renderMarkdown(p.llm_teardown)) : null))));
+  }
+
+  // ---- Budget + reports --------------------------------------------------------------
+  function ResearchBudget(props) {
+    const [data, setData] = useState(null);
+    const [reports, setReports] = useState(null);
+    const [view, setView] = useState(null);
+    useEffect(function () {
+      api("/research/budget").then(setData).catch(function () { setData({}); });
+      api("/research/reports").then(setReports).catch(function () { setReports({ files: [] }); });
+    }, []);
+    const openReport = function (f) {
+      api("/research/report-file?path=" + encodeURIComponent(f.relPath)).then(function (r) { setView({ name: f.name, content: r.content || "" }); }).catch(function () {});
+    };
+    if (!data) return h("div", { className: "yti-empty" }, "Loading…");
+    const totals = data.totals || [];
+    return h("div", null,
+      h("div", { className: "yti-stats-row" },
+        totals.map(function (t) { return h(StatCard, { key: t.provider, value: formatNumber(t.credits), label: t.provider + " credits (all time, " + t.calls + " calls)" }); }),
+        (data.today || []).map(function (t) { return h(StatCard, { key: "t" + t.provider, value: formatNumber(t.credits), label: t.provider + " today" }); }),
+        h(StatCard, { value: String(data.quarantine || 0), label: "quarantined records" })),
+      h("div", { className: "yti-subtle" }, "Caps: " + JSON.stringify(data.caps || {}) + " · the ledger reads only api_usage; failures are recorded with credits=0."),
+      h("div", { className: "yti-rs-row" },
+        h("div", { className: "yti-card yti-rs-flex1" }, h("h3", { className: "yti-rs-h3" }, "By endpoint (" + data.days + "d)"),
+          h("table", { className: "yti-table yti-rs-table" }, h("thead", null, h("tr", null, h("th", null, "provider"), h("th", null, "endpoint"), h("th", { className: "yti-right" }, "credits"), h("th", { className: "yti-right" }, "calls"), h("th", { className: "yti-right" }, "failures"))),
+            h("tbody", null, (data.byEndpoint || []).map(function (r, i) { return h("tr", { key: i }, h("td", null, r.provider), h("td", { className: "yti-small" }, r.endpoint), h("td", { className: "yti-right" }, r.credits), h("td", { className: "yti-right yti-muted" }, r.calls), h("td", { className: "yti-right yti-muted" }, r.failures)); })))),
+        h("div", { className: "yti-card yti-rs-flex1" }, h("h3", { className: "yti-rs-h3" }, "By day"),
+          h("table", { className: "yti-table yti-rs-table" }, h("thead", null, h("tr", null, h("th", null, "day"), h("th", null, "provider"), h("th", { className: "yti-right" }, "credits"), h("th", { className: "yti-right" }, "calls"))),
+            h("tbody", null, (data.byDay || []).slice(0, 40).map(function (r, i) { return h("tr", { key: i }, h("td", null, r.day), h("td", null, r.provider), h("td", { className: "yti-right" }, r.credits), h("td", { className: "yti-right yti-muted" }, r.calls)); }))))),
+      h("div", { className: "yti-card", style: { marginTop: 12 } },
+        h("h3", { className: "yti-rs-h3" }, "Reports (D1–D5)"),
+        h("div", { className: "yti-subtle" }, "Markdown written to the workspace under research/reports/ — also browsable on the Artifacts tab."),
+        !reports || !reports.files.length ? h("div", { className: "yti-empty" }, "No reports yet — run Report on the Run panel.") :
+        h("div", { className: "yti-chip-row" }, reports.files.map(function (f) {
+          return h("button", { key: f.relPath, className: "yti-filter-chip", onClick: function () { openReport(f); } }, f.date + " · " + f.name);
+        })),
+        view ? h("div", { className: "yti-rs-report" }, h("div", { className: "yti-rs-head" }, h("b", null, view.name), h(Button, { size: "sm", variant: "outline", onClick: function () { setView(null); } }, "Close")),
+          h("div", { className: "yti-md" }, renderMarkdown(view.content))) : null));
+  }
+
+  function ResearchView() {
+    const [overview, setOverview] = useState(null);
+    const [panel, setPanel] = useState("run");
+    const [err, setErr] = useState(null);
+    const reload = useCallback(function () {
+      api("/research/overview").then(function (d) { setOverview(d); setErr(null); }).catch(function (e) { setErr(String((e && e.message) || e)); });
+    }, []);
+    useEffect(function () { reload(); }, [reload]);
+    useEffect(function () {
+      if (overview && overview.niches && overview.niches.length === 0 && panel === "run") setPanel("setup");
+    }, [overview]);  // eslint-disable-line
+    const counts = (overview && overview.counts) || {};
+    const body = panel === "setup" ? h(ResearchSetup, { overview: overview, reload: reload })
+      : panel === "run" ? h(ResearchRun, { overview: overview, reload: reload })
+      : panel === "outliers" ? h(ResearchOutliers, { overview: overview })
+      : panel === "formats" ? h(ResearchFormats, {})
+      : panel === "gaps" ? h(ResearchGaps, {})
+      : panel === "teardown" ? h(ResearchTeardown, { overview: overview })
+      : h(ResearchBudget, {});
+    return h("div", { className: "yti-page" },
+      h("div", { className: "yti-header" },
+        h("h1", { className: "yti-title" }, "YouTube Research"),
+        h("div", { className: "yti-header-actions" }, h(Button, { size: "sm", variant: "outline", onClick: reload }, "Refresh"))),
+      h("div", { className: "yti-subtle" },
+        "Niche teardown engine: crawl a niche depth-first, find videos that beat their own channel's baseline, mine the ",
+        "packaging formats behind them with their failure rates, and surface formats proven elsewhere but absent from your niche.",
+        overview && overview.lastRuns && overview.lastRuns.snapshot ? " · last snapshot " + formatAgo(overview.lastRuns.snapshot) : ""),
+      err ? h("div", { className: "yti-notice yti-notice-error" }, err) : null,
+      h(ChannelManager, { title: "Followed Channels", defaultOpen: true,
+        hint: "Same list as the Trends tab. Every followed channel is snapshotted daily for free (exact views), and its uploads are scored against its own baseline." }),
+      h("div", { className: "yti-stats-row" },
+        h(StatCard, { value: String(counts.channels || 0), label: "Channels seen" }),
+        h(StatCard, { value: String(counts.videos || 0), label: "Videos" }),
+        h(StatCard, { value: String(counts.hits || 0), label: "Hits (≥3× baseline)" }),
+        h(StatCard, { value: String(counts.formats || 0), label: "Formats" }),
+        h(StatCard, { value: String(counts.video_snapshots || 0), label: "Snapshot points" })),
+      h("div", { className: "yti-rs-nav" }, RS_PANELS.map(function (p) {
+        return h("button", { key: p[0], className: "yti-rs-pill" + (panel === p[0] ? " yti-rs-pill-on" : ""), onClick: function () { setPanel(p[0]); } }, p[1]);
+      })),
+      overview === null ? h("div", { className: "yti-empty" }, "Loading…") : body);
+  }
+
+  // -------------------------------------------------------------------------
+  // Root page: Research | Trends | Insights | Artifacts sub-tabs
   // -------------------------------------------------------------------------
 
   function YouTubeInsightsPage() {
-    const [view, setView] = useState("trends");
+    const [view, setView] = useState("research");
     return h("div", { className: "yti-root" },
       // same gutters as the page content (24px) and the Short Form top
       // margin (28px)
@@ -1697,6 +2303,10 @@
           "🎬 Long Form")),
       h("div", { className: "yti-tabs" },
         h("button", {
+          className: "yti-tab" + (view === "research" ? " yti-tab-active" : ""),
+          onClick: function () { setView("research"); },
+        }, "Research"),
+        h("button", {
           className: "yti-tab" + (view === "trends" ? " yti-tab-active" : ""),
           onClick: function () { setView("trends"); },
         }, "Trends"),
@@ -1709,7 +2319,8 @@
           onClick: function () { setView("artifacts"); },
         }, "Artifacts")
       ),
-      view === "trends" ? h(TrendsView)
+      view === "research" ? h(ResearchView)
+        : view === "trends" ? h(TrendsView)
         : view === "insights" ? h(InsightsView)
         : h(ArtifactsView)
     );

@@ -489,3 +489,245 @@ def achievements_progress() -> dict:
          "done": insights > 0},
     ]
     return {"items": items, "complete": all(i["done"] for i in items)}
+
+
+# ---------------------------------------------------------------------------
+# YouTube Research tab — niche crawl / outliers / formats / gap / teardown.
+# Thin wrappers over yti_rs_* (the same code the yt_research tool runs).
+# ---------------------------------------------------------------------------
+
+import json  # noqa: E402
+import yti_rs_db  # noqa: E402
+import yti_rs_config  # noqa: E402
+import yti_rs_jobs  # noqa: E402
+import yti_rs_budget  # noqa: E402
+import yti_rs_formats  # noqa: E402
+import yti_rs_report  # noqa: E402
+import yti_rs_profiles  # noqa: E402
+import yti_rs_crawl  # noqa: E402
+
+
+def _rconn():
+    return yti_rs_db.connect()
+
+
+@router.get("/research/overview")
+def research_overview() -> dict[str, Any]:
+    conn = _rconn()
+    dconn = yti_store.connect()
+    try:
+        cfg = yti_rs_config.load_config(conn)
+        followed = yti_store.list_channels(dconn)
+        tracked = conn.execute("SELECT COUNT(*) FROM channels WHERE is_tracked = 1").fetchone()[0]
+        last = {k: yti_rs_db.get_meta(conn, f"last_{k}_run") for k in
+                ("snapshot", "score", "enrich", "transcripts", "comments", "formats", "report")}
+        runs = yti_rs_db.rows(conn, "SELECT run_id, started_at, finished_at, status, stats_json FROM crawl_runs "
+                                    "ORDER BY started_at DESC LIMIT 8")
+        for r in runs:
+            try:
+                r["stats"] = json.loads(r.pop("stats_json") or "{}")
+            except json.JSONDecodeError:
+                r["stats"] = {}
+        niches = [n["name"] for n in cfg.get("niches") or []]
+        return {
+            "config": cfg, "configProblems": yti_rs_config.validate_config(cfg) if cfg.get("niches") else [],
+            "secrets": yti_rs_config.get_secrets().present(),
+            "followedChannels": followed, "trackedResearchChannels": tracked,
+            "counts": yti_rs_db.counts(conn), "lastRuns": last, "crawlRuns": runs,
+            "job": yti_rs_jobs.state(), "history": yti_rs_jobs.load_history(),
+            "niches": niches, "maturityCurve": yti_rs_db.get_meta_json(conn, "maturity_curve"),
+            "lastReportDir": yti_rs_db.get_meta(conn, "last_report_dir"),
+        }
+    finally:
+        conn.close()
+        dconn.close()
+
+
+
+class ResearchConfigBody(BaseModel):
+    config: dict
+
+
+@router.put("/research/config")
+def research_put_config(body: ResearchConfigBody) -> dict[str, Any]:
+    conn = _rconn()
+    try:
+        cfg = yti_rs_config.save_config(conn, body.config)
+        return {"ok": True, "config": cfg}
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    finally:
+        conn.close()
+
+
+class ResearchRunBody(BaseModel):
+    job: str
+    params: dict = {}
+
+
+@router.post("/research/run")
+def research_run(body: ResearchRunBody) -> dict[str, Any]:
+    if body.job not in yti_rs_jobs.JOBS:
+        raise HTTPException(status_code=400, detail=f"unknown job {body.job}")
+    if body.job == "crawl" and body.params.get("dry_run"):
+        conn = _rconn()
+        try:
+            cfg = yti_rs_config.load_config(conn)
+            return {"ok": True, "dryRun": True, "plan": yti_rs_crawl.plan(cfg, body.params.get("niches") or None)}
+        finally:
+            conn.close()
+    try:
+        return yti_rs_jobs.start(body.job, body.params)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.get("/research/job")
+def research_job() -> dict[str, Any]:
+    return yti_rs_jobs.state()
+
+
+@router.get("/research/outliers")
+def research_outliers(niche: str = "", classes: str = "strong_hit,hit", limit: int = 100, offset: int = 0,
+                      sort: str = "projected_multiple") -> dict[str, Any]:
+    conn = _rconn()
+    try:
+        cls = [c for c in classes.split(",") if c] or None
+        return yti_rs_report.outlier_register(conn, niche=niche or None, classes=cls,
+                                              limit=max(1, min(limit, 500)), offset=max(0, offset), sort=sort)
+    finally:
+        conn.close()
+
+
+@router.get("/research/demand")
+def research_demand() -> dict[str, Any]:
+    conn = _rconn()
+    try:
+        return yti_rs_report.demand_map(conn, yti_rs_config.load_config(conn))
+    finally:
+        conn.close()
+
+
+@router.get("/research/formats")
+def research_formats(niche: str = "") -> dict[str, Any]:
+    conn = _rconn()
+    try:
+        cfg = yti_rs_config.load_config(conn)
+        return {"formats": yti_rs_formats.library(conn, niche or None),
+                "minActionableN": int(cfg.get("formats", {}).get("min_actionable_n", 10))}
+    finally:
+        conn.close()
+
+
+@router.get("/research/gaps")
+def research_gaps(minWilson: Optional[float] = None) -> dict[str, Any]:
+    conn = _rconn()
+    try:
+        return yti_rs_formats.gap_report(conn, yti_rs_config.load_config(conn), minWilson)
+    finally:
+        conn.close()
+
+
+@router.get("/research/channels")
+def research_channels(niche: str = "", limit: int = 300) -> dict[str, Any]:
+    conn = _rconn()
+    try:
+        params: list[Any] = []
+        where = ""
+        if niche:
+            where = " WHERE c.niche = ?"
+            params.append(niche)
+        rows = yti_rs_db.rows(conn, f"""
+            SELECT c.channel_id, c.handle, c.title, c.niche, c.is_tracked, c.subscriber_count, c.subscriber_approx,
+                   (SELECT COUNT(*) FROM videos v WHERE v.channel_id = c.channel_id) AS videos,
+                   (SELECT COUNT(*) FROM videos v JOIN scores s ON s.video_id = v.video_id
+                     WHERE v.channel_id = c.channel_id AND s.class IN ('hit','strong_hit')) AS hits,
+                   (SELECT MAX(s.projected_multiple) FROM videos v JOIN scores s ON s.video_id = v.video_id
+                     WHERE v.channel_id = c.channel_id) AS top_multiple,
+                   (SELECT COUNT(*) FROM channel_profiles p WHERE p.channel_id = c.channel_id) AS profiled
+            FROM channels c{where} ORDER BY hits DESC, videos DESC LIMIT ?""", params + [max(1, min(limit, 1000))])
+        return {"channels": rows}
+    finally:
+        conn.close()
+
+
+class TrackBody(BaseModel):
+    channelId: str
+    tracked: bool
+
+
+@router.post("/research/channels/track")
+def research_track(body: TrackBody) -> dict[str, Any]:
+    conn = _rconn()
+    try:
+        conn.execute("UPDATE channels SET is_tracked = ? WHERE channel_id = ?", (int(body.tracked), body.channelId))
+        conn.commit()
+        return {"ok": True}
+    finally:
+        conn.close()
+
+
+@router.get("/research/profile")
+def research_profile(channel: str) -> dict[str, Any]:
+    conn = _rconn()
+    try:
+        ident = channel.strip()
+        row = yti_rs_db.one(conn, "SELECT * FROM channels WHERE channel_id = ? OR lower(handle) = lower(?)",
+                            (ident, ident if ident.startswith("@") else "@" + ident))
+        if not row:
+            raise HTTPException(status_code=404, detail="channel not in the research DB")
+        prof = yti_rs_profiles.load_profile(conn, row["channel_id"])
+        series = yti_rs_db.rows(conn, """
+            SELECT v.video_id, v.title, v.published_at, v.views, s.projected_views, s.class, s.projected_multiple
+            FROM videos v LEFT JOIN scores s ON s.video_id = v.video_id
+            WHERE v.channel_id = ? AND v.published_at IS NOT NULL AND (v.is_short IS NULL OR v.is_short = 0)
+            ORDER BY v.published_at""", (row["channel_id"],))
+        md = yti_rs_report.render_d5(conn, row["channel_id"], prof) if prof else None
+        return {"channel": row, "profile": prof, "series": series, "markdown": md}
+    finally:
+        conn.close()
+
+
+@router.get("/research/budget")
+def research_budget(days: int = 30) -> dict[str, Any]:
+    conn = _rconn()
+    try:
+        cfg = yti_rs_config.load_config(conn)
+        return {**yti_rs_budget.ledger(conn, max(1, min(days, 365))), "caps": cfg.get("budget", {}),
+                "quarantine": conn.execute("SELECT COUNT(*) FROM quarantine").fetchone()[0]}
+    finally:
+        conn.close()
+
+
+@router.post("/research/doctor")
+def research_doctor(body: Optional[dict] = None) -> dict[str, Any]:
+    body = body or {}
+    return yti_rs_jobs.doctor(run_sample=bool(body.get("runSample")))
+
+
+@router.get("/research/reports")
+def research_reports() -> dict[str, Any]:
+    conn = _rconn()
+    try:
+        last = yti_rs_db.get_meta(conn, "last_report_dir")
+    finally:
+        conn.close()
+    files: list[dict[str, Any]] = []
+    root = yti_paths.workspace_dir()
+    base = root / "research" / "reports"
+    if base.is_dir():
+        for d in sorted(base.iterdir(), reverse=True)[:10]:
+            if d.is_dir():
+                for f in sorted(d.iterdir()):
+                    if f.suffix == ".md":
+                        files.append({"date": d.name, "name": f.name, "relPath": str(f.relative_to(root)),
+                                      "size": f.stat().st_size})
+    return {"files": files, "lastDir": last}
+
+
+@router.get("/research/report-file")
+def research_report_file(path: str) -> dict[str, Any]:
+    result = yti_workspace.read_file(path)
+    if not result.get("ok"):
+        raise HTTPException(status_code=400, detail=result.get("error"))
+    return result
