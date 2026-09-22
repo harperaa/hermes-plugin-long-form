@@ -160,7 +160,7 @@
     const chatHref = g && g.sessionId
       ? "/chat?resume=" + encodeURIComponent(g.sessionId) : null;
     const taskHref = g && g.taskId
-      ? "/kanban#task=" + encodeURIComponent(g.taskId) : null;
+      ? "/kanban?task=" + encodeURIComponent(g.taskId) : null;
 
     function navLink(href, text, title) {
       return h("a", {
@@ -1169,7 +1169,7 @@
     var prodChat = prod && prod.sessionId
       ? "/chat?resume=" + encodeURIComponent(prod.sessionId) : null;
     var prodTask = prod && prod.taskId
-      ? "/kanban#task=" + encodeURIComponent(prod.taskId) : null;
+      ? "/kanban?task=" + encodeURIComponent(prod.taskId) : null;
     var iter = sel && iterate[sel.relPath];
     var iterOpen = !!iter && iter.status === "open";
     var iterChat = iterOpen && iter.sessionId
