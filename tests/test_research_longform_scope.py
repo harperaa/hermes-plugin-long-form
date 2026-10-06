@@ -17,7 +17,7 @@ NOW = datetime(2026, 10, 6, tzinfo=timezone.utc)
 
 def _cfg():
     cfg = dict(DEFAULT_CONFIG)
-    cfg["niches"] = [{"name": "n1", "is_target": True, "signal_half_life_days": 365, "seed_terms": ["alpha"]}]
+    cfg["niches"] = [{"name": "n1", "is_target": True, "signal_half_life_days": 365, "seed_terms": ["alpha", "long"]}]
     return cfg
 
 

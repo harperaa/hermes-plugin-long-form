@@ -14,11 +14,12 @@ from datetime import datetime, timezone
 from typing import Any, Optional
 
 try:
-    from . import yti_rs_db, yti_rs_normalize
+    from . import yti_rs_db, yti_rs_normalize, yti_rs_relevance
     from .yti_rs_config import DEFAULT_MATURITY_CURVE
 except ImportError:  # pragma: no cover
     import yti_rs_db  # type: ignore
     import yti_rs_normalize  # type: ignore
+    import yti_rs_relevance  # type: ignore
     from yti_rs_config import DEFAULT_MATURITY_CURVE  # type: ignore
 
 CLASS_IMMATURE = "immature"
@@ -235,10 +236,46 @@ def resolve_unknown_form(conn: sqlite3.Connection) -> int:
     return n
 
 
+def niche_verdicts(videos: list[dict[str, Any]], cfg: dict[str, Any], trusted_channels: set[str]
+                   ) -> tuple[dict[str, int], dict[tuple[str, str], Optional[bool]]]:
+    """Per-video in-niche verdict (1/0) and per-(niche, channel) on-topic verdict.
+
+    A video is tagged OUT only on positive evidence: its channel has enough
+    long-form titles to judge, too few of them mention the niche's vocabulary,
+    the operator does not follow/track the channel, and the video's own title
+    does not carry at least two of the niche's core words. Everything else
+    stays in — a thin vocabulary must never hide data on its own.
+    """
+    c = cfg.get("crawl", {})
+    min_share = float(c.get("channel_relevance_min", 0.20))
+    min_titles = int(c.get("relevance_min_titles", 5))
+    vocabs = {n["name"]: yti_rs_relevance.niche_vocab(n) for n in cfg.get("niches") or []}
+    cores = {n["name"]: yti_rs_relevance.niche_core_vocab(n) for n in cfg.get("niches") or []}
+    groups: dict[tuple[str, str], list[dict[str, Any]]] = {}
+    for v in videos:
+        groups.setdefault((v["niche"], v["channel_id"]), []).append(v)
+    in_niche: dict[str, int] = {}
+    channel_verdict: dict[tuple[str, str], Optional[bool]] = {}
+    for (niche, cid), rows in groups.items():
+        vocab = vocabs.get(niche)
+        if not vocab or cid in trusted_channels:
+            verdict: Optional[bool] = True
+        else:
+            longs = [r["title"] for r in rows if bucket_for(r) == "long"]
+            verdict = yti_rs_relevance.channel_on_topic(longs, vocab, min_share=min_share, min_titles=min_titles)
+        channel_verdict[(niche, cid)] = verdict
+        for r in rows:
+            # on an off-topic channel one broad word is not evidence ("attack" on a
+            # news network is war coverage): require two of the niche's core words
+            keep = verdict is not False or yti_rs_relevance.match_count(r["title"], cores.get(niche) or vocab) >= 2
+            in_niche[r["video_id"]] = 1 if keep else 0
+    return in_niche, channel_verdict
+
+
 # -- score_all ------------------------------------------------------------------------
 
 def score_all(conn: sqlite3.Connection, cfg: dict[str, Any], *, now: Optional[datetime] = None,
-              refit_curve: bool = False) -> dict[str, Any]:
+              refit_curve: bool = False, followed: Optional[set[str]] = None) -> dict[str, Any]:
     now = now or datetime.now(timezone.utc)
     s = cfg.get("scoring", {})
     window = int(s.get("baseline_window", 20))
@@ -262,6 +299,12 @@ def score_all(conn: sqlite3.Connection, cfg: dict[str, Any], *, now: Optional[da
     by_channel: dict[str, list[dict[str, Any]]] = {}
     for v in videos:
         by_channel.setdefault(v["channel_id"], []).append(v)
+
+    # topical relevance: channels the operator follows or tracks are in-niche by choice
+    fol = {h.lower() for h in (followed or set())}
+    trusted = {r["channel_id"] for r in conn.execute("SELECT channel_id, handle, is_tracked FROM channels")
+               if r["is_tracked"] or (r["handle"] or "").lower() in fol}
+    in_niche, _channel_verdict = niche_verdicts(videos, cfg, trusted)
 
     comment_stats = {r["video_id"]: r for r in yti_rs_db.rows(conn, """
         SELECT video_id, COUNT(*) AS n, AVG(CASE WHEN sentiment > 0.2 THEN 1.0 ELSE 0.0 END) AS pos_share,
@@ -315,7 +358,9 @@ def score_all(conn: sqlite3.Connection, cfg: dict[str, Any], *, now: Optional[da
     # skew every long-form percentile (and the paid/breakout flags built on them)
     cohorts: dict[tuple[str, str], list[dict[str, Any]]] = {}
     for c in computed:
-        cohorts.setdefault((c["video"]["niche"], c["bucket"]), []).append(c)
+        # off-topic videos are scored but kept out of the niche's percentile cohort
+        if in_niche.get(c["video"]["video_id"], 1):
+            cohorts.setdefault((c["video"]["niche"], c["bucket"]), []).append(c)
     bw_age = float(s.get("breakout_watch_max_age_days", 14))
     bw_pct = float(s.get("breakout_watch_comment_pct", 80))
     for (niche, _bucket), group in cohorts.items():
@@ -357,15 +402,18 @@ def score_all(conn: sqlite3.Connection, cfg: dict[str, Any], *, now: Optional[da
         conn.execute("""INSERT INTO scores(video_id, computed_at, format_bucket, age_days, baseline_views,
             baseline_n, multiple, projected_views, projected_multiple, log_mad_z, signal_weight, like_rate,
             comment_rate, positive_comment_rate, vs_percentile, organic_flag, breakout_watch, fade_watch,
-            maturity_source, raw_only, class) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            maturity_source, raw_only, in_niche, class) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             (v["video_id"], ts, c["bucket"], c["age"], c["baseline"], c["n"], c["multiple"], c["projected"],
              c["pmult"], c["z"], c["weight"], c.get("like_rate"), c.get("comment_rate"),
              c.get("pos_comment_rate"), c.get("vs_pct"), c.get("organic", "unknown"),
-             c.get("breakout", 0), c.get("fade", 0), curve_src, int(c["raw_only"]), cls))
+             c.get("breakout", 0), c.get("fade", 0), curve_src, int(c["raw_only"]),
+             in_niche.get(v["video_id"], 1), cls))
     conn.commit()
     yti_rs_db.set_meta(conn, "last_score_run", ts)
     by_bucket: dict[str, int] = {}
     for c in computed:
         by_bucket[c["bucket"]] = by_bucket.get(c["bucket"], 0) + 1
+    off_channels = sorted({cid for (_n, cid), verdict in _channel_verdict.items() if verdict is False})
     return {"scored": len(computed), "classes": tally, "buckets": by_bucket,
-            "form_resolved": resolved, "maturity_curve": curve_meta}
+            "form_resolved": resolved, "out_of_niche": sum(1 for x in in_niche.values() if not x),
+            "off_topic_channels": len(off_channels), "maturity_curve": curve_meta}

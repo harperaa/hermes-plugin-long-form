@@ -95,6 +95,67 @@ def run_enrich(conn: sqlite3.Connection, cfg: dict[str, Any], apify, *, classes:
     return summary
 
 
+# -- channel sizes (approximate, from channel search) -------------------------------------------
+
+def lookup_channel_size(conn: sqlite3.Connection, tapi, channel: dict[str, Any]) -> Optional[int]:
+    """Subscriber count for one channel from a TranscriptAPI channel search
+    (1 credit; the text is rounded, e.g. "712K subscribers" -> 712000, so the
+    value is stored with ``subscriber_approx = 1``). Every other channel the
+    search returns that we already know is updated too. Returns the count, or
+    None when the search did not return this channel."""
+    query = channel.get("handle") or channel.get("title") or channel["channel_id"]
+    data = tapi.search(str(query), "channel")
+    found: Optional[int] = None
+    for r in (data or {}).get("results") or []:
+        cid = str(r.get("channelId") or "")
+        subs, _ = yti_rs_normalize.parse_views(r.get("subscriberCount"))
+        if not cid or subs is None:
+            continue
+        known = conn.execute("SELECT subscriber_count, subscriber_approx FROM channels WHERE channel_id = ?",
+                             (cid,)).fetchone()
+        if known is None:
+            continue
+        if known["subscriber_count"] is None or known["subscriber_approx"]:
+            conn.execute("UPDATE channels SET subscriber_count = ?, subscriber_approx = 1, handle = COALESCE(handle, ?) "
+                         "WHERE channel_id = ?", (subs, yti_rs_normalize.channel_handle_clean(r.get("handle")), cid))
+        if cid == channel["channel_id"]:
+            found = subs if known["subscriber_count"] is None or known["subscriber_approx"] else known["subscriber_count"]
+    conn.commit()
+    return found
+
+
+def run_sizes(conn: sqlite3.Connection, cfg: dict[str, Any], tapi, *, max_channels: int = 100,
+              log: Callable[[str], None] = lambda m: None) -> dict[str, Any]:
+    """Fill in missing subscriber counts, most useful first: channels with
+    scored in-niche long-form videos, ordered by hits then video count."""
+    todo = yti_rs_db.rows(conn, """
+        SELECT c.channel_id, c.handle, c.title,
+               SUM(CASE WHEN s.class IN ('hit','strong_hit') THEN 1 ELSE 0 END) AS hits, COUNT(*) AS n
+        FROM channels c JOIN videos v ON v.channel_id = c.channel_id JOIN scores s ON s.video_id = v.video_id
+        WHERE c.subscriber_count IS NULL AND s.format_bucket = 'long' AND s.in_niche = 1 AND s.class != 'immature'
+        GROUP BY c.channel_id ORDER BY hits DESC, n DESC LIMIT ?""", (int(max_channels),))
+    summary: dict[str, Any] = {"candidates": len(todo), "sized": 0, "not_found": 0, "errors": []}
+    for ch in todo:
+        if conn.execute("SELECT subscriber_count FROM channels WHERE channel_id = ?", (ch["channel_id"],)).fetchone()[0] is not None:
+            summary["sized"] += 1          # a previous search in this run already returned it
+            continue
+        try:
+            subs = lookup_channel_size(conn, tapi, ch)
+        except CreditsExhausted:
+            raise
+        except ClientError as exc:
+            summary["errors"].append(f"{ch.get('handle') or ch['channel_id']}: {exc}")
+            continue
+        if subs is None:
+            summary["not_found"] += 1
+            log(f"size {ch.get('handle') or ch['channel_id']}: not returned by channel search")
+        else:
+            summary["sized"] += 1
+            log(f"size {ch.get('handle') or ch['channel_id']}: ~{subs:,} subscribers")
+    yti_rs_db.set_meta(conn, "last_sizes_run", yti_rs_db.now_iso())
+    return summary
+
+
 # -- Tier 3: transcripts ----------------------------------------------------------------------
 
 TranscriptFn = Callable[[str], Optional[dict[str, Any]]]

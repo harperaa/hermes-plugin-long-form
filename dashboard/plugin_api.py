@@ -588,15 +588,28 @@ def research_job() -> dict[str, Any]:
     return yti_rs_jobs.state()
 
 
+def _size_band(conn, size: str) -> tuple[Optional[int], Optional[int]]:
+    """'band' = the subscriber band from Setup (default up to 100k); 'any' = no size filter;
+    a number = that many subscribers at most."""
+    crawl = yti_rs_config.load_config(conn).get("crawl", {})
+    if size == "any":
+        return None, None
+    if size.isdigit():
+        return None, int(size)
+    return int(crawl.get("min_subscribers", 0) or 0) or None, int(crawl.get("max_subscribers", 0) or 0) or None
+
+
 @router.get("/research/outliers")
 def research_outliers(niche: str = "", classes: str = "strong_hit,hit", limit: int = 100, offset: int = 0,
-                      sort: str = "projected_multiple", order: str = "desc") -> dict[str, Any]:
+                      sort: str = "projected_multiple", order: str = "desc",
+                      size: str = "band") -> dict[str, Any]:
     conn = _rconn()
     try:
         cls = [c for c in classes.split(",") if c] or None
+        lo, hi = _size_band(conn, size)
         return yti_rs_report.outlier_register(conn, niche=niche or None, classes=cls,
                                               limit=max(1, min(limit, 500)), offset=max(0, offset), sort=sort,
-                                              order=order)
+                                              order=order, min_subs=lo, max_subs=hi)
     finally:
         conn.close()
 
@@ -651,15 +664,18 @@ def research_channels(niche: str = "", limit: int = 300) -> dict[str, Any]:
             params.append(niche)
         rows = yti_rs_db.rows(conn, f"""
             SELECT c.channel_id, c.handle, c.title, c.niche, c.is_tracked, c.subscriber_count, c.subscriber_approx,
-                   (SELECT COUNT(*) FROM videos v WHERE v.channel_id = c.channel_id AND v.is_short = 0) AS videos,
+                   (SELECT COUNT(*) FROM videos v LEFT JOIN scores s ON s.video_id = v.video_id
+                     WHERE v.channel_id = c.channel_id AND v.is_short = 0 AND COALESCE(s.in_niche, 1) = 1) AS videos,
                    (SELECT COUNT(*) FROM videos v JOIN scores s ON s.video_id = v.video_id
-                     WHERE v.channel_id = c.channel_id AND s.format_bucket = 'long'
+                     WHERE v.channel_id = c.channel_id AND s.format_bucket = 'long' AND s.in_niche = 1
                        AND s.class IN ('hit','strong_hit')) AS hits,
                    (SELECT MAX(s.projected_multiple) FROM videos v JOIN scores s ON s.video_id = v.video_id
-                     WHERE v.channel_id = c.channel_id AND s.format_bucket = 'long') AS top_multiple,
+                     WHERE v.channel_id = c.channel_id AND s.format_bucket = 'long' AND s.in_niche = 1) AS top_multiple,
                    (SELECT COUNT(*) FROM channel_profiles p WHERE p.channel_id = c.channel_id) AS profiled
             FROM channels c{where}{' AND' if where else ' WHERE'}
-                 (c.is_tracked = 1 OR EXISTS (SELECT 1 FROM videos v WHERE v.channel_id = c.channel_id AND v.is_short = 0))
+                 (c.is_tracked = 1 OR EXISTS (SELECT 1 FROM videos v LEFT JOIN scores s ON s.video_id = v.video_id
+                                              WHERE v.channel_id = c.channel_id AND v.is_short = 0
+                                                AND COALESCE(s.in_niche, 1) = 1))
             ORDER BY hits DESC, videos DESC LIMIT ?""", params + [max(1, min(limit, 1000))])
         return {"channels": rows}
     finally:

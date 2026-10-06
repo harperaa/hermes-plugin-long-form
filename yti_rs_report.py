@@ -59,7 +59,7 @@ def demand_map(conn: sqlite3.Connection, cfg: dict[str, Any], bucket: str = "lon
     rows = yti_rs_db.rows(conn, """
         SELECT v.video_id, v.title, v.niche, v.channel_id, s.class, s.projected_multiple, s.signal_weight
         FROM videos v JOIN scores s ON s.video_id = v.video_id
-        WHERE s.class IN ('hit','strong_hit') AND s.format_bucket = ?""", (bucket,))
+        WHERE s.class IN ('hit','strong_hit') AND s.format_bucket = ? AND s.in_niche = 1""", (bucket,))
     per_niche: dict[str, Counter] = defaultdict(Counter)
     channels: dict[str, dict[str, set]] = defaultdict(lambda: defaultdict(set))
     for r in rows:
@@ -111,13 +111,21 @@ def render_d1(d: dict[str, Any]) -> str:
 def outlier_register(conn: sqlite3.Connection, *, niche: Optional[str] = None,
                      classes: Optional[list[str]] = None, limit: int = 200, offset: int = 0,
                      sort: str = "projected_multiple", bucket: str = "long",
-                     order: str = "desc") -> dict[str, Any]:
+                     order: str = "desc", min_subs: Optional[int] = None,
+                     max_subs: Optional[int] = None) -> dict[str, Any]:
     """Scored videos in ONE format bucket (default long-form). Shorts are
     scored against their own baselines and kept in the DB, but never mixed
     into a long-form register."""
-    where, params = ["s.format_bucket = ?"], [bucket]
+    # in-niche only; channel size is a filter (followed/tracked channels and
+    # channels whose size is not known yet are never filtered out by it)
+    where, params = ["s.format_bucket = ?", "s.in_niche = 1"], [bucket]
     if niche:
         where.append("v.niche = ?"); params.append(niche)
+    if max_subs is not None:
+        where.append("(c.subscriber_count IS NULL OR c.is_tracked = 1 OR c.subscriber_count <= ?)"); params.append(int(max_subs))
+    if min_subs is not None:
+        where.append("(c.subscriber_count IS NULL OR c.is_tracked = 1 OR c.subscriber_count >= ?)"); params.append(int(min_subs))
+    base_where, base_params = list(where), list(params)
     if classes:
         where.append("s.class IN (" + ",".join("?" for _ in classes) + ")"); params.extend(classes)
     w = (" WHERE " + " AND ".join(where)) if where else ""
@@ -126,7 +134,7 @@ def outlier_register(conn: sqlite3.Connection, *, niche: Optional[str] = None,
     sort_col = {
         "projected_multiple": "s.projected_multiple", "multiple": "s.multiple", "views": "v.views",
         "age": "s.age_days", "vs": "s.vs_percentile", "z": "s.log_mad_z", "weight": "s.signal_weight",
-        "title": "v.title COLLATE NOCASE", "niche": "v.niche COLLATE NOCASE",
+        "title": "v.title COLLATE NOCASE", "niche": "v.niche COLLATE NOCASE", "subs": "c.subscriber_count",
         "channel": "COALESCE(c.handle, c.title, v.channel_id) COLLATE NOCASE",
         "class": "CASE s.class WHEN 'strong_hit' THEN 5 WHEN 'hit' THEN 4 WHEN 'normal' THEN 3 "
                  "WHEN 'under' THEN 2 ELSE 1 END",
@@ -135,19 +143,21 @@ def outlier_register(conn: sqlite3.Connection, *, niche: Optional[str] = None,
                  "+ s.breakout_watch)",
     }.get(sort, "s.projected_multiple")
     direction = "ASC" if str(order).lower() == "asc" else "DESC"
-    total = conn.execute(f"SELECT COUNT(*) FROM videos v JOIN scores s ON s.video_id = v.video_id{w}", params).fetchone()[0]
+    join = ("FROM videos v JOIN scores s ON s.video_id = v.video_id "
+            "LEFT JOIN channels c ON c.channel_id = v.channel_id")
+    total = conn.execute(f"SELECT COUNT(*) {join}{w}", params).fetchone()[0]
     rows = yti_rs_db.rows(conn, f"""
         SELECT v.video_id, v.title, v.niche, v.channel_id, c.handle, c.title AS channel_title, v.published_at,
                v.published_approx, v.views, v.views_approx, v.likes, v.comment_count, v.duration_seconds,
-               v.thumbnail_url, v.precision_tier, v.discovered_via, s.*
-        FROM videos v JOIN scores s ON s.video_id = v.video_id LEFT JOIN channels c ON c.channel_id = v.channel_id
+               v.thumbnail_url, v.precision_tier, v.discovered_via, c.subscriber_count, c.subscriber_approx,
+               c.is_tracked, s.*
+        {join}
         {w} ORDER BY {sort_col} {direction} NULLS LAST, s.projected_multiple DESC NULLS LAST, v.video_id
         LIMIT ? OFFSET ?""", params + [limit, offset])
     counts = {r["class"]: r["n"] for r in yti_rs_db.rows(conn, f"""
-        SELECT s.class, COUNT(*) AS n FROM videos v JOIN scores s ON s.video_id = v.video_id
-        WHERE s.format_bucket = ?{(' AND v.niche = ?') if niche else ''} GROUP BY s.class""",
-        [bucket] + ([niche] if niche else []))}
-    return {"rows": rows, "total": total, "counts": counts, "bucket": bucket}
+        SELECT s.class, COUNT(*) AS n {join} WHERE {" AND ".join(base_where)} GROUP BY s.class""", base_params)}
+    return {"rows": rows, "total": total, "counts": counts, "bucket": bucket,
+            "min_subs": min_subs, "max_subs": max_subs}
 
 
 # -- supply / demand ------------------------------------------------------------------------
@@ -171,12 +181,13 @@ def supply_demand(conn: sqlite3.Connection, cfg: dict[str, Any], *, niche: Optio
     """
     now = now or datetime.now(timezone.utc)
     where, params = ["s.format_bucket = ?", "s.class != 'immature'", "s.projected_multiple IS NOT NULL",
-                     "v.published_at IS NOT NULL"], [bucket]
+                     "v.published_at IS NOT NULL", "s.in_niche = 1"], [bucket]
     if niche:
         where.append("v.niche = ?"); params.append(niche)
     rows = conn.execute(f"""
         SELECT v.video_id, v.title, v.niche, v.channel_id, c.handle, c.title AS channel_title, v.published_at,
                v.published_approx, v.published_granularity_days, v.views, v.views_approx, v.raw_json,
+               c.subscriber_count, c.is_tracked,
                s.projected_multiple, s.multiple, s.class, s.raw_only, s.organic_flag
         FROM videos v JOIN scores s ON s.video_id = v.video_id
         LEFT JOIN channels c ON c.channel_id = v.channel_id
@@ -207,9 +218,12 @@ def supply_demand(conn: sqlite3.Connection, cfg: dict[str, Any], *, niche: Optio
             flags.append("projected")
         points.append({"id": r["video_id"], "t": r["title"], "ch": r["handle"] or r["channel_title"] or r["channel_id"],
                        "n": r["niche"], "a": round(lo, 2), "s": round(span, 2),
-                       "m": round(float(r["projected_multiple"]), 3), "v": r["views"], "c": r["class"], "f": flags})
+                       "m": round(float(r["projected_multiple"]), 3), "v": r["views"], "c": r["class"], "f": flags,
+                       "sub": r["subscriber_count"], "fol": int(bool(r["is_tracked"]))})
     s_cfg = cfg.get("scoring", {})
+    c_cfg = cfg.get("crawl", {})
     return {"points": points, "bucket": bucket,
+            "min_subs": int(c_cfg.get("min_subscribers", 0) or 0), "max_subs": int(c_cfg.get("max_subscribers", 0) or 0),
             "half_life": {n["name"]: float(n.get("signal_half_life_days") or 365) for n in cfg.get("niches") or []},
             "default_half_life": 365.0, "hit_multiple": float(s_cfg.get("hit_multiple", 3.0)),
             "niches": sorted({p["n"] for p in points}), "generated_at": now.isoformat()}

@@ -18,12 +18,13 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Optional
 
 try:
-    from . import yti_rs_db, yti_rs_normalize
+    from . import yti_rs_db, yti_rs_normalize, yti_rs_relevance
     from .yti_rs_budget import BudgetExceeded
     from .yti_rs_clients import ClientError, CreditsExhausted
 except ImportError:  # pragma: no cover
     import yti_rs_db  # type: ignore
     import yti_rs_normalize  # type: ignore
+    import yti_rs_relevance  # type: ignore
     from yti_rs_budget import BudgetExceeded  # type: ignore
     from yti_rs_clients import ClientError, CreditsExhausted  # type: ignore
 
@@ -101,7 +102,8 @@ class Crawler:
         self.barren: dict[Optional[int], int] = {}
         self.stats: dict[str, Any] = {"nodes": 0, "videos_new": 0, "outliers_new": 0,
                                       "channels_new": 0, "pruned": 0, "errors": 0,
-                                      "quarantined": 0}
+                                      "quarantined": 0, "skipped_offtopic": 0, "skipped_size": 0}
+        self.vocabs = {n["name"]: yti_rs_relevance.niche_vocab(n) for n in cfg.get("niches") or []}
         self.stop_reason: Optional[str] = None
 
     # -- persistence -------------------------------------------------------------
@@ -348,13 +350,49 @@ class Crawler:
             children.extend(rec_children)
         return children, yield_count
 
+    def _channel_gate(self, node: Node, ch: dict[str, Any], sample_titles: list[str]) -> Optional[str]:
+        """Why this channel must NOT be expanded, or None when it may be.
+
+        Followed/tracked channels always pass. Otherwise (1) relevance, free:
+        too few of the channel's recent titles mention the niche's vocabulary
+        -> it is a general-interest channel that happened to publish one
+        relevant video; (2) size, 1 credit when unknown: outside the configured
+        subscriber band -> not a comparable channel. Both verdicts need
+        evidence; with none the channel is given the benefit of the doubt."""
+        if ch.get("is_tracked"):
+            return None
+        vocab = self.vocabs.get(node.niche)
+        if vocab:
+            known = [r["title"] for r in yti_rs_db.rows(
+                self.conn, "SELECT title FROM videos WHERE channel_id = ? AND (is_short IS NULL OR is_short = 0)",
+                (node.key,))]
+            titles = list(dict.fromkeys(sample_titles + known))
+            verdict = yti_rs_relevance.channel_on_topic(
+                titles, vocab, min_share=float(self.c.get("channel_relevance_min", 0.20)),
+                min_titles=int(self.c.get("relevance_min_titles", 5)))
+            if verdict is False:
+                share, n = yti_rs_relevance.channel_share(titles, vocab)
+                return f"off-topic ({share:.0%} of {n} recent titles mention the niche's terms)"
+        subs = ch.get("subscriber_count")
+        if subs is None:
+            try:
+                from .yti_rs_enrich import lookup_channel_size
+            except ImportError:  # pragma: no cover
+                from yti_rs_enrich import lookup_channel_size  # type: ignore
+            try:
+                subs = lookup_channel_size(self.conn, self.tapi, {**ch, "channel_id": node.key})
+            except (CreditsExhausted, BudgetExceeded):
+                raise
+            except ClientError as exc:
+                self.log(f"size lookup {node.key} failed: {exc}")
+        if subs is not None:
+            lo, hi = int(self.c.get("min_subscribers", 0) or 0), int(self.c.get("max_subscribers", 0) or 0)
+            if subs < lo or (hi and subs > hi):
+                return f"outside the subscriber band (~{subs:,}; band {lo:,}-{hi:,})"
+        return None
+
     def _expand_channel(self, node: Node) -> tuple[list[Node], int]:
         ch = yti_rs_db.one(self.conn, "SELECT * FROM channels WHERE channel_id = ?", (node.key,))
-        if ch and ch.get("subscriber_count") is not None:
-            lo, hi = int(self.c.get("min_subscribers", 0)), int(self.c.get("max_subscribers", 10**12))
-            if not (lo <= ch["subscriber_count"] <= hi):
-                self.log(f"channel {node.key} outside subscriber band; skipped")
-                return [], 0
         ident = (ch or {}).get("handle") or node.key
         # free, exact: newest ~15 uploads with exact dates + integer views
         try:
@@ -362,6 +400,13 @@ class Crawler:
         except ClientError as exc:
             self.log(f"latest {ident} failed: {exc}")
             latest = {}
+        sample = [str(r.get("title") or "") for r in (latest.get("results") or [])
+                  if "/shorts/" not in str(r.get("link") or "")] if isinstance(latest, dict) else []
+        reason = self._channel_gate(node, ch or {"channel_id": node.key}, sample)
+        if reason:
+            self.stats["skipped_size" if reason.startswith("outside") else "skipped_offtopic"] += 1
+            self.log(f"channel {ident} not expanded: {reason}")
+            return [], 0
         exact: dict[str, dict[str, Any]] = {}
         if isinstance(latest, dict) and latest.get("results"):
             chinfo = latest.get("channel") or {}
@@ -504,6 +549,12 @@ class Crawler:
             # scored against a long-form baseline, never counted as yield and
             # never expanded: this crawl researches long-form.
             is_short_row = rec["is_short"] == 1
+            # "similar video" searches drift: a news outlier's title finds more
+            # news. A recommendation is only followed when it is about the niche.
+            vocab = self.vocabs.get(node.niche)
+            drifted = (via == "recommendation" and bool(vocab)
+                       and not yti_rs_relevance.title_matches(rec["title"], vocab))
+            is_short_row = is_short_row or drifted
             pm = None if is_short_row else provisional_multiple(views, others)
             rec["provisional_multiple"] = pm
             new = yti_rs_db.upsert_video(self.conn, rec)

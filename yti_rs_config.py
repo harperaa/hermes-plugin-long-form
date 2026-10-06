@@ -31,7 +31,13 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "outliers_to_expand_per_node": 4,
         "prune_after_barren_nodes": 2,
         "min_subscribers": 1000,
-        "max_subscribers": 5000000,
+        # research channels of a comparable size: a 4x on a 60k channel is a
+        # lesson you can use; a 4x on a 20M news network is not
+        "max_subscribers": 100000,
+        # a channel is on-topic for a niche when at least this share of its
+        # long-form titles mention the niche's vocabulary (yti_rs_relevance)
+        "channel_relevance_min": 0.20,
+        "relevance_min_titles": 5,
         "term_variants": ["{term}", "how to {term}", "{term} mistakes"],
         "recommendations_per_video": 3,
         "include_followed_channels": True,
@@ -79,6 +85,8 @@ NICHE_TEMPLATE: dict[str, Any] = {
     "seed_terms": [],
     "outcome_terms": [],
     "mechanism_terms": [],
+    # extra subject vocabulary used only to decide what is in/out of the niche
+    "topic_terms": [],
 }
 
 
@@ -127,10 +135,12 @@ def save_config(conn, cfg: dict[str, Any]) -> dict[str, Any]:
     for n in cfg.get("niches") or []:
         niche = _merge(NICHE_TEMPLATE, n)
         niche["name"] = str(niche["name"]).strip()
-        for key in ("seed_terms", "outcome_terms", "mechanism_terms"):
+        for key in ("seed_terms", "outcome_terms", "mechanism_terms", "topic_terms"):
             vals = niche.get(key) or []
             if isinstance(vals, str):
                 vals = [v for v in vals.replace("\n", ",").split(",")]
+            if key == "topic_terms":       # one per line or comma-separated
+                vals = [part for v in vals for part in str(v).split(",")]
             niche[key] = [str(v).strip() for v in vals if str(v).strip()]
         niche["is_target"] = bool(niche.get("is_target"))
         niche["signal_half_life_days"] = float(niche.get("signal_half_life_days") or 365)

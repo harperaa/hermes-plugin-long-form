@@ -41,6 +41,12 @@ def wilson_lb(hits: int, n: int, z: float = 1.96) -> float:
     return max(0.0, (centre - margin) / denom)
 
 
+# Format evidence: long-form videos that are actually about their niche. A video
+# with no score row yet counts as in-niche (nothing has judged it off-topic).
+_IN_SCOPE_TITLES = ("SELECT {cols} FROM videos v LEFT JOIN scores s ON s.video_id = v.video_id "
+                    "WHERE v.is_short = 0 AND COALESCE(s.in_niche, 1) = 1")
+
+
 # -- §10.1 seeded ---------------------------------------------------------------------
 
 def load_seeded(conn: sqlite3.Connection, path: Optional[Path] = None) -> int:
@@ -64,7 +70,7 @@ def load_seeded(conn: sqlite3.Connection, path: Optional[Path] = None) -> int:
 def match_seeded(conn: sqlite3.Connection) -> int:
     formats = yti_rs_db.rows(conn, "SELECT format_id, pattern FROM formats WHERE kind = 'seeded' AND pattern IS NOT NULL")
     # long-form only: Shorts titles ("#shorts", hooks) are a different packaging game
-    videos = yti_rs_db.rows(conn, "SELECT video_id, title FROM videos WHERE is_short = 0")
+    videos = yti_rs_db.rows(conn, _IN_SCOPE_TITLES.format(cols="v.video_id, v.title"))
     conn.execute("DELETE FROM format_matches WHERE format_id IN (SELECT format_id FROM formats WHERE kind = 'seeded')")
     n = 0
     for f in formats:
@@ -150,7 +156,7 @@ def topical_term_set(cfg: dict[str, Any]) -> set[str]:
 
 def mine_into_db(conn: sqlite3.Connection, cfg: dict[str, Any]) -> dict[str, Any]:
     f = cfg.get("formats", {})
-    videos = yti_rs_db.rows(conn, "SELECT video_id, channel_id, niche, title FROM videos WHERE is_short = 0")
+    videos = yti_rs_db.rows(conn, _IN_SCOPE_TITLES.format(cols="v.video_id, v.channel_id, v.niche, v.title"))
     mined = mine(videos, min_support=int(f.get("min_support", 4)),
                  min_channels=int(f.get("min_distinct_channels", 3)),
                  min_niches=int(f.get("min_distinct_niches", 2)),

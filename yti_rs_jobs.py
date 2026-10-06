@@ -139,9 +139,20 @@ def job_comments(conn, cfg, params, log_fn) -> dict[str, Any]:
 
 
 def job_score(conn, cfg, params, log_fn) -> dict[str, Any]:
-    res = yti_rs_outliers.score_all(conn, cfg, refit_curve=bool(params.get("refit_maturity_curve")))
-    log_fn(f"scored {res['scored']} videos: {res['classes']}")
+    res = yti_rs_outliers.score_all(conn, cfg, refit_curve=bool(params.get("refit_maturity_curve")),
+                                    followed=set(followed_handles()))
+    log_fn(f"scored {res['scored']} videos: {res['classes']}; {res['out_of_niche']} tagged out of niche "
+           f"on {res['off_topic_channels']} off-topic channel(s)")
     return res
+
+
+def job_sizes(conn, cfg, params, log_fn) -> dict[str, Any]:
+    cap = int(params.get("max_channels") or 100)
+    budget = yti_rs_budget.Budget(conn, run_id="sizes", caps={"transcriptapi": cap})
+    res = yti_rs_enrich.run_sizes(conn, cfg, _tapi(budget), max_channels=cap, log=log_fn)
+    log_fn(f"channel sizes: {res['sized']} sized, {res['not_found']} not found, "
+           f"{budget.spent('transcriptapi')} credits")
+    return {**res, "credits": budget.spent("transcriptapi")}
 
 
 def job_packaging(conn, cfg, params, log_fn) -> dict[str, Any]:
@@ -186,7 +197,8 @@ def job_pipeline(conn, cfg, params, log_fn) -> dict[str, Any]:
     when APIFY_API_TOKEN is missing so the free/cheap path still produces D1–D4."""
     out: dict[str, Any] = {}
     have_apify = yti_rs_config.get_secrets().present()["apify"]
-    steps: list[tuple[str, Callable]] = [("snapshot", job_snapshot), ("crawl", job_crawl), ("score", job_score)]
+    steps: list[tuple[str, Callable]] = [("snapshot", job_snapshot), ("crawl", job_crawl), ("score", job_score),
+                                         ("sizes", job_sizes)]
     if have_apify and not params.get("skip_apify"):
         steps.append(("enrich", job_enrich))
     steps += [("transcripts", job_transcripts)]
@@ -210,7 +222,7 @@ def job_pipeline(conn, cfg, params, log_fn) -> dict[str, Any]:
 JOBS: dict[str, Callable] = {
     "snapshot": job_snapshot, "crawl": job_crawl, "enrich": job_enrich, "transcripts": job_transcripts,
     "comments": job_comments, "score": job_score, "packaging": job_packaging, "formats": job_formats,
-    "profile": job_profile, "report": job_report, "pipeline": job_pipeline,
+    "profile": job_profile, "report": job_report, "pipeline": job_pipeline, "sizes": job_sizes,
 }
 
 

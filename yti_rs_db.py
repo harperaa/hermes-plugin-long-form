@@ -127,6 +127,7 @@ CREATE TABLE IF NOT EXISTS scores (
   fade_watch           INTEGER NOT NULL DEFAULT 0,
   maturity_source      TEXT,
   raw_only             INTEGER NOT NULL DEFAULT 0,
+  in_niche             INTEGER NOT NULL DEFAULT 1,
   class                TEXT NOT NULL
 );
 
@@ -283,6 +284,10 @@ def connect(path: Optional[Path] = None) -> sqlite3.Connection:
     conn.execute("PRAGMA foreign_keys=ON")
     with _LOCK:
         conn.executescript(SCHEMA)
+        # migration: topical-relevance verdict per scored video
+        if "in_niche" not in {r["name"] for r in conn.execute("PRAGMA table_info(scores)")}:
+            conn.execute("ALTER TABLE scores ADD COLUMN in_niche INTEGER NOT NULL DEFAULT 1")
+            conn.commit()
     return conn
 
 
@@ -413,11 +418,22 @@ def counts(conn: sqlite3.Connection) -> dict[str, int]:
     out["hits"] = conn.execute(
         "SELECT COUNT(*) FROM scores WHERE class IN ('hit','strong_hit')").fetchone()[0]
     # the Research tab is long-form only; Shorts stay in the DB for the Short Form page
-    out["videos_long"] = conn.execute("SELECT COUNT(*) FROM videos WHERE is_short = 0").fetchone()[0]
+    # ... and in-niche only: videos on channels judged off-topic are tagged, not deleted
+    out["videos_long_all"] = conn.execute("SELECT COUNT(*) FROM videos WHERE is_short = 0").fetchone()[0]
+    out["videos_long"] = conn.execute(
+        "SELECT COUNT(*) FROM videos v LEFT JOIN scores s ON s.video_id = v.video_id "
+        "WHERE v.is_short = 0 AND COALESCE(s.in_niche, 1) = 1").fetchone()[0]
+    out["videos_out_of_niche"] = out["videos_long_all"] - out["videos_long"]
     out["videos_short"] = conn.execute("SELECT COUNT(*) FROM videos WHERE is_short = 1").fetchone()[0]
     out["videos_unknown_form"] = conn.execute("SELECT COUNT(*) FROM videos WHERE is_short IS NULL").fetchone()[0]
     out["channels_long"] = conn.execute(
-        "SELECT COUNT(DISTINCT channel_id) FROM videos WHERE is_short = 0").fetchone()[0]
+        "SELECT COUNT(DISTINCT v.channel_id) FROM videos v LEFT JOIN scores s ON s.video_id = v.video_id "
+        "WHERE v.is_short = 0 AND COALESCE(s.in_niche, 1) = 1").fetchone()[0]
     out["hits_long"] = conn.execute(
-        "SELECT COUNT(*) FROM scores WHERE class IN ('hit','strong_hit') AND format_bucket = 'long'").fetchone()[0]
+        "SELECT COUNT(*) FROM scores WHERE class IN ('hit','strong_hit') AND format_bucket = 'long' "
+        "AND in_niche = 1").fetchone()[0]
+    out["channels_unknown_size"] = conn.execute(
+        "SELECT COUNT(DISTINCT v.channel_id) FROM videos v JOIN scores s ON s.video_id = v.video_id "
+        "JOIN channels c ON c.channel_id = v.channel_id WHERE s.format_bucket = 'long' AND s.in_niche = 1 "
+        "AND s.class != 'immature' AND c.subscriber_count IS NULL").fetchone()[0]
     return out

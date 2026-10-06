@@ -1702,7 +1702,12 @@
     weight: "Weight — signal weight: how much this result still counts as evidence today. It halves every 'half-life' of the video's niche (set per niche on the Setup panel).\nFormula: 0.5 ^ (age ÷ half-life).\nExample: with a 180-day half-life, a brand-new video weighs 1.00, a 180-day-old one 0.50 and a 360-day-old one 0.25.",
     vs: "VS % — viewer-satisfaction percentile, from 0 to 100, compared with other long-form videos in the same niche. It blends three signals, each turned into a percentile rank: like rate (25%), positive-comment rate (55%) and replies per comment (20%).\nExample: 84 means this video's engagement is more positive than 84% of long-form videos in its niche.\n'—' means likes and comments have not been collected yet — run Enrich and Comments on the Run panel.",
     flags: "Flags — short notes about how trustworthy each number is and what to watch. Hover any flag in a row for its exact meaning.",
+    subs: "Subs — the channel's subscriber count. A leading '~' means it is rounded (read from text such as '712K subscribers'); no mark means the exact figure from Apify. '?' means it has not been looked up yet — run Channel sizes on the Run panel.\nExample: ~61.2K = about 61,200 subscribers.\nThe default view only shows channels inside the size band from Setup (1,000 to 100,000 by default) so the lessons come from channels comparable to yours.",
+    sizefilter: "Channel size — which channels' videos to show, by subscriber count. 'Comparable' uses the band from Setup → Advanced (crawl.min_subscribers to crawl.max_subscribers, 1,000 to 100,000 by default). Channels you follow are always shown, and so are channels whose size is not known yet.\nExample: choose 'Any size' to bring back a 2.6M-subscriber security channel such as Computerphile.",
+    scope: "In-niche — a video counts as part of a niche when its own title mentions one of the niche's terms, or its channel is on-topic (at least 20% of the channel's long-form titles mention those terms), or you follow the channel. Videos on a channel judged off-topic are tagged 'out of niche' and hidden here; they are never deleted.\nExample: a news network that published one video about AI agents keeps that one video in 'ai-security'; its 80 other news clips are tagged out.",
+    topicterms: "Topic terms — extra subject words used only to decide what belongs to the niche. Add the vocabulary your niche's channels actually use in titles.\nExample: for a security niche: hacking, exploit, malware, vulnerability. A general security channel then stays in the niche even though it rarely uses your exact seed phrases.",
     // ---- flags
+    "flag:size?": "size? — this channel's subscriber count is not known yet, so the channel-size filter cannot judge it and lets it through. Run Channel sizes on the Run panel (1 TranscriptAPI credit per channel).",
     "flag:views≈": "views≈ — the view count is approximate. It was read from rounded text.\nExample: '3.4M views' could be anything from 3,350,000 to 3,449,999.\nRun Enrich on the Run panel to replace it with the exact count.",
     "flag:date≈": "date≈ — the publish date is approximate. It came from relative text such as '2 months ago' (meaning two to three months), or was estimated from how often the channel uploads.\nExample: seen as '2 months ago' on Oct 6 → published some time between early July and early August.",
     "flag:raw": "raw — the publish date is too vague (coarser than a week) to project views by age, so this video is judged on its raw multiple only.\nExample: a video dated only '1 year ago' is scored on × raw.",
@@ -1962,7 +1967,8 @@
           "One target niche plus adjacent niches that share viewer INTENT (not subject matter). Seed terms in the ",
           "market's own problem language (\"lose visceral fat\", not \"visceral adiposity reduction\"). ",
           "Outcome terms = what they already want; mechanism terms = what you actually do. The D4 gap report only ",
-          "exists when ≥2 niches are crawled."),
+          "exists when ≥2 niches are crawled. Channels are kept comparable to yours: the crawl only expands channels between ",
+          String(cfg.crawl.min_subscribers), " and ", String(cfg.crawl.max_subscribers), " subscribers (Advanced), and only when their titles are actually about the niche."),
         msg ? h("div", { className: "yti-notice " + (msg.tone === "error" ? "yti-notice-error" : "yti-notice-ok") }, msg.text) : null,
         (ov && ov.configProblems && ov.configProblems.length) ? h("div", { className: "yti-notice yti-notice-error" }, ov.configProblems.join(" · ")) : null,
         niches.length === 0 ? h("div", { className: "yti-empty" }, "No niches yet — add your target niche to begin.") : null,
@@ -1983,13 +1989,16 @@
               h(Field, { label: "Outcome terms", textarea: true, rows: 3, value: terms(n.outcome_terms), placeholder: "get hired\nmore clients",
                 onChange: function (v) { setNiche(i, { outcome_terms: v.split("\n") }); } }),
               h(Field, { label: "Mechanism terms", textarea: true, rows: 3, value: terms(n.mechanism_terms), placeholder: "threat modeling\nred teaming",
-                onChange: function (v) { setNiche(i, { mechanism_terms: v.split("\n") }); } })));
+                onChange: function (v) { setNiche(i, { mechanism_terms: v.split("\n") }); } }),
+              h(Field, { label: h(Tip, { k: "topicterms" }, "Topic terms (what counts as in-niche; one per line or comma-separated)"), textarea: true, rows: 3, wide: true,
+                value: terms(n.topic_terms), placeholder: "hacking\nexploit\nmalware\nvulnerability",
+                onChange: function (v) { setNiche(i, { topic_terms: v.split("\n") }); } })));
         }),
         h("div", { className: "yti-channels-toggle", style: { marginTop: 10 }, onClick: function () { setAdvanced(!advanced); } },
           (advanced ? "▼" : "▶") + " Advanced: crawl / scoring / formats / budget"),
         advanced ? h("div", { className: "yti-rs-grid yti-rs-grid-4" },
           [["crawl", "max_depth"], ["crawl", "search_pages_per_term"], ["crawl", "channel_pages_per_channel"], ["crawl", "outliers_to_expand_per_node"],
-           ["crawl", "prune_after_barren_nodes"], ["crawl", "recommendations_per_video"], ["crawl", "min_subscribers"], ["crawl", "max_subscribers"],
+           ["crawl", "prune_after_barren_nodes"], ["crawl", "recommendations_per_video"], ["crawl", "min_subscribers"], ["crawl", "max_subscribers"], ["crawl", "channel_relevance_min"],
            ["scoring", "baseline_window"], ["scoring", "min_baseline_videos"], ["scoring", "hit_multiple"], ["scoring", "strong_multiple"],
            ["scoring", "underperformer_multiple"], ["scoring", "breakout_watch_max_age_days"], ["scoring", "breakout_watch_comment_pct"],
            ["formats", "min_support"], ["formats", "min_distinct_channels"], ["formats", "min_distinct_niches"], ["formats", "gap_min_wilson_lb"],
@@ -2055,7 +2064,9 @@
               btn("Crawl", "crawl", { max_credits: cp(maxCredits) }, "Run the DFS crawl", "default"))),
           h("div", { className: "yti-rs-step" }, h("b", null, h(Tip, { k: "tier2" }, "Tier 2 · Precision")),
             h("div", { className: "yti-muted yti-small" }, "Apify exact views / likes / comments / duration / subscribers for the shortlist only."),
-            btn("Enrich", "enrich", {}, sec.apify ? "Enrich hits with exact numbers" : "APIFY_API_TOKEN missing")),
+            h("div", { className: "yti-rs-inline" },
+              btn("Enrich", "enrich", {}, sec.apify ? "Enrich hits with exact numbers" : "APIFY_API_TOKEN missing"),
+              btn("Channel sizes", "sizes", {}, "Look up subscriber counts for channels that have none (1 TranscriptAPI credit per channel, most useful first)"))),
           h("div", { className: "yti-rs-step" }, h("b", null, h(Tip, { k: "tier3" }, "Tier 3 · Depth")),
             h("div", { className: "yti-muted yti-small" }, "Transcripts (packaging + structure) and comments (satisfaction + sentiment) for the shortlist."),
             h("div", { className: "yti-rs-inline" },
@@ -2128,14 +2139,15 @@
     const ov = props.overview;
     const [niche, setNiche] = useState("");
     const [classes, setClasses] = useState(["strong_hit", "hit"]);
+    const [size, setSize] = useState("band");
     const sort = useSort("projected_multiple", "desc");
     const [data, setData] = useState(null);
     const [demand, setDemand] = useState(null);
     const [showDemand, setShowDemand] = useState(false);
     useEffect(function () {
-      const p = new URLSearchParams({ niche: niche, classes: classes.join(","), sort: sort.key, order: sort.dir, limit: "150" });
+      const p = new URLSearchParams({ niche: niche, classes: classes.join(","), sort: sort.key, order: sort.dir, size: size, limit: "150" });
       api("/research/outliers?" + p.toString()).then(setData).catch(function () { setData({ rows: [], total: 0, counts: {} }); });
-    }, [niche, classes, sort.key, sort.dir]);
+    }, [niche, classes, size, sort.key, sort.dir]);
     useEffect(function () { if (showDemand && !demand) api("/research/demand").then(setDemand).catch(function () {}); }, [showDemand]);  // eslint-disable-line
     const toggle = function (c) { setClasses(classes.indexOf(c) >= 0 ? classes.filter(function (x) { return x !== c; }) : classes.concat([c])); };
     const rows = (data && data.rows) || [];
@@ -2145,6 +2157,10 @@
         h("select", { className: "yti-select", value: niche, onChange: function (e) { setNiche(e.target.value); } },
           h("option", { value: "" }, "All niches"),
           ((ov && ov.niches) || []).concat(["followed"]).map(function (n) { return h("option", { key: n, value: n }, n); })),
+        h(Tip, { k: "sizefilter", plain: true }, h("select", { className: "yti-select", value: size, onChange: function (e) { setSize(e.target.value); } },
+          h("option", { value: "band" }, "Comparable channels (" + ((ov && ov.config && ov.config.crawl) ? formatNumber(ov.config.crawl.min_subscribers) + "–" + formatNumber(ov.config.crawl.max_subscribers) : "Setup band") + " subs)"),
+          h("option", { value: "1000000" }, "Up to 1M subs"),
+          h("option", { value: "any" }, "Any size"))),
         ["strong_hit", "hit", "normal", "under", "immature"].map(function (c) {
           return h("button", { key: c, className: "yti-filter-chip" + (classes.indexOf(c) >= 0 ? " yti-filter-chip-on" : ""),
             onClick: function () { toggle(c); } }, h(Tip, { k: "class:" + c, plain: true }, c + (counts[c] != null ? " " + counts[c] : "")));
@@ -2167,11 +2183,12 @@
       data == null ? h("div", { className: "yti-empty" }, "Loading…") :
       rows.length === 0 ? h("div", { className: "yti-empty" }, "No scored videos match. Crawl, then Score, on the Run panel.") :
       h("div", { className: "yti-table-wrap" },
-        h("div", { className: "yti-subtle" }, data.total + " long-form videos (showing " + rows.length + ") · ", h(Tip, { k: "approx" }, "≈"), " marks approximate ", h(Tip, { k: "tier1" }, "Tier-1"), " numbers · ", h(Tip, { k: "rawword" }, "raw"), " = date too coarse to project"),
+        h("div", { className: "yti-subtle" }, data.total + " long-form, ", h(Tip, { k: "scope" }, "in-niche"), " videos (showing " + rows.length + ") · ", h(Tip, { k: "approx" }, "≈"), " marks approximate ", h(Tip, { k: "tier1" }, "Tier-1"), " numbers · ", h(Tip, { k: "rawword" }, "raw"), " = date too coarse to project"),
         h("table", { className: "yti-table yti-rs-table" },
           h("thead", null, h("tr", null, h("th", null, ""),
             h(Th, { sort: sort, k: "title", label: "Title", tip: "title", first: "asc" }),
             h(Th, { sort: sort, k: "channel", label: "Channel", tip: "channel", first: "asc" }),
+            h(Th, { sort: sort, k: "subs", label: "Subs", tip: "subs", cls: "yti-right" }),
             h(Th, { sort: sort, k: "niche", label: "Niche", tip: "niche", first: "asc" }),
             h(Th, { sort: sort, k: "class", label: "Class", tip: "cls" }),
             h(Th, { sort: sort, k: "projected_multiple", label: "× proj", tip: "xproj", cls: "yti-right yti-strong" }),
@@ -2191,10 +2208,12 @@
             if (r.breakout_watch) flags.push("🚀 breakout");
             if (r.fade_watch) flags.push("fade");
             if (r.precision_tier >= 2) flags.push("exact");
+            if (r.subscriber_count == null && !r.is_tracked) flags.push("size?");
             return h("tr", { key: r.video_id },
               h("td", null, r.thumbnail_url ? h("img", { className: "yti-thumb yti-rs-thumb", src: r.thumbnail_url, alt: "" }) : null),
               h("td", null, h("a", { className: "yti-video-link", href: "https://www.youtube.com/watch?v=" + r.video_id, target: "_blank", rel: "noopener" }, r.title)),
               h("td", { className: "yti-muted yti-small" }, r.handle || r.channel_title || r.channel_id),
+              h("td", { className: "yti-right yti-muted yti-small" }, r.subscriber_count == null ? "?" : (r.subscriber_approx ? "~" : "") + formatNumber(r.subscriber_count)),
               h("td", { className: "yti-muted yti-small" }, r.niche),
               h("td", null, h(ClassBadge, { cls: r["class"] })),
               h("td", { className: "yti-right yti-strong" }, fmtMult(r.projected_multiple)),
@@ -2260,6 +2279,7 @@
     const useRef = SDK.hooks.useRef || function () { return { current: null }; };
     const [data, setData] = useState(null);
     const [niche, setNiche] = useState("");
+    const [size, setSize] = useState("band");
     const [recent, setRecent] = useState(7);          // default focus: 3× and under one week
     const [threshold, setThreshold] = useState(null);
     const [hover, setHover] = useState(null);
@@ -2282,6 +2302,12 @@
       let maxAge = 0;
       (data.points || []).forEach(function (p) {
         if (niche && p.n !== niche) return;
+        // channel size: followed channels and channels of unknown size always pass
+        if (size !== "any" && p.sub != null && !p.fol) {
+          const hi = size === "band" ? (data.max_subs || 0) : Number(size);
+          const lo = size === "band" ? (data.min_subs || 0) : 0;
+          if ((hi && p.sub > hi) || p.sub < lo) return;
+        }
         const age = p.a + (p.s ? sdHash01(p.id) * p.s : 0);     // somewhere inside its known range
         if (age > maxAge) maxAge = age;
         const half = hl[p.n] || data.default_half_life || 365;
@@ -2313,7 +2339,7 @@
       q.focus.sort(function (a, b) { return b.adj - a.adj; });
       const recentTotal = q.focus.length + q.recentLow;
       return { pts: drawn, q: q, xMax: xMax, yTop: yTop, X: X, Y: Y, iw: iw, ih: ih, total: inRange.length, recentTotal: recentTotal };
-    }, [data, niche, recent, thr]);
+    }, [data, niche, size, recent, thr]);
 
     // the marks layer is memoised: hovering must not rebuild thousands of circles
     const marks = useMemo(function () {
@@ -2387,6 +2413,10 @@
         h("select", { className: "yti-select", value: niche, onChange: function (e) { setNiche(e.target.value); setHover(null); } },
           h("option", { value: "" }, "All niches"),
           (data.niches || []).map(function (n) { return h("option", { key: n, value: n }, n); })),
+        h(Tip, { k: "sizefilter", plain: true }, h("select", { className: "yti-select", value: size, onChange: function (e) { setSize(e.target.value); setHover(null); } },
+          h("option", { value: "band" }, "Comparable channels (" + formatNumber(data.min_subs || 0) + "–" + formatNumber(data.max_subs || 0) + " subs)"),
+          h("option", { value: "1000000" }, "Up to 1M subs"),
+          h("option", { value: "any" }, "Any size"))),
         h("select", { className: "yti-select", value: recent, title: "What counts as recent (low supply)",
             onChange: function (e) { setRecent(Number(e.target.value)); setHover(null); } },
           SD_RECENTS.map(function (o) { return h("option", { key: o[0], value: o[0] }, "Recent = last " + o[1]); })),
@@ -2403,7 +2433,7 @@
             h("span", null, h("i", { className: "yti-sd-key yti-sd-key-hollow", style: { borderColor: pal.context } }), "date approximate"))),
         h("div", { className: "yti-subtle", style: { marginBottom: 8 } },
           q.focus.length + " of " + m.recentTotal + " videos from the last " + (SD_RECENTS.filter(function (o) { return o[0] === recent; })[0] || [0, Math.round(recent) + " days"])[1] + " (" + pct + "%) are running at " + thr + "× their channel's normal views or more. ",
-          "Each dot is one long-form video from the last 3 months; time since publish stands in for supply."),
+          "Each dot is one long-form, in-niche video from the last 3 months; time since publish stands in for supply."),
         h("div", { className: "yti-sd-wrap", ref: wrapRef },
           h("svg", { className: "yti-sd-svg", viewBox: "0 0 " + SD_W + " " + SD_H, role: "img",
               "aria-label": "Scatter of long-form videos: multiple of normal views against time since publish. " +
@@ -2467,6 +2497,7 @@
           h("thead", null, h("tr", null,
             h(Th, { sort: sdSort, k: "title", label: "Title", tip: "title", first: "asc" }),
             h(Th, { sort: sdSort, k: "channel", label: "Channel", tip: "channel", first: "asc" }),
+            h(Th, { sort: sdSort, k: "subs", label: "Subs", tip: "subs", cls: "yti-right" }),
             h(Th, { sort: sdSort, k: "niche", label: "Niche", tip: "niche", first: "asc" }),
             h(Th, { sort: sdSort, k: "age", label: "Published", tip: "published", cls: "yti-right", first: "asc" }),
             h(Th, { sort: sdSort, k: "m", label: "× normal", tip: "xnormal", cls: "yti-right" }),
@@ -2476,18 +2507,19 @@
             h(Th, { sort: sdSort, k: "flags", label: "Flags", tip: "flags", cls: "yti-rs-flagcol" }))),
           h("tbody", null, sortRows(q.focus, sdSort, {
             title: function (d) { return d.p.t; }, channel: function (d) { return d.p.ch; }, niche: function (d) { return d.p.n; },
-            m: function (d) { return d.p.m; }, views: function (d) { return d.p.v; },
+            m: function (d) { return d.p.m; }, views: function (d) { return d.p.v; }, subs: function (d) { return d.p.sub; },
             flags: function (d) { return d.p.f.length + (d.p.s > 0 ? 1 : 0); } }).slice(0, 60).map(function (d) {
             return h("tr", { key: d.p.id },
               h("td", null, h("a", { className: "yti-video-link", href: "https://www.youtube.com/watch?v=" + d.p.id, target: "_blank", rel: "noopener" }, d.p.t)),
               h("td", { className: "yti-muted yti-small" }, d.p.ch),
+              h("td", { className: "yti-right yti-muted yti-small" }, d.p.sub == null ? "?" : formatNumber(d.p.sub)),
               h("td", { className: "yti-muted yti-small" }, d.p.n),
               h("td", { className: "yti-right yti-muted" }, ageText(d) + " ago"),
               h("td", { className: "yti-right" }, fmtMult(d.p.m)),
               h("td", { className: "yti-right yti-muted" }, Math.round(d.fresh * 100) + "%"),
               h("td", { className: "yti-right yti-strong" }, fmtMult(d.adj)),
               h("td", { className: "yti-right" }, formatNumber(d.p.v)),
-              h("td", { className: "yti-small yti-muted" }, h(FlagChips, { flags: (d.p.s > 0 ? ["date≈"] : []).concat(d.p.f) })));
+              h("td", { className: "yti-small yti-muted" }, h(FlagChips, { flags: (d.p.s > 0 ? ["date≈"] : []).concat(d.p.f).concat(d.p.sub == null && !d.p.fol ? ["size?"] : []) })));
           }))),
         q.focus.length > 60 ? h("div", { className: "yti-subtle", style: { marginTop: 6 } }, "Showing the first 60 of " + q.focus.length + " in the current sort order.") : null));
   }
@@ -2789,7 +2821,9 @@
       h("div", { className: "yti-subtle", style: { marginTop: -12 } },
         "Long-form only. ",
         counts.videos_short ? formatNumber(counts.videos_short) + " Shorts are kept out of every number, list and format on this tab (they stay in the data for the Short Form page)." : "",
-        counts.videos_unknown_form ? " " + counts.videos_unknown_form + " videos of unknown length are held back until their duration is known." : ""),
+        counts.videos_unknown_form ? " " + counts.videos_unknown_form + " videos of unknown length are held back until their duration is known." : "",
+        counts.videos_out_of_niche ? h("span", null, " ", h(Tip, { k: "scope" }, formatNumber(counts.videos_out_of_niche) + " off-topic videos"), " (channels that are not about the niche) are tagged and hidden.") : null,
+        counts.channels_unknown_size ? " " + counts.channels_unknown_size + " channels still need a size lookup (Run → Channel sizes)." : ""),
       h("div", { className: "yti-rs-nav" }, RS_PANELS.map(function (p) {
         return h("button", { key: p[0], className: "yti-rs-pill" + (panel === p[0] ? " yti-rs-pill-on" : ""), onClick: function () { setPanel(p[0]); } }, p[1]);
       })),
