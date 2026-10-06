@@ -120,7 +120,7 @@
   function StatCard(props) {
     return h("div", { className: "yti-stat-card" },
       h("div", { className: "yti-stat-value" }, props.value),
-      h("div", { className: "yti-stat-label" }, props.label)
+      h("div", { className: "yti-stat-label" }, props.tip ? h(Tip, { k: props.tip }, props.label) : props.label)
     );
   }
 
@@ -304,12 +304,11 @@
       setPage(0);
     };
 
-    const sorted = videos.slice().sort(function (a, b) {
-      const mul = sortAsc ? 1 : -1;
-      if (sortField === "vph") return (a.vph - b.vph) * mul;
-      if (sortField === "views") return (a.views - b.views) * mul;
-      return (new Date(a.published).getTime() - new Date(b.published).getTime()) * mul;
-    });
+    const sorted = sortRows(videos, { key: sortField, dir: sortAsc ? "asc" : "desc" }, {
+      published: function (v) { return new Date(v.published).getTime(); },
+      title: function (v) { return v.title; }, channel: function (v) { return v.author; },
+      trend: function (v) { return ({ accelerating: 3, flat: 2, decelerating: 1 })[v.trendDirection] || 0; },
+      status: function (v) { return ({ discovered: 1, transcribed: 2, analyzing: 3, analyzed: 4 })[v.status || "discovered"] || 0; } });
 
     // clamp the page if the list shrank or the page size grew
     const maxPage = Math.max(0, Math.ceil(sorted.length / pageSize) - 1);
@@ -321,7 +320,7 @@
       : 0;
 
     const sortGlyph = function (field) {
-      if (sortField !== field) return field === "vph" ? " ↓" : "";
+      if (sortField !== field) return " ↕";
       return sortAsc ? " ▲" : " ▼";
     };
 
@@ -371,23 +370,15 @@
               h("thead", null,
                 h("tr", null,
                   h("th", null, "Thumbnail"),
-                  h("th", null, "Title"),
-                  h("th", null, "Channel"),
-                  h("th", {
-                    className: "yti-sortable",
-                    onClick: function () { toggleSort("published"); },
-                  }, "Published" + sortGlyph("published")),
-                  h("th", { className: "yti-right" }, "Duration"),
-                  h("th", {
-                    className: "yti-right yti-sortable",
-                    onClick: function () { toggleSort("views"); },
-                  }, "Views" + sortGlyph("views")),
-                  h("th", {
-                    className: "yti-right yti-sortable yti-strong",
-                    onClick: function () { toggleSort("vph"); },
-                  }, "VPH" + sortGlyph("vph")),
-                  h("th", { className: "yti-center" }, "Trend"),
-                  h("th", { className: "yti-center" }, "Status"),
+                  [["title", "Title", "title", ""], ["channel", "Channel", "channel", ""], ["published", "Published", "tpublished", ""],
+                   ["duration", "Duration", "duration", "yti-right"], ["views", "Views", "views", "yti-right"],
+                   ["vph", "VPH", "vph", "yti-right yti-strong"], ["trend", "Trend", "trend", "yti-center"],
+                   ["status", "Status", "tstatus", "yti-center"]].map(function (c) {
+                    return h("th", { key: c[0], className: (c[3] ? c[3] + " " : "") + "yti-sortable" + (sortField === c[0] ? " yti-sorted" : ""),
+                        onClick: function () { toggleSort(c[0]); } },
+                      h(Tip, { k: c[2], right: /right|center/.test(c[3]) }, c[1]),
+                      h("span", { className: "yti-sort-glyph", "aria-hidden": "true" }, sortGlyph(c[0])));
+                  }),
                   h("th", { className: "yti-center", title: "Generate a similar-but-unique script from this video" }, "Create")
                 )
               ),
@@ -1683,7 +1674,7 @@
   // Research tab — niche crawl, outliers, formats, gap report, teardown
   // -------------------------------------------------------------------------
   const CLASS_COLOR = { strong_hit: "#22c55e", hit: "#84cc16", normal: "#9ca3af", under: "#ef4444", immature: "#6b7280" };
-  const RS_PANELS = [["setup", "Setup"], ["run", "Run"], ["outliers", "Outliers"], ["formats", "Formats"],
+  const RS_PANELS = [["setup", "Setup"], ["run", "Run"], ["outliers", "Outliers"], ["supply", "Supply / Demand"], ["formats", "Formats"],
     ["gaps", "Gap Report"], ["teardown", "Teardown"], ["budget", "Budget & Reports"]];
 
   function fmtMult(x) { return x == null ? "—" : Number(x).toFixed(2) + "×"; }
@@ -1692,12 +1683,192 @@
   function post(path, body) {
     return api(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body || {}) });
   }
+  // -------------------------------------------------------------------------
+  // Glossary: every symbol, acronym and piece of jargon on the Research tab
+  // (and the Trends table) explained in full, with an example. Shown on hover
+  // and on keyboard focus by <Tip>.
+  // -------------------------------------------------------------------------
+  const RS_TIPS = {
+    // ---- outlier register columns
+    title: "The video's title as YouTube shows it. Click it to open the video in a new tab.",
+    channel: "The channel that published the video, shown as its @handle when known.\nExample: @dankoetalks.",
+    niche: "Which of your configured niches (Setup panel) the crawl found this video under. A niche is a group of viewers who want the same outcome — not a subject.\nExample: 'ai-security' is your target niche; 'one-person-business' is an adjacent one.",
+    cls: "Class — the verdict on the video compared with its own channel's normal, using × proj.\n• strong_hit: 5× normal or more\n• hit: 3× up to 5×\n• normal: between 0.4× and 3×\n• under: 0.4× or less (a flop — kept on purpose, it shows what fails)\n• immature: cannot be judged yet (fewer than 6 earlier videos on the channel, or length unknown)\nExample: a video at 6.2× on a channel that normally gets 4,000 views is a strong_hit.\nThresholds are the defaults; change them under Setup → Advanced.",
+    xproj: "× proj — projected multiple. The video's views divided by its channel's normal views. 'Normal' is the median of the 20 long-form videos that channel published just before this one.\nFor a video younger than 28 days, views are first projected to what they should be at day 28 (day 1 ≈ 15% of day-28 views, day 3 ≈ 35%, day 7 ≈ 55%, day 14 ≈ 75%), so young videos are not unfairly marked down.\nExample: a 7-day-old video has 11,000 views → projected 20,000. The channel's median is 4,000 → × proj = 5.00×.",
+    xraw: "× raw — raw multiple. Views divided by the channel's normal views, with NO adjustment for the video's age.\nExample: 12,000 views on a channel whose previous 20 videos have a median of 4,000 → 3.00×.\nFor videos older than 28 days this equals × proj.",
+    z: "z — robust z-score. How far above its channel's normal the video sits, counted in 'typical spreads' of that channel. It is measured on the logarithm of views using the median and the MAD (median absolute deviation) instead of the average and standard deviation, so one earlier viral video cannot distort it.\nExample: z = 3.5 means 3.5 typical spreads above the channel's usual level; anything above 3 is rare for that channel.\n'—' means the channel's earlier videos all have almost identical views, so no spread can be measured.",
+    views: "Views — the view count at the last time this video was observed.\nExample: 194.0K = about 194,000 views.\nIf the flag 'views≈' is shown, the number came from rounded text such as '194K views' rather than an exact count.",
+    age: "Age d — age in days: how long ago the video was published, as of the last Score run.\nExample: 134 = published about four and a half months ago.",
+    weight: "Weight — signal weight: how much this result still counts as evidence today. It halves every 'half-life' of the video's niche (set per niche on the Setup panel).\nFormula: 0.5 ^ (age ÷ half-life).\nExample: with a 180-day half-life, a brand-new video weighs 1.00, a 180-day-old one 0.50 and a 360-day-old one 0.25.",
+    vs: "VS % — viewer-satisfaction percentile, from 0 to 100, compared with other long-form videos in the same niche. It blends three signals, each turned into a percentile rank: like rate (25%), positive-comment rate (55%) and replies per comment (20%).\nExample: 84 means this video's engagement is more positive than 84% of long-form videos in its niche.\n'—' means likes and comments have not been collected yet — run Enrich and Comments on the Run panel.",
+    flags: "Flags — short notes about how trustworthy each number is and what to watch. Hover any flag in a row for its exact meaning.",
+    // ---- flags
+    "flag:views≈": "views≈ — the view count is approximate. It was read from rounded text.\nExample: '3.4M views' could be anything from 3,350,000 to 3,449,999.\nRun Enrich on the Run panel to replace it with the exact count.",
+    "flag:date≈": "date≈ — the publish date is approximate. It came from relative text such as '2 months ago' (meaning two to three months), or was estimated from how often the channel uploads.\nExample: seen as '2 months ago' on Oct 6 → published some time between early July and early August.",
+    "flag:raw": "raw — the publish date is too vague (coarser than a week) to project views by age, so this video is judged on its raw multiple only.\nExample: a video dated only '1 year ago' is scored on × raw.",
+    "flag:exact": "exact — views, likes, comments, duration and publish time are exact figures fetched from Apify (precision tier 2), not rounded search-result text.",
+    "flag:⚠ paid?": "⚠ paid? — suspected paid traffic. Views are in the top 10% of the niche while the comment rate is in the bottom 10%, the usual signature of ad-driven views.\nExample: 2,000,000 views with 40 comments.\nSuch videos are left out of format statistics, because an ad budget says nothing about the title or format.",
+    "flag:🚀 breakout": "🚀 breakout — breakout watch. The video is 14 days old or younger and still below its channel's normal (under 1×), but its positive-comment rate is in the top 20% of the niche. Videos like this often take off one to two weeks later.\nExample: a 5-day-old video at 0.6× whose comments are full of 'this is going to blow up'.",
+    "flag:fade": "fade — fade watch. The video is 14 days old or younger with views in the top 20% of the niche but a comment rate in the bottom 20%. Lots of views that nobody talks about tend to tail off quickly.",
+    "flag:projected": "projected — the video is younger than 28 days, so its multiple uses views projected forward to day 28 rather than today's count.\nExample: 11,000 views on day 7 is treated as 20,000 by day 28.",
+    "flag:paid?": "paid? — suspected paid traffic: views in the top 10% of the niche with a comment rate in the bottom 10%.\nExample: 2,000,000 views with 40 comments.",
+    // ---- classes
+    "class:strong_hit": "strong_hit — the video reached 5× its channel's normal views or more (using × proj).\nExample: 22,000 views on a channel whose median is 4,000 = 5.5×.",
+    "class:hit": "hit — the video reached at least 3× but less than 5× its channel's normal views.\nExample: 14,000 views on a channel whose median is 4,000 = 3.5×.",
+    "class:normal": "normal — between 0.4× and 3× the channel's normal views: an ordinary result for that channel.",
+    "class:under": "under — underperformer: 0.4× the channel's normal views or less. Kept on purpose, because failures show when a title format does NOT work.\nExample: 1,200 views on a channel whose median is 4,000 = 0.3×.",
+    "class:immature": "immature — cannot be judged yet. Either the channel has fewer than 6 earlier long-form videos to form a baseline, or the video's length is unknown.",
+    // ---- supply / demand
+    published: "Published — how long ago the video went live. A leading '~' means the date is approximate.\nExample: '~ 2 mo ago' came from text like '2 months ago'.",
+    xnormal: "× normal — the video's views divided by its channel's normal views (the median of that channel's previous 20 long-form videos). For videos under 28 days old, views are projected to day 28 first.\nExample: 20,000 views on a channel that normally gets 4,000 = 5.00×.",
+    fresh: "Freshness — how much of the demand signal is left after time has passed. Time stands in for supply: the longer an idea has been out, the more videos about it exist. Freshness halves every half-life of the video's niche.\nExample: with a 180-day half-life, a 60-day-old video keeps 79% and a 180-day-old one keeps 50%.",
+    xadj: "× time-adjusted — demand discounted for supply: × normal multiplied by Freshness. This is the ranking of the table.\nExample: a video at 10.00× that is 180 days old in a niche with a 180-day half-life scores 10 × 50% = 5.00×, the same as a brand-new video at 5.00×.",
+    // ---- formats
+    format: "Format — a reusable title frame, shown with its slots.\nExample: 'the new rules of {subject}' matches 'The New Rules of SaaS Pricing' and 'The New Rules of Fat Loss'.\nClick a row to see its strongest examples and what separates its hits from its misses.",
+    kind: "Kind — where the format came from.\n• seeded: one of the known frames shipped with the plugin, matched by pattern.\n• mined: discovered in your data — a run of 3 to 7 title words found in at least 4 videos, on at least 3 channels, across at least 2 niches.",
+    wilson: "Wilson LB — the Wilson score lower bound (95% confidence) of the format's hit rate: a cautious estimate of how often the format really produces a hit, which punishes small samples. Formats are ranked by it.\nExample: 2 hits out of 2 has a 100% hit rate but a Wilson LB of only 0.34; 40 hits out of 60 has a 67% hit rate and a Wilson LB of 0.54 — the second is the safer bet and ranks higher.",
+    hitsn: "Hits / n — how many videos using this format were hits (3× their channel's normal or more), out of n scored videos that used it.\nExample: 8 / 12 means 8 of the 12 videos with this title frame were hits. Videos that cannot be scored yet are not counted in n.",
+    under: "Under — how many videos using this format flopped (0.4× their channel's normal or less). The failures matter as much as the hits.\nExample: Under = 4 next to Hits / n = 8 / 12 means a third of the attempts badly underperformed.",
+    medianx: "Median × — the middle multiple of all scored videos using this format: half did better, half did worse.\nExample: 2.40× means a typical video with this frame got 2.4 times its channel's normal views.",
+    whit: "Weighted hit — the hit rate with recent results counting more than old ones. Each video is weighted by its signal weight (which halves every niche half-life).\nExample: 0.70 next to an unweighted 8 / 12 (0.67) means the recent uses did slightly better than the old ones.",
+    channels: "Channels — how many different channels have used this format. More channels means it is a real format rather than one creator's habit.",
+    niches: "Niches — which of your niches this format has been seen in. A format proven in two or more niches is transferable.",
+    targetuses: "Target uses — how many videos in YOUR target niche already use this format.\nExample: 0 for a format that is proven in two other niches is a gap: nobody in your niche has tried it yet.",
+    // ---- teardown
+    feature: "Feature — one measurable property of the channel's videos, compared before and after the turning point. Hover a feature name for what it measures.",
+    before: "Before — the feature's value across the videos published BEFORE the channel's turning point (a median, a rate between 0 and 1, or a breakdown by category).",
+    after: "After — the same feature across the videos published AFTER the turning point.",
+    n: "n — sample size: how many videos the before / after values are based on.\nExample: 14/22 = 14 videos before the turning point and 22 after.",
+    effect: "Effect — how big the change is, on a scale where larger means a bigger shift. For medians it is the relative change (0.50 = 50% change); for rates it is the difference in points (0.40 = from 20% to 60%); for category breakdowns it is the share of videos that moved category (1.00 = completely different mix).",
+    changepoint: "Changepoint — the date where the channel's typical views shifted most sharply, with its p-value: the chance a shift this large would appear by luck if nothing had changed (tested by shuffling the videos 2,000 times).\nExample: 2026-03-14 (p=0.004) means a 0.4% chance it is a fluke. Nothing is reported when p is above 0.05.",
+    lift: "Lift ratio — median views after the turning point divided by median views before it.\nExample: 3.20× means a typical video now gets 3.2 times what it did before.",
+    coherence: "Coherence — how similar the channel's last 20 long-form videos are to each other in topic and wording, from 0 (unrelated) to 1 (identical), measured on titles, descriptions and the first 500 transcript words.\nExample: 0.03 is a scattered channel; 0.30 is tightly focused. A hit far from the channel's usual topics is flagged as off-topic.",
+    uploads: "Uploads — how many dated long-form videos from this channel the teardown analysed.",
+    computed: "Computed — when this teardown was last calculated.",
+    // ---- cohort-diff feature names
+    "feat:title_words": "title_words — number of words in the title (median).",
+    "feat:point_count": "point_count — how many numbered points the video works through, detected in the transcript ('number one', 'step 3', 'the next one').\nExample: 25 is a dense list; 4 is a short one.",
+    "feat:duration_seconds": "duration_seconds — video length in seconds (median). Example: 900 = 15 minutes.",
+    "feat:promise_restated_sec": "promise_restated_sec — seconds into the video before the speaker repeats what the title promised. Lower is better.\nExample: 8 means the promise is restated within the first eight seconds.",
+    "feat:filler_rate": "filler_rate — filler words ('um', 'uh', 'like', 'you know') per 100 spoken words. Very low suggests a scripted read; high suggests off-the-cuff delivery.",
+    "feat:like_rate": "like_rate — likes divided by views. Example: 0.045 = 45 likes per 1,000 views.",
+    "feat:comment_rate": "comment_rate — comments divided by views. Example: 0.002 = 2 comments per 1,000 views.",
+    "feat:vs_percentile": "vs_percentile — viewer-satisfaction percentile (0–100) within the niche; see VS % on the Outliers panel.",
+    "feat:projected_multiple": "projected_multiple — views divided by the channel's normal views, age-adjusted; see × proj on the Outliers panel.",
+    "feat:title_lowercase": "title_lowercase — share of titles written entirely in lower case, a deliberate 'unpolished' look.\nExample: 0.60 = 60% of titles.",
+    "feat:has_promise": "has_promise — share of videos whose first 90 seconds repeat the promise made in the title.",
+    "feat:has_proof": "has_proof — share of videos whose first 90 seconds give a reason to trust the speaker: numbers, client or company names, credentials, years of experience.",
+    "feat:has_plan": "has_plan — share of videos whose first 90 seconds say what will be covered ('by the end of this video…', 'first we'll…').",
+    "feat:has_persona": "has_persona — share of videos whose first 90 seconds name who the video is for ('if you're a founder…').",
+    "feat:mismatch_risk": "mismatch_risk — share of videos where a casual, lower-case title is paired with a scripted, polished delivery, which can feel like a bait-and-switch.",
+    "feat:is_short": "is_short — share of uploads that are Shorts (180 seconds or less).",
+    "feat:question_title": "question_title — share of titles phrased as a question or starting with how / why / what.",
+    "feat:numeral_title": "numeral_title — share of titles containing a number. Example: '7 mistakes…'.",
+    "feat:uses_seeded_format": "uses_seeded_format — share of titles that match one of the known title formats on the Formats panel.",
+    "feat:lead_magnet": "lead_magnet — share of videos that end by offering something free (a template, checklist, link in the description).",
+    "feat:awareness_frame": "awareness_frame — what the title leads with: the outcome viewers already want (outcome_led), the method you teach (mechanism_led), both together (bridged), or neither (unclear). Uses the outcome and mechanism terms from the Setup panel.",
+    "feat:structure_class": "structure_class — the shape of the video: listicle_short (2–8 points), listicle_dense (15 or more points), narrative (one story), or walkthrough (on-screen demo).",
+    "feat:delivery_class": "delivery_class — how the video is delivered: scripted (few filler words, even sentences), raw (many fillers, uneven sentences) or mixed.",
+    "feat:cta_kind": "cta_kind — CTA means call to action: what the viewer is asked to do near the end.\n• give: offers something free (template, checklist)\n• take: asks for something (book a call, buy, join)\n• mixed: both\n• none: no ask",
+    "feat:weekday": "weekday — which days of the week the channel publishes on, as shares.",
+    "feat:uploads_per_week": "uploads_per_week — average number of long-form uploads per week.",
+    "feat:gap_variance_days": "gap_variance_days — how irregular the gaps between uploads are (variance, in days squared). Lower means a steadier schedule.",
+    "feat:topic_terms": "topic_terms — the title words that fell away (before) and the ones that took over (after).",
+    // ---- run + budget
+    planniche: "Niche — the niche this row of the estimate is for.",
+    seedterms: "Seed terms — how many starting search phrases the niche has on the Setup panel.",
+    searchcalls: "Search calls — keyword searches the crawl will make: seed terms × phrase variants × result pages. Each costs 1 TranscriptAPI credit.\nExample: 3 seed terms × 3 variants × 2 pages = 18 calls.",
+    chancalls: "Channel calls (worst) — the most channel back-catalogue pages the crawl could fetch, 1 credit each, if no branch is cut short.",
+    reccalls: "Rec calls (worst) — the most 'similar videos' searches the crawl could make (one per standout video it follows), 1 credit each.",
+    creditsworst: "Credits (worst) — the upper limit on credits this niche can cost if nothing is pruned. Typical runs use 30–50% of it, and the credit cap stops the run cleanly either way.",
+    run: "Run — the crawl's identifier: the date and time it started plus a short random code.\nExample: crawl-20261006-141743-a93c77.",
+    status: "Status — done (finished), paused (stopped at the credit cap; press Resume to continue from where it stopped), running, or aborted (the provider reported no credits left).",
+    nodes: "Nodes — how many steps the crawl took. A step is one search phrase, one video or one channel explored.",
+    newvideos: "New videos — videos recorded for the first time by this run.",
+    newoutliers: "New outliers — videos first seen in this run that already look like standouts (about 3× their channel's usual views on the rough search-result numbers). The Score job makes the final call.",
+    credits: "Credits — units charged by the data provider. TranscriptAPI charges 1 credit per successful search, channel page or transcript; Apify counts one per result returned. Failed calls cost nothing.",
+    stopreason: "Stop reason — why the run ended: 'exhausted' (nothing left to explore) or the budget message when it reached the credit cap.",
+    provider: "Provider — the service that was called: transcriptapi (search, channel pages, free daily snapshots, transcripts), apify (exact numbers and comments) or anthropic (optional AI analysis).",
+    endpoint: "Endpoint — the specific operation called at the provider.\nExample: 'channel/latest' is the free feed of a channel's 15 newest uploads; 'search' is a keyword search.",
+    calls: "Calls — how many requests were made, including failed ones.",
+    failures: "Failures — requests that returned an error or no response. They are recorded but cost no credits.",
+    day: "Day — the calendar day (UTC) the calls were made.",
+    // ---- stat cards + misc
+    "stat:channels": "Channels — how many channels have at least one long-form video in the research data.",
+    "stat:videos": "Long-form videos — videos longer than 180 seconds recorded by snapshots and crawls. Shorts are stored but kept out of this tab.",
+    "stat:hits": "Hits (≥3× baseline) — long-form videos that reached at least three times their own channel's normal views. '≥' means 'greater than or equal to'; 'baseline' is the median of the channel's previous 20 long-form videos.\nExample: 14,000 views on a channel whose median is 4,000 is 3.5× and counts as a hit.",
+    "stat:formats": "Formats — title frames in the library: the known ones shipped with the plugin plus the ones mined from your data.",
+    "stat:snapshots": "Snapshot points — individual daily view-count readings stored so far (one per video per day). They build the history that shows how fast videos grow.",
+    approx: "≈ — 'approximately'. The number or date came from rounded text on a search page (Tier 1 = the cheap discovery pass), not an exact figure.\nExample: 'views≈' on 3.4M means somewhere between 3,350,000 and 3,449,999.",
+    rawword: "raw — the publish date is too vague to adjust views for the video's age, so only the unadjusted (raw) multiple is used.",
+    d1: "D1 — Deliverable 1, the demand map: which subjects in each niche have proven pull, built from the title words of long-form hits.",
+    d15: "D1–D5 — the five reports this engine writes.\n• D1 demand map: subjects with proven pull\n• D2 outlier register: videos that beat their channel's normal\n• D3 format library: title frames with hit and failure rates\n• D4 format gap report: frames proven elsewhere and unused in your niche\n• D5 channel teardown: when a channel took off and what changed",
+    tier0: "Tier 0 — the free layer. Once a day it reads each followed channel's feed of its 15 newest uploads, which gives exact view counts and publish times at no cost. Over weeks this becomes a growth history nobody sells.",
+    tier1: "Tier 1 — discovery on cheap, approximate data: keyword searches and channel pages that return rounded figures like '3.4M views' and '2 years ago'. About 1 credit per 20–100 videos.",
+    tier2: "Tier 2 — precision: exact views, likes, comment counts, duration and subscriber counts from Apify, bought only for the shortlist of standout videos.",
+    tier3: "Tier 3 — depth: full transcripts (to analyse structure and openings) and comment text (to gauge viewer satisfaction), again only for the shortlist.",
+    wilsonnote: "Wilson 95% lower bound — a cautious estimate of a format's true hit rate that shrinks when the sample is small.\nExample: 2 hits of 2 → 0.34; 40 hits of 60 → 0.54. 'n' is the number of scored videos using the format.",
+    // ---- trends table
+    vph: "VPH — views per hour: total views divided by the hours since the video was published. It shows how fast a video is collecting views right now relative to its age.\nExample: 96,000 views 24 hours after publishing = 4,000 VPH.",
+    trend: "Trend — the direction of the view curve across the saved snapshots: ↗ accelerating (gaining views faster than before), → flat, ↘ decelerating (slowing down). The small line is the view count over time and 'pts' is how many snapshots it is drawn from.",
+    tstatus: "Status — how far the video is through the pipeline: discovered (seen, no transcript), transcribed (transcript saved), analyzing (insight extraction queued or running), analyzed (insights saved).",
+    duration: "Duration — video length as minutes:seconds, taken from its transcript. '—' means no transcript yet.",
+    tpublished: "Published — how long ago the video went live. Example: '3d ago'.",
+  };
+
+  function Tip(props) {
+    const text = props.text || RS_TIPS[props.k];
+    if (!text) return props.children == null ? null : props.children;
+    return h("span", { className: "yti-tip" + (props.right ? " yti-tip-r" : "") + (props.plain ? " yti-tip-plain" : ""),
+      "data-tip": text, tabIndex: 0 }, props.children);
+  }
+
+  // Sorting: one state shape for every table. Empty values always sort last.
+  function useSort(key, dir) {
+    const st = useState({ key: key, dir: dir || "desc" });
+    const cur = st[0];
+    return { key: cur.key, dir: cur.dir, toggle: function (k, first) {
+      st[1](cur.key === k ? { key: k, dir: cur.dir === "asc" ? "desc" : "asc" } : { key: k, dir: first || "desc" });
+    } };
+  }
+  function sortRows(rows, sort, getters) {
+    const g = (getters && getters[sort.key]) || function (r) { return r[sort.key]; };
+    const mul = sort.dir === "asc" ? 1 : -1;
+    const empty = function (v) { return v == null || v === "" || (typeof v === "number" && isNaN(v)); };
+    return (rows || []).slice().sort(function (a, b) {
+      const x = g(a), y = g(b);
+      if (empty(x) && empty(y)) return 0;
+      if (empty(x)) return 1;
+      if (empty(y)) return -1;
+      if (typeof x === "number" && typeof y === "number") return (x - y) * mul;
+      return String(x).localeCompare(String(y), undefined, { numeric: true, sensitivity: "base" }) * mul;
+    });
+  }
+  // <Th sort k label tip cls first> — a clickable, explained column header
+  function Th(props) {
+    const s = props.sort, on = s.key === props.k;
+    const right = /yti-right/.test(props.cls || "");
+    return h("th", { className: (props.cls ? props.cls + " " : "") + "yti-sortable" + (on ? " yti-sorted" : ""),
+        "aria-sort": on ? (s.dir === "asc" ? "ascending" : "descending") : "none",
+        title: undefined, onClick: function () { s.toggle(props.k, props.first); } },
+      h(Tip, { k: props.tip, right: right }, props.label),
+      h("span", { className: "yti-sort-glyph", "aria-hidden": "true" }, on ? (s.dir === "asc" ? " ▲" : " ▼") : " ↕"));
+  }
+  function FlagChips(props) {
+    const flags = props.flags || [];
+    if (!flags.length) return null;
+    return flags.map(function (f, i) {
+      return h(React.Fragment, { key: f }, i ? " " : null, h(Tip, { k: "flag:" + f, right: true }, f));
+    });
+  }
+
   function ClassBadge(props) {
     const c = props.cls || "immature";
-    return h("span", { className: "yti-rs-badge", style: { borderColor: CLASS_COLOR[c] || "#6b7280", color: CLASS_COLOR[c] || "#6b7280" } }, c);
+    return h(Tip, { k: "class:" + c, plain: true },
+      h("span", { className: "yti-rs-badge", style: { borderColor: CLASS_COLOR[c] || "#6b7280", color: CLASS_COLOR[c] || "#6b7280" } }, c));
   }
   function KV(props) {
-    return h("div", { className: "yti-rs-kv" }, h("div", { className: "yti-rs-kv-k" }, props.k), h("div", { className: "yti-rs-kv-v" }, props.v));
+    return h("div", { className: "yti-rs-kv" }, h("div", { className: "yti-rs-kv-k" }, h(Tip, { k: props.tip }, props.k)), h("div", { className: "yti-rs-kv-v" }, props.v));
   }
   function Field(props) {
     return h("label", { className: "yti-rs-field" + (props.wide ? " yti-rs-field-wide" : "") },
@@ -1832,6 +2003,8 @@
   // ---- Run -------------------------------------------------------------------
   function ResearchRun(props) {
     const ov = props.overview;
+    const planSort = useSort("credits_worst_case", "desc");
+    const runSort = useSort("started_at", "desc");
     const job = (ov && ov.job) || {};
     const [live, setLive] = useState(null);
     const [maxCredits, setMaxCredits] = useState("");
@@ -1870,20 +2043,20 @@
       h("div", { className: "yti-card" },
         h("h3", { className: "yti-rs-h3" }, "Pipeline"),
         h("div", { className: "yti-rs-steps" },
-          h("div", { className: "yti-rs-step" }, h("b", null, "Tier 0 · History (free)"),
+          h("div", { className: "yti-rs-step" }, h("b", null, h(Tip, { k: "tier0" }, "Tier 0 · History (free)")),
             h("div", { className: "yti-muted yti-small" }, "Exact daily views for every followed + tracked channel. Cron this daily; it is the moat."),
             btn("Snapshot", "snapshot", {}, "Free RSS snapshot of the latest ~15 uploads per tracked channel")),
-          h("div", { className: "yti-rs-step" }, h("b", null, "Tier 1 · Discovery"),
+          h("div", { className: "yti-rs-step" }, h("b", null, h(Tip, { k: "tier1" }, "Tier 1 · Discovery")),
             h("div", { className: "yti-muted yti-small" }, "Depth-first crawl on approximate data (1 credit per ~20-100 rows). Barren branches are pruned."),
             h("div", { className: "yti-rs-inline" },
               h("input", { className: "yti-rs-mini", placeholder: "max credits (" + (ov && ov.config ? ov.config.budget.crawl_default_credits : 150) + ")", value: maxCredits,
                 onChange: function (e) { setMaxCredits(e.target.value); } }),
               btn("Dry run", "crawl", { dry_run: true }, "Plan the calls and projected credits without spending anything"),
               btn("Crawl", "crawl", { max_credits: cp(maxCredits) }, "Run the DFS crawl", "default"))),
-          h("div", { className: "yti-rs-step" }, h("b", null, "Tier 2 · Precision"),
+          h("div", { className: "yti-rs-step" }, h("b", null, h(Tip, { k: "tier2" }, "Tier 2 · Precision")),
             h("div", { className: "yti-muted yti-small" }, "Apify exact views / likes / comments / duration / subscribers for the shortlist only."),
             btn("Enrich", "enrich", {}, sec.apify ? "Enrich hits with exact numbers" : "APIFY_API_TOKEN missing")),
-          h("div", { className: "yti-rs-step" }, h("b", null, "Tier 3 · Depth"),
+          h("div", { className: "yti-rs-step" }, h("b", null, h(Tip, { k: "tier3" }, "Tier 3 · Depth")),
             h("div", { className: "yti-muted yti-small" }, "Transcripts (packaging + structure) and comments (satisfaction + sentiment) for the shortlist."),
             h("div", { className: "yti-rs-inline" },
               btn("Transcripts", "transcripts", {}, "Free caption check first; one credit per transcript"),
@@ -1899,11 +2072,15 @@
           btn("Run everything", "pipeline", { max_credits: cp(maxCredits) }, "Snapshot → crawl → score → enrich → transcripts → comments → score → packaging → formats → report", "default"),
           h("span", { className: "yti-muted yti-small" }, "Every step is idempotent and resumable."))),
       plan ? h("div", { className: "yti-card", style: { marginTop: 12 } },
-        h("h3", { className: "yti-rs-h3" }, "Dry run — projected Tier-1 credits"),
+        h("h3", { className: "yti-rs-h3" }, "Dry run — projected ", h(Tip, { k: "tier1" }, "Tier-1"), " ", h(Tip, { k: "credits" }, "credits")),
         h("table", { className: "yti-table yti-rs-table" }, h("thead", null, h("tr", null,
-          h("th", null, "niche"), h("th", { className: "yti-right" }, "seed terms"), h("th", { className: "yti-right" }, "search calls"),
-          h("th", { className: "yti-right" }, "channel calls (worst)"), h("th", { className: "yti-right" }, "rec calls (worst)"), h("th", { className: "yti-right" }, "credits (worst)"))),
-          h("tbody", null, (plan.niches || []).map(function (n) {
+          h(Th, { sort: planSort, k: "niche", label: "niche", tip: "planniche", first: "asc" }),
+          h(Th, { sort: planSort, k: "seed_terms", label: "seed terms", tip: "seedterms", cls: "yti-right" }),
+          h(Th, { sort: planSort, k: "search_calls", label: "search calls", tip: "searchcalls", cls: "yti-right" }),
+          h(Th, { sort: planSort, k: "channel_calls_worst", label: "channel calls (worst)", tip: "chancalls", cls: "yti-right" }),
+          h(Th, { sort: planSort, k: "recommendation_calls_worst", label: "rec calls (worst)", tip: "reccalls", cls: "yti-right" }),
+          h(Th, { sort: planSort, k: "credits_worst_case", label: "credits (worst)", tip: "creditsworst", cls: "yti-right" }))),
+          h("tbody", null, sortRows(plan.niches || [], planSort).map(function (n) {
             return h("tr", { key: n.niche }, h("td", null, n.niche), h("td", { className: "yti-right" }, n.seed_terms), h("td", { className: "yti-right" }, n.search_calls),
               h("td", { className: "yti-right" }, n.channel_calls_worst), h("td", { className: "yti-right" }, n.recommendation_calls_worst), h("td", { className: "yti-right yti-strong" }, n.credits_worst_case));
           }))),
@@ -1919,9 +2096,17 @@
       (ov && ov.crawlRuns && ov.crawlRuns.length) ? h("div", { className: "yti-card", style: { marginTop: 12 } },
         h("h3", { className: "yti-rs-h3" }, "Crawl runs"),
         h("table", { className: "yti-table yti-rs-table" }, h("thead", null, h("tr", null,
-          h("th", null, "run"), h("th", null, "status"), h("th", { className: "yti-right" }, "nodes"), h("th", { className: "yti-right" }, "new videos"),
-          h("th", { className: "yti-right" }, "new outliers"), h("th", { className: "yti-right" }, "credits"), h("th", null, "stop reason"), h("th", null, ""))),
-          h("tbody", null, ov.crawlRuns.map(function (r) {
+          h(Th, { sort: runSort, k: "started_at", label: "run", tip: "run" }),
+          h(Th, { sort: runSort, k: "status", label: "status", tip: "status", first: "asc" }),
+          h(Th, { sort: runSort, k: "nodes", label: "nodes", tip: "nodes", cls: "yti-right" }),
+          h(Th, { sort: runSort, k: "videos_new", label: "new videos", tip: "newvideos", cls: "yti-right" }),
+          h(Th, { sort: runSort, k: "outliers_new", label: "new outliers", tip: "newoutliers", cls: "yti-right" }),
+          h(Th, { sort: runSort, k: "credits", label: "credits", tip: "credits", cls: "yti-right" }),
+          h(Th, { sort: runSort, k: "stop_reason", label: "stop reason", tip: "stopreason", first: "asc" }), h("th", null, ""))),
+          h("tbody", null, sortRows(ov.crawlRuns, runSort, {
+            nodes: function (r) { return (r.stats || {}).nodes; }, videos_new: function (r) { return (r.stats || {}).videos_new; },
+            outliers_new: function (r) { return (r.stats || {}).outliers_new; }, credits: function (r) { return (r.stats || {}).credits; },
+            stop_reason: function (r) { return (r.stats || {}).stop_reason; } }).map(function (r) {
             const s = r.stats || {};
             return h("tr", { key: r.run_id }, h("td", { className: "yti-small" }, r.run_id), h("td", null, r.status),
               h("td", { className: "yti-right" }, s.nodes), h("td", { className: "yti-right" }, s.videos_new), h("td", { className: "yti-right" }, s.outliers_new),
@@ -1943,14 +2128,14 @@
     const ov = props.overview;
     const [niche, setNiche] = useState("");
     const [classes, setClasses] = useState(["strong_hit", "hit"]);
-    const [sort, setSort] = useState("projected_multiple");
+    const sort = useSort("projected_multiple", "desc");
     const [data, setData] = useState(null);
     const [demand, setDemand] = useState(null);
     const [showDemand, setShowDemand] = useState(false);
     useEffect(function () {
-      const p = new URLSearchParams({ niche: niche, classes: classes.join(","), sort: sort, limit: "150" });
+      const p = new URLSearchParams({ niche: niche, classes: classes.join(","), sort: sort.key, order: sort.dir, limit: "150" });
       api("/research/outliers?" + p.toString()).then(setData).catch(function () { setData({ rows: [], total: 0, counts: {} }); });
-    }, [niche, classes, sort]);
+    }, [niche, classes, sort.key, sort.dir]);
     useEffect(function () { if (showDemand && !demand) api("/research/demand").then(setDemand).catch(function () {}); }, [showDemand]);  // eslint-disable-line
     const toggle = function (c) { setClasses(classes.indexOf(c) >= 0 ? classes.filter(function (x) { return x !== c; }) : classes.concat([c])); };
     const rows = (data && data.rows) || [];
@@ -1962,12 +2147,10 @@
           ((ov && ov.niches) || []).concat(["followed"]).map(function (n) { return h("option", { key: n, value: n }, n); })),
         ["strong_hit", "hit", "normal", "under", "immature"].map(function (c) {
           return h("button", { key: c, className: "yti-filter-chip" + (classes.indexOf(c) >= 0 ? " yti-filter-chip-on" : ""),
-            onClick: function () { toggle(c); } }, c + (counts[c] != null ? " " + counts[c] : ""));
+            onClick: function () { toggle(c); } }, h(Tip, { k: "class:" + c, plain: true }, c + (counts[c] != null ? " " + counts[c] : "")));
         }),
-        h("select", { className: "yti-select", value: sort, onChange: function (e) { setSort(e.target.value); } },
-          [["projected_multiple", "× projected"], ["z", "robust z"], ["views", "views"], ["age", "age"], ["vs", "satisfaction"], ["weight", "signal weight"]].map(function (o) {
-            return h("option", { key: o[0], value: o[0] }, "sort: " + o[1]); })),
-        h("button", { className: "yti-filter-chip" + (showDemand ? " yti-filter-chip-on" : ""), onClick: function () { setShowDemand(!showDemand); } }, "D1 Demand map")),
+        h("button", { className: "yti-filter-chip" + (showDemand ? " yti-filter-chip-on" : ""), onClick: function () { setShowDemand(!showDemand); } }, h(Tip, { k: "d1", plain: true }, "D1 Demand map")),
+        h("span", { className: "yti-muted yti-small" }, "Click any column header to sort; hover it for what it means.")),
       showDemand ? h("div", { className: "yti-card", style: { marginBottom: 12 } },
         h("h3", { className: "yti-rs-h3" }, "D1 — Demand map"),
         !demand ? h("div", { className: "yti-empty" }, "Loading…") :
@@ -1984,12 +2167,21 @@
       data == null ? h("div", { className: "yti-empty" }, "Loading…") :
       rows.length === 0 ? h("div", { className: "yti-empty" }, "No scored videos match. Crawl, then Score, on the Run panel.") :
       h("div", { className: "yti-table-wrap" },
-        h("div", { className: "yti-subtle" }, data.total + " long-form videos · ≈ marks approximate Tier-1 numbers · raw = date too coarse to project"),
+        h("div", { className: "yti-subtle" }, data.total + " long-form videos (showing " + rows.length + ") · ", h(Tip, { k: "approx" }, "≈"), " marks approximate ", h(Tip, { k: "tier1" }, "Tier-1"), " numbers · ", h(Tip, { k: "rawword" }, "raw"), " = date too coarse to project"),
         h("table", { className: "yti-table yti-rs-table" },
-          h("thead", null, h("tr", null, h("th", null, ""), h("th", null, "Title"), h("th", null, "Channel"), h("th", null, "Niche"), h("th", null, "Class"),
-            h("th", { className: "yti-right yti-strong" }, "× proj"), h("th", { className: "yti-right" }, "× raw"), h("th", { className: "yti-right" }, "z"),
-            h("th", { className: "yti-right" }, "Views"), h("th", { className: "yti-right" }, "Age d"), h("th", { className: "yti-right" }, "Weight"),
-            h("th", { className: "yti-right" }, "VS %"), h("th", null, "Flags"))),
+          h("thead", null, h("tr", null, h("th", null, ""),
+            h(Th, { sort: sort, k: "title", label: "Title", tip: "title", first: "asc" }),
+            h(Th, { sort: sort, k: "channel", label: "Channel", tip: "channel", first: "asc" }),
+            h(Th, { sort: sort, k: "niche", label: "Niche", tip: "niche", first: "asc" }),
+            h(Th, { sort: sort, k: "class", label: "Class", tip: "cls" }),
+            h(Th, { sort: sort, k: "projected_multiple", label: "× proj", tip: "xproj", cls: "yti-right yti-strong" }),
+            h(Th, { sort: sort, k: "multiple", label: "× raw", tip: "xraw", cls: "yti-right" }),
+            h(Th, { sort: sort, k: "z", label: "z", tip: "z", cls: "yti-right" }),
+            h(Th, { sort: sort, k: "views", label: "Views", tip: "views", cls: "yti-right" }),
+            h(Th, { sort: sort, k: "age", label: "Age d", tip: "age", cls: "yti-right", first: "asc" }),
+            h(Th, { sort: sort, k: "weight", label: "Weight", tip: "weight", cls: "yti-right" }),
+            h(Th, { sort: sort, k: "vs", label: "VS %", tip: "vs", cls: "yti-right" }),
+            h(Th, { sort: sort, k: "flags", label: "Flags", tip: "flags", cls: "yti-rs-flagcol" }))),
           h("tbody", null, rows.map(function (r) {
             const flags = [];
             if (r.views_approx) flags.push("views≈");
@@ -2012,8 +2204,292 @@
               h("td", { className: "yti-right yti-muted" }, r.age_days == null ? "—" : Math.round(r.age_days)),
               h("td", { className: "yti-right yti-muted" }, r.signal_weight == null ? "—" : Number(r.signal_weight).toFixed(2)),
               h("td", { className: "yti-right yti-muted" }, fmtPct(r.vs_percentile)),
-              h("td", { className: "yti-small yti-muted" }, flags.join(" ")));
+              h("td", { className: "yti-small yti-muted" }, h(FlagChips, { flags: flags })));
           })))));
+  }
+
+  // ---- Supply / Demand ---------------------------------------------------------
+  // Demand (y) = multiple of the channel's normal views; supply (x) = time
+  // since publish, newest on the left. The longer an idea has been out, the
+  // more of it exists, so the same multiple is worth less: the top-left
+  // quadrant (recent AND high demand) is where to look.
+  const SD_W = 1040, SD_H = 500, SD_M = { l: 58, r: 18, t: 20, b: 46 };
+  // x axis: log-style (log of 1 + days) so the newest days get the room;
+  // nothing older than three months is shown
+  const SD_X_MAX = 91.31;
+  const SD_X_TICKS = [[0, "today"], [1, "1 d"], [2, "2 d"], [3, "3 d"], [4, "4 d"], [5, "5 d"], [6, "6 d"], [7, "7 d"],
+    [14, "2 wk"], [21, "3 wk"], [28, "4 wk"], [60.87, "2 mo"], [91.31, "3 mo"]];
+  const SD_RECENTS = [[7, "week"], [14, "2 weeks"], [28, "4 weeks"], [60.87, "2 months"]];
+  const SD_THRESHOLDS = [2, 3, 5, 10];
+  const SD_Y_MIN = 0.25;
+
+  function sdHash01(str) {           // deterministic 0..1 per video id
+    let h = 2166136261;
+    for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); }
+    return ((h >>> 0) % 10000) / 10000;
+  }
+  function sdAgeLabel(d) {
+    if (d < 1) return "today";
+    if (d < 60) return Math.round(d) + " d";
+    if (d < 730) return Math.round(d / 30.44) + " mo";
+    return (d / 365.25).toFixed(1) + " y";
+  }
+  function sdNice125(x) {            // next 1-2-5 step at or above x
+    const p = Math.pow(10, Math.floor(Math.log10(x)));
+    const f = x / p;
+    return (f <= 1 ? 1 : f <= 2 ? 2 : f <= 5 ? 5 : 10) * p;
+  }
+  function sdPalette() {             // validated pair per surface (dataviz validator)
+    let dark = true;
+    try {
+      const bg = getComputedStyle(document.documentElement).getPropertyValue("--background-base").trim();
+      const m = /^#?([0-9a-f]{6})$/i.exec(bg);
+      if (m) {
+        const n = parseInt(m[1], 16);
+        const lum = (0.2126 * (n >> 16) + 0.7152 * ((n >> 8) & 255) + 0.0722 * (n & 255)) / 255;
+        dark = lum < 0.5;
+      }
+    } catch (e) { /* keep dark */ }
+    return dark ? { focus: "#3987e5", context: "#6f7782", surface: "var(--background-base, #0b0f14)" }
+                : { focus: "#2a78d6", context: "#8d939c", surface: "var(--background-base, #fcfcfb)" };
+  }
+
+  function SupplyDemandView(props) {
+    const ov = props.overview;
+    const useMemo = SDK.hooks.useMemo || function (f) { return f(); };
+    const useRef = SDK.hooks.useRef || function () { return { current: null }; };
+    const [data, setData] = useState(null);
+    const [niche, setNiche] = useState("");
+    const [recent, setRecent] = useState(7);          // default focus: 3× and under one week
+    const [threshold, setThreshold] = useState(null);
+    const [hover, setHover] = useState(null);
+    const sdSort = useSort("adj", "desc");
+    const wrapRef = useRef(null);
+    useEffect(function () {
+      api("/research/supply-demand").then(function (d) {
+        setData(d);
+        setThreshold(function (t) { return t == null ? (d.hit_multiple || 3) : t; });
+      }).catch(function () { setData({ points: [], half_life: {}, niches: [] }); });
+    }, []);
+    const thr = threshold == null ? 3 : threshold;
+    const pal = useMemo(sdPalette, []);
+
+    // one model for chart, legend, quadrant counts and table — the numbers always agree
+    const model = useMemo(function () {
+      if (!data) return null;
+      const hl = data.half_life || {};
+      const pts = [];
+      let maxAge = 0;
+      (data.points || []).forEach(function (p) {
+        if (niche && p.n !== niche) return;
+        const age = p.a + (p.s ? sdHash01(p.id) * p.s : 0);     // somewhere inside its known range
+        if (age > maxAge) maxAge = age;
+        const half = hl[p.n] || data.default_half_life || 365;
+        const fresh = Math.pow(0.5, age / half);
+        pts.push({ p: p, age: age, fresh: fresh, adj: p.m * fresh });
+      });
+      const xMax = SD_X_MAX;
+      const inRange = pts.filter(function (q) { return q.age <= xMax; });
+      let yTop = thr * 2;
+      inRange.forEach(function (q) { if (q.p.m > yTop) yTop = q.p.m; });
+      yTop = sdNice125(yTop);
+      const iw = SD_W - SD_M.l - SD_M.r, ih = SD_H - SD_M.t - SD_M.b;
+      const lmin = Math.log(SD_Y_MIN), lmax = Math.log(yTop);
+      const X = function (age) { return SD_M.l + (Math.log(1 + Math.max(0, age)) / Math.log(1 + xMax)) * iw; };
+      const Y = function (m) { return SD_M.t + (1 - (Math.log(Math.max(m, SD_Y_MIN)) - lmin) / (lmax - lmin)) * ih; };
+      const q = { focus: [], oldHigh: 0, recentLow: 0, oldLow: 0, below: 0 };
+      const drawn = [];
+      inRange.forEach(function (d) {
+        const isRecent = d.age <= recent, isHigh = d.p.m >= thr;
+        d.focus = isRecent && isHigh;
+        if (d.focus) q.focus.push(d);
+        else if (isHigh) q.oldHigh += 1;
+        else if (isRecent) q.recentLow += 1;
+        else q.oldLow += 1;
+        if (d.p.m < SD_Y_MIN) { q.below += 1; return; }
+        d.x = X(d.age); d.y = Y(d.p.m);
+        drawn.push(d);
+      });
+      q.focus.sort(function (a, b) { return b.adj - a.adj; });
+      const recentTotal = q.focus.length + q.recentLow;
+      return { pts: drawn, q: q, xMax: xMax, yTop: yTop, X: X, Y: Y, iw: iw, ih: ih, total: inRange.length, recentTotal: recentTotal };
+    }, [data, niche, recent, thr]);
+
+    // the marks layer is memoised: hovering must not rebuild thousands of circles
+    const marks = useMemo(function () {
+      if (!model) return null;
+      const ctx = [], foc = [];
+      model.pts.forEach(function (d) {
+        const approx = d.p.s > 0;
+        if (d.focus) {
+          foc.push(h("circle", { key: d.p.id, cx: d.x.toFixed(1), cy: d.y.toFixed(1), r: 4.5,
+            fill: approx ? pal.surface : pal.focus, stroke: approx ? pal.focus : pal.surface,
+            strokeWidth: approx ? 2 : 1.5 }));
+        } else {
+          ctx.push(h("circle", { key: d.p.id, cx: d.x.toFixed(1), cy: d.y.toFixed(1), r: 2.6,
+            fill: pal.context, fillOpacity: approx ? 0.12 : 0.5,
+            stroke: approx ? pal.context : "none", strokeOpacity: 0.55, strokeWidth: 1 }));
+        }
+      });
+      return h("g", null, h("g", null, ctx), h("g", null, foc));
+    }, [model, pal]);
+
+    if (!data) return h("div", { className: "yti-empty" }, "Loading…");
+    if (!(data.points || []).length) {
+      return h("div", { className: "yti-empty" }, "No scored long-form videos yet. Crawl, then Score, on the Run panel.");
+    }
+    const m = model, q = m.q;
+
+    // axes
+    const yTicks = [];
+    [0.5, 1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000].forEach(function (t) { if (t <= m.yTop && t >= SD_Y_MIN) yTicks.push(t); });
+    const x0 = SD_M.l, x1 = SD_W - SD_M.r, y0 = SD_M.t, y1 = SD_H - SD_M.b;
+    const xr = m.X(Math.min(recent, m.xMax)), yt = m.Y(thr), yn = m.Y(1);
+
+    // sparing direct labels: the strongest few in the focus quadrant, skipped on collision
+    const labels = [];
+    const boxes = [];
+    q.focus.slice(0, 12).forEach(function (d) {
+      if (labels.length >= 4 || d.p.m < SD_Y_MIN) return;
+      const text = d.p.t.length > 38 ? d.p.t.slice(0, 37) + "…" : d.p.t;
+      const w = text.length * 6.1 + 6;
+      const right = d.x + 9 + w < x1;
+      const bx = right ? d.x + 9 : d.x - 9 - w, by = d.y - 8;
+      const box = { x: bx, y: by, w: w, h: 15 };
+      if (by < y0 || boxes.some(function (b) { return !(box.x > b.x + b.w || box.x + box.w < b.x || box.y > b.y + b.h || box.y + box.h < b.y); })) return;
+      boxes.push(box);
+      labels.push(h("text", { key: d.p.id, x: right ? d.x + 9 : d.x - 9, y: d.y + 4, textAnchor: right ? "start" : "end",
+        className: "yti-sd-label" }, text));
+    });
+
+    const onMove = function (e) {
+      const svg = e.currentTarget, rect = svg.getBoundingClientRect();
+      const sx = SD_W / rect.width, sy = SD_H / rect.height;
+      const px = (e.clientX - rect.left) * sx, py = (e.clientY - rect.top) * sy;
+      const lim = 24 * sx;                                 // 24 screen px, nearest point wins
+      let best = null, bd = lim * lim;
+      for (let i = 0; i < m.pts.length; i++) {
+        const d = m.pts[i], dx = d.x - px, dy = d.y - py, dd = dx * dx + dy * dy;
+        if (dd < bd || (dd === bd && best && d.focus && !best.focus)) { bd = dd; best = d; }
+      }
+      if (!best) { if (hover) setHover(null); return; }
+      if (!hover || hover.d !== best) setHover({ d: best, left: best.x / sx, top: best.y / sy, w: rect.width });
+    };
+    const openVideo = function (d) { window.open("https://www.youtube.com/watch?v=" + encodeURIComponent(d.p.id), "_blank", "noopener"); };
+    const hd = hover && hover.d;
+    const pct = m.recentTotal ? Math.round(100 * q.focus.length / m.recentTotal) : 0;
+    const halfNote = Object.keys(data.half_life || {}).filter(function (n) { return !niche || n === niche; })
+      .map(function (n) { return n + " " + Math.round(data.half_life[n]) + " d"; }).join(" · ");
+    const ageText = function (d) { return (d.p.s > 0 ? "~" : "") + sdAgeLabel(d.age); };
+
+    return h("div", null,
+      h("div", { className: "yti-rs-filter" },
+        h("select", { className: "yti-select", value: niche, onChange: function (e) { setNiche(e.target.value); setHover(null); } },
+          h("option", { value: "" }, "All niches"),
+          (data.niches || []).map(function (n) { return h("option", { key: n, value: n }, n); })),
+        h("select", { className: "yti-select", value: recent, title: "What counts as recent (low supply)",
+            onChange: function (e) { setRecent(Number(e.target.value)); setHover(null); } },
+          SD_RECENTS.map(function (o) { return h("option", { key: o[0], value: o[0] }, "Recent = last " + o[1]); })),
+        h("select", { className: "yti-select", value: thr, title: "What counts as high demand",
+            onChange: function (e) { setThreshold(Number(e.target.value)); setHover(null); } },
+          SD_THRESHOLDS.map(function (t) { return h("option", { key: t, value: t }, "High demand = " + t + "× normal or more"); }))),
+
+      h("div", { className: "yti-card yti-sd-card" },
+        h("div", { className: "yti-rs-head" },
+          h("h3", { className: "yti-rs-h3" }, "Demand against supply"),
+          h("div", { className: "yti-sd-legend" },
+            h("span", null, h("i", { className: "yti-sd-key", style: { background: pal.focus } }), "Recent + high demand (" + q.focus.length + ")"),
+            h("span", null, h("i", { className: "yti-sd-key", style: { background: pal.context } }), "Everything else (" + (m.total - q.focus.length) + ")"),
+            h("span", null, h("i", { className: "yti-sd-key yti-sd-key-hollow", style: { borderColor: pal.context } }), "date approximate"))),
+        h("div", { className: "yti-subtle", style: { marginBottom: 8 } },
+          q.focus.length + " of " + m.recentTotal + " videos from the last " + (SD_RECENTS.filter(function (o) { return o[0] === recent; })[0] || [0, Math.round(recent) + " days"])[1] + " (" + pct + "%) are running at " + thr + "× their channel's normal views or more. ",
+          "Each dot is one long-form video from the last 3 months; time since publish stands in for supply."),
+        h("div", { className: "yti-sd-wrap", ref: wrapRef },
+          h("svg", { className: "yti-sd-svg", viewBox: "0 0 " + SD_W + " " + SD_H, role: "img",
+              "aria-label": "Scatter of long-form videos: multiple of normal views against time since publish. " +
+                q.focus.length + " recent high-demand videos are highlighted; they are listed in the table below.",
+              onPointerMove: onMove, onPointerLeave: function () { setHover(null); },
+              onClick: function () { if (hd) openVideo(hd); }, style: { cursor: hd ? "pointer" : "default" } },
+            // focus quadrant wash
+            h("rect", { x: x0, y: y0, width: Math.max(0, xr - x0), height: Math.max(0, yt - y0), fill: pal.focus, fillOpacity: 0.09 }),
+            // recessive grid + ticks
+            yTicks.map(function (t) {
+              const y = m.Y(t);
+              return h("g", { key: "y" + t },
+                h("line", { x1: x0, x2: x1, y1: y, y2: y, className: "yti-sd-grid" }),
+                h("text", { x: x0 - 8, y: y + 4, textAnchor: "end", className: "yti-sd-tick" }, t + "×"));
+            }),
+            SD_X_TICKS.map(function (tk, i) {
+              const x = m.X(tk[0]);
+              return h("g", { key: "x" + i },
+                i ? h("line", { x1: x, x2: x, y1: y0, y2: y1, className: "yti-sd-grid" }) : null,
+                h("line", { x1: x, x2: x, y1: y1, y2: y1 + 4, className: "yti-sd-axis" }),
+                h("text", { x: x, y: y1 + 17, textAnchor: i === 0 ? "start" : i === SD_X_TICKS.length - 1 ? "end" : "middle", className: "yti-sd-tick" }, tk[1]));
+            }),
+            h("line", { x1: x0, x2: x1, y1: y1, y2: y1, className: "yti-sd-axis" }),
+            h("line", { x1: x0, x2: x0, y1: y0, y2: y1, className: "yti-sd-axis" }),
+            // reference lines: normal, the demand threshold, the recent boundary
+            h("line", { x1: x0, x2: x1, y1: yn, y2: yn, className: "yti-sd-ref" }),
+            h("text", { x: x0 + 8, y: yn - 5, className: "yti-sd-note" }, "1× = the channel's normal"),
+            h("line", { x1: x0, x2: x1, y1: yt, y2: yt, className: "yti-sd-ref" }),
+            h("line", { x1: xr, x2: xr, y1: y0, y2: y1, className: "yti-sd-ref" }),
+            marks,
+            // quadrant captions (text tokens, never the series colour)
+            h("text", { x: x0 + 8, y: y0 + 15, className: "yti-sd-quad yti-sd-quad-strong" }, "Recent · high demand — " + q.focus.length),
+            xr < x1 - 190 ? h("text", { x: x1 - 8, y: y0 + 15, textAnchor: "end", className: "yti-sd-quad" }, "Older · high demand, supply has caught up — " + q.oldHigh) : null,
+            h("text", { x: x0 + 8, y: y1 - 8, className: "yti-sd-quad" }, "Recent · ordinary — " + q.recentLow),
+            xr < x1 - 190 ? h("text", { x: x1 - 8, y: y1 - 8, textAnchor: "end", className: "yti-sd-quad" }, "Older · ordinary — " + q.oldLow) : null,
+            labels,
+            hd ? h("circle", { cx: hd.x, cy: hd.y, r: hd.focus ? 7.5 : 6, fill: "none", stroke: "currentColor", strokeWidth: 1.5 }) : null,
+            // axis titles
+            h("text", { x: (x0 + x1) / 2, y: SD_H - 6, textAnchor: "middle", className: "yti-sd-title" }, "← newer · time since published, log scale (supply builds with time) · older →"),
+            h("text", { x: 14, y: (y0 + y1) / 2, textAnchor: "middle", transform: "rotate(-90 14 " + ((y0 + y1) / 2) + ")", className: "yti-sd-title" }, "Demand: views ÷ channel's normal (log)")),
+          hd ? h("div", { className: "yti-sd-tip", style: {
+              left: Math.min(Math.max(8, hover.left + 14), Math.max(8, hover.w - 300)), top: Math.max(8, hover.top - 12) } },
+            h("div", { className: "yti-sd-tip-val" }, fmtMult(hd.p.m), h("span", null, " normal views")),
+            h("div", { className: "yti-sd-tip-sub" }, fmtMult(hd.adj) + " after discounting for " + ageText(hd) + " of supply"),
+            h("div", { className: "yti-sd-tip-title" }, hd.p.t),
+            h("div", { className: "yti-sd-tip-meta" }, hd.p.ch + " · " + hd.p.n),
+            h("div", { className: "yti-sd-tip-meta" }, "published " + ageText(hd) + " ago" + (hd.p.s > 0 ? " (date approximate)" : "") + " · " + formatNumber(hd.p.v) + " views" +
+              (hd.p.f.length ? " · " + hd.p.f.join(" ") : "")),
+            h("div", { className: "yti-sd-tip-meta" }, "click to open")) : null),
+        h("div", { className: "yti-subtle", style: { margin: "8px 0 0" } },
+          "Approximate dates (“2 months ago”) are placed inside the range they can fall in. ",
+          q.below ? q.below + " videos below " + SD_Y_MIN + "× are counted but not drawn. " : "",
+          "Videos under 28 days old use views projected to day 28.")),
+
+      h("div", { className: "yti-card", style: { marginTop: 12 } },
+        h("h3", { className: "yti-rs-h3" }, "Recent + high demand"),
+        h("div", { className: "yti-subtle" },
+          "Ranked by time-adjusted demand unless you sort another column. Time-adjusted = multiple × freshness; freshness halves every half-life of the video's niche" + (halfNote ? " (" + halfNote + ")" : "") + ", set on the Setup panel."),
+        q.focus.length === 0 ? h("div", { className: "yti-empty" }, "Nothing in this quadrant with the current settings — widen Recent or lower the demand threshold.") :
+        h("table", { className: "yti-table yti-rs-table" },
+          h("thead", null, h("tr", null,
+            h(Th, { sort: sdSort, k: "title", label: "Title", tip: "title", first: "asc" }),
+            h(Th, { sort: sdSort, k: "channel", label: "Channel", tip: "channel", first: "asc" }),
+            h(Th, { sort: sdSort, k: "niche", label: "Niche", tip: "niche", first: "asc" }),
+            h(Th, { sort: sdSort, k: "age", label: "Published", tip: "published", cls: "yti-right", first: "asc" }),
+            h(Th, { sort: sdSort, k: "m", label: "× normal", tip: "xnormal", cls: "yti-right" }),
+            h(Th, { sort: sdSort, k: "fresh", label: "Freshness", tip: "fresh", cls: "yti-right" }),
+            h(Th, { sort: sdSort, k: "adj", label: "× time-adjusted", tip: "xadj", cls: "yti-right yti-strong" }),
+            h(Th, { sort: sdSort, k: "views", label: "Views", tip: "views", cls: "yti-right" }),
+            h(Th, { sort: sdSort, k: "flags", label: "Flags", tip: "flags", cls: "yti-rs-flagcol" }))),
+          h("tbody", null, sortRows(q.focus, sdSort, {
+            title: function (d) { return d.p.t; }, channel: function (d) { return d.p.ch; }, niche: function (d) { return d.p.n; },
+            m: function (d) { return d.p.m; }, views: function (d) { return d.p.v; },
+            flags: function (d) { return d.p.f.length + (d.p.s > 0 ? 1 : 0); } }).slice(0, 60).map(function (d) {
+            return h("tr", { key: d.p.id },
+              h("td", null, h("a", { className: "yti-video-link", href: "https://www.youtube.com/watch?v=" + d.p.id, target: "_blank", rel: "noopener" }, d.p.t)),
+              h("td", { className: "yti-muted yti-small" }, d.p.ch),
+              h("td", { className: "yti-muted yti-small" }, d.p.n),
+              h("td", { className: "yti-right yti-muted" }, ageText(d) + " ago"),
+              h("td", { className: "yti-right" }, fmtMult(d.p.m)),
+              h("td", { className: "yti-right yti-muted" }, Math.round(d.fresh * 100) + "%"),
+              h("td", { className: "yti-right yti-strong" }, fmtMult(d.adj)),
+              h("td", { className: "yti-right" }, formatNumber(d.p.v)),
+              h("td", { className: "yti-small yti-muted" }, h(FlagChips, { flags: (d.p.s > 0 ? ["date≈"] : []).concat(d.p.f) })));
+          }))),
+        q.focus.length > 60 ? h("div", { className: "yti-subtle", style: { marginTop: 6 } }, "Showing the first 60 of " + q.focus.length + " in the current sort order.") : null));
   }
 
   // ---- Formats (D3) ------------------------------------------------------------
@@ -2035,18 +2511,29 @@
     const [data, setData] = useState(null);
     const [open, setOpen] = useState(null);
     const [kind, setKind] = useState("");
+    const fSort = useSort("wilson_lb", "desc");
     useEffect(function () { api("/research/formats").then(setData).catch(function () { setData({ formats: [] }); }); }, []);
     if (!data) return h("div", { className: "yti-empty" }, "Loading…");
-    const rows = data.formats.filter(function (f) { return !kind || f.kind === kind; });
+    const rows = sortRows(data.formats.filter(function (f) { return !kind || f.kind === kind; }), fSort, {
+      hits: function (f) { return f.n_total ? (f.n_hits || 0) / f.n_total : null; },
+      niches: function (f) { return (f.niches || []).join(", "); } });
     return h("div", null,
       h("div", { className: "yti-rs-filter" },
         ["", "seeded", "mined"].map(function (k) { return h("button", { key: k, className: "yti-filter-chip" + (kind === k ? " yti-filter-chip-on" : ""), onClick: function () { setKind(k); } }, k || "all"); }),
-        h("span", { className: "yti-muted yti-small" }, "Ranked by Wilson 95% lower bound of hit rate (P2) — a 2-for-2 format cannot outrank a 40-for-60 one. n < " + data.minActionableN + " is not actionable.")),
+        h("span", { className: "yti-muted yti-small" }, "Ranked by ", h(Tip, { k: "wilsonnote" }, "Wilson 95% lower bound"), " of hit rate — a 2-for-2 format cannot outrank a 40-for-60 one. Formats used by fewer than " + data.minActionableN + " scored videos are too thin to act on. Click a header to re-sort.")),
       rows.length === 0 ? h("div", { className: "yti-empty" }, "No formats yet — run Formats on the Run panel (after Score).") :
       h("div", { className: "yti-table-wrap" }, h("table", { className: "yti-table yti-rs-table" },
-        h("thead", null, h("tr", null, h("th", null, "Format"), h("th", null, "Kind"), h("th", { className: "yti-right yti-strong" }, "Wilson LB"),
-          h("th", { className: "yti-right" }, "Hits / n"), h("th", { className: "yti-right" }, "Under"), h("th", { className: "yti-right" }, "Median ×"),
-          h("th", { className: "yti-right" }, "Weighted hit"), h("th", { className: "yti-right" }, "Channels"), h("th", null, "Niches"), h("th", { className: "yti-right" }, "Target uses"))),
+        h("thead", null, h("tr", null,
+          h(Th, { sort: fSort, k: "label", label: "Format", tip: "format", first: "asc" }),
+          h(Th, { sort: fSort, k: "kind", label: "Kind", tip: "kind", first: "asc" }),
+          h(Th, { sort: fSort, k: "wilson_lb", label: "Wilson LB", tip: "wilson", cls: "yti-right yti-strong" }),
+          h(Th, { sort: fSort, k: "hits", label: "Hits / n", tip: "hitsn", cls: "yti-right" }),
+          h(Th, { sort: fSort, k: "n_under", label: "Under", tip: "under", cls: "yti-right" }),
+          h(Th, { sort: fSort, k: "median_multiple", label: "Median ×", tip: "medianx", cls: "yti-right" }),
+          h(Th, { sort: fSort, k: "weighted_hit_rate", label: "Weighted hit", tip: "whit", cls: "yti-right" }),
+          h(Th, { sort: fSort, k: "distinct_channels", label: "Channels", tip: "channels", cls: "yti-right" }),
+          h(Th, { sort: fSort, k: "niches", label: "Niches", tip: "niches", first: "asc" }),
+          h(Th, { sort: fSort, k: "target_niche_uses", label: "Target uses", tip: "targetuses", cls: "yti-right" }))),
         h("tbody", null, rows.map(function (f) {
           const isOpen = open === f.format_id;
           const weak = (f.n_total || 0) < data.minActionableN;
@@ -2081,9 +2568,9 @@
       r.psychology ? h("div", { className: "yti-small" }, h("b", null, "Psychology: "), r.psychology) : null,
       r.caution ? h("div", { className: "yti-small yti-rs-caution" }, h("b", null, "Caution: "), r.caution) : null,
       h("div", { className: "yti-rs-kvs" },
-        h(KV, { k: "Wilson LB", v: Number(r.wilson_lb).toFixed(3) }), h(KV, { k: "hits / n", v: r.n_hits + " / " + r.n_total }),
-        h(KV, { k: "under", v: r.n_under }), h(KV, { k: "median ×", v: fmtMult(r.median_multiple) }),
-        h(KV, { k: "proven in", v: (r.niches || []).join(", ") }), h(KV, { k: "target uses", v: r.target_niche_uses })),
+        h(KV, { k: "Wilson LB", tip: "wilson", v: Number(r.wilson_lb).toFixed(3) }), h(KV, { k: "hits / n", tip: "hitsn", v: r.n_hits + " / " + r.n_total }),
+        h(KV, { k: "under", tip: "under", v: r.n_under }), h(KV, { k: "median ×", tip: "medianx", v: fmtMult(r.median_multiple) }),
+        h(KV, { k: "proven in", tip: "niches", v: (r.niches || []).join(", ") }), h(KV, { k: "target uses", tip: "targetuses", v: r.target_niche_uses })),
       h(ExampleList, { items: r.examples }),
       r.known_discriminator ? h("div", { className: "yti-small" }, h("b", null, "Known discriminator: "), r.known_discriminator) : null,
       h(DiscriminatorList, { items: r.discriminators, max: 4 }));
@@ -2127,6 +2614,7 @@
     const [prof, setProf] = useState(null);
     const [busy, setBusy] = useState(false);
     const [q, setQ] = useState("");
+    const cdSort = useSort("effect", "desc");
     const [msg, setMsg] = useState(null);
     const loadChannels = function () { api("/research/channels?limit=500").then(function (d) { setChannels(d.channels || []); }).catch(function () { setChannels([]); }); };
     useEffect(loadChannels, []);
@@ -2177,17 +2665,25 @@
           !p ? h("div", { className: "yti-subtle" }, prof.series.length + " dated long-form uploads known. Run the teardown to detect the inflection point and diff the cohorts.") :
           h("div", null,
             h("div", { className: "yti-rs-kvs" },
-              h(KV, { k: "uploads", v: p.n_videos }),
-              h(KV, { k: "changepoint", v: p.changepoint_date ? fmtDate(p.changepoint_date) + " (p=" + p.changepoint_p + ")" : "none (p > 0.05)" }),
-              h(KV, { k: "lift ratio", v: p.lift_ratio == null ? "—" : Number(p.lift_ratio).toFixed(2) + "×" }),
-              h(KV, { k: "coherence", v: p.coherence_score == null ? "—" : Number(p.coherence_score).toFixed(3) }),
-              h(KV, { k: "computed", v: formatAgo(p.computed_at) })),
+              h(KV, { k: "uploads", tip: "uploads", v: p.n_videos }),
+              h(KV, { k: "changepoint", tip: "changepoint", v: p.changepoint_date ? fmtDate(p.changepoint_date) + " (p=" + p.changepoint_p + ")" : "none (p > 0.05)" }),
+              h(KV, { k: "lift ratio", tip: "lift", v: p.lift_ratio == null ? "—" : Number(p.lift_ratio).toFixed(2) + "×" }),
+              h(KV, { k: "coherence", tip: "coherence", v: p.coherence_score == null ? "—" : Number(p.coherence_score).toFixed(3) }),
+              h(KV, { k: "computed", tip: "computed", v: formatAgo(p.computed_at) })),
             (p.off_topic_hits || []).length ? h("div", { className: "yti-notice yti-notice-error" }, "Off-topic hits (poor model to double down on): " + p.off_topic_hits.map(function (o) { return o.title; }).join(" · ")) : null,
             (p.cohort_diff || []).length ? h("div", null, h("h4", { className: "yti-rs-h4" }, "Cohort diff (before → after, by effect size)"),
-              h("table", { className: "yti-table yti-rs-table" }, h("thead", null, h("tr", null, h("th", null, "feature"), h("th", null, "before"), h("th", null, "after"), h("th", { className: "yti-right" }, "n"), h("th", { className: "yti-right" }, "effect"))),
-                h("tbody", null, p.cohort_diff.slice(0, 30).map(function (d, i) {
+              h("table", { className: "yti-table yti-rs-table" }, h("thead", null, h("tr", null,
+                  h(Th, { sort: cdSort, k: "feature", label: "feature", tip: "feature", first: "asc" }),
+                  h(Th, { sort: cdSort, k: "before", label: "before", tip: "before" }),
+                  h(Th, { sort: cdSort, k: "after", label: "after", tip: "after" }),
+                  h(Th, { sort: cdSort, k: "n", label: "n", tip: "n", cls: "yti-right" }),
+                  h(Th, { sort: cdSort, k: "effect", label: "effect", tip: "effect", cls: "yti-right" }))),
+                h("tbody", null, sortRows(p.cohort_diff, cdSort, {
+                  before: function (d) { return typeof d.before === "object" ? JSON.stringify(d.before) : d.before; },
+                  after: function (d) { return typeof d.after === "object" ? JSON.stringify(d.after) : d.after; },
+                  n: function (d) { return (d.n_before || 0) + (d.n_after || 0); } }).slice(0, 30).map(function (d, i) {
                   const fmt = function (v) { return typeof v === "object" ? JSON.stringify(v) : String(v); };
-                  return h("tr", { key: i }, h("td", null, d.feature), h("td", { className: "yti-small" }, fmt(d.before)), h("td", { className: "yti-small" }, fmt(d.after)),
+                  return h("tr", { key: d.feature + i }, h("td", null, h(Tip, { k: "feat:" + d.feature }, d.feature)), h("td", { className: "yti-small" }, fmt(d.before)), h("td", { className: "yti-small" }, fmt(d.after)),
                     h("td", { className: "yti-right yti-muted" }, d.n_before + "/" + d.n_after), h("td", { className: "yti-right yti-strong" }, d.effect));
                 })))) : h("div", { className: "yti-subtle" }, "No significant changepoint — no cohort diff."),
             (p.doubling_down || []).length ? h("div", null, h("h4", { className: "yti-rs-h4" }, "Doubling-down candidates"),
@@ -2209,6 +2705,8 @@
     const [data, setData] = useState(null);
     const [reports, setReports] = useState(null);
     const [view, setView] = useState(null);
+    const epSort = useSort("credits", "desc");
+    const daySort = useSort("day", "desc");
     useEffect(function () {
       api("/research/budget").then(setData).catch(function () { setData({}); });
       api("/research/reports").then(setReports).catch(function () { setReports({ files: [] }); });
@@ -2226,13 +2724,22 @@
       h("div", { className: "yti-subtle" }, "Caps: " + JSON.stringify(data.caps || {}) + " · the ledger reads only api_usage; failures are recorded with credits=0."),
       h("div", { className: "yti-rs-row" },
         h("div", { className: "yti-card yti-rs-flex1" }, h("h3", { className: "yti-rs-h3" }, "By endpoint (" + data.days + "d)"),
-          h("table", { className: "yti-table yti-rs-table" }, h("thead", null, h("tr", null, h("th", null, "provider"), h("th", null, "endpoint"), h("th", { className: "yti-right" }, "credits"), h("th", { className: "yti-right" }, "calls"), h("th", { className: "yti-right" }, "failures"))),
-            h("tbody", null, (data.byEndpoint || []).map(function (r, i) { return h("tr", { key: i }, h("td", null, r.provider), h("td", { className: "yti-small" }, r.endpoint), h("td", { className: "yti-right" }, r.credits), h("td", { className: "yti-right yti-muted" }, r.calls), h("td", { className: "yti-right yti-muted" }, r.failures)); })))),
+          h("table", { className: "yti-table yti-rs-table" }, h("thead", null, h("tr", null,
+            h(Th, { sort: epSort, k: "provider", label: "provider", tip: "provider", first: "asc" }),
+            h(Th, { sort: epSort, k: "endpoint", label: "endpoint", tip: "endpoint", first: "asc" }),
+            h(Th, { sort: epSort, k: "credits", label: "credits", tip: "credits", cls: "yti-right" }),
+            h(Th, { sort: epSort, k: "calls", label: "calls", tip: "calls", cls: "yti-right" }),
+            h(Th, { sort: epSort, k: "failures", label: "failures", tip: "failures", cls: "yti-right" }))),
+            h("tbody", null, sortRows(data.byEndpoint || [], epSort).map(function (r, i) { return h("tr", { key: i }, h("td", null, r.provider), h("td", { className: "yti-small" }, r.endpoint), h("td", { className: "yti-right" }, r.credits), h("td", { className: "yti-right yti-muted" }, r.calls), h("td", { className: "yti-right yti-muted" }, r.failures)); })))),
         h("div", { className: "yti-card yti-rs-flex1" }, h("h3", { className: "yti-rs-h3" }, "By day"),
-          h("table", { className: "yti-table yti-rs-table" }, h("thead", null, h("tr", null, h("th", null, "day"), h("th", null, "provider"), h("th", { className: "yti-right" }, "credits"), h("th", { className: "yti-right" }, "calls"))),
-            h("tbody", null, (data.byDay || []).slice(0, 40).map(function (r, i) { return h("tr", { key: i }, h("td", null, r.day), h("td", null, r.provider), h("td", { className: "yti-right" }, r.credits), h("td", { className: "yti-right yti-muted" }, r.calls)); }))))),
+          h("table", { className: "yti-table yti-rs-table" }, h("thead", null, h("tr", null,
+            h(Th, { sort: daySort, k: "day", label: "day", tip: "day" }),
+            h(Th, { sort: daySort, k: "provider", label: "provider", tip: "provider", first: "asc" }),
+            h(Th, { sort: daySort, k: "credits", label: "credits", tip: "credits", cls: "yti-right" }),
+            h(Th, { sort: daySort, k: "calls", label: "calls", tip: "calls", cls: "yti-right" }))),
+            h("tbody", null, sortRows(data.byDay || [], daySort).slice(0, 40).map(function (r, i) { return h("tr", { key: i }, h("td", null, r.day), h("td", null, r.provider), h("td", { className: "yti-right" }, r.credits), h("td", { className: "yti-right yti-muted" }, r.calls)); }))))),
       h("div", { className: "yti-card", style: { marginTop: 12 } },
-        h("h3", { className: "yti-rs-h3" }, "Reports (D1–D5)"),
+        h("h3", { className: "yti-rs-h3" }, "Reports (", h(Tip, { k: "d15" }, "D1–D5"), ")"),
         h("div", { className: "yti-subtle" }, "Markdown written to the workspace under research/reports/ — also browsable on the Artifacts tab."),
         !reports || !reports.files.length ? h("div", { className: "yti-empty" }, "No reports yet — run Report on the Run panel.") :
         h("div", { className: "yti-chip-row" }, reports.files.map(function (f) {
@@ -2257,6 +2764,7 @@
     const body = panel === "setup" ? h(ResearchSetup, { overview: overview, reload: reload })
       : panel === "run" ? h(ResearchRun, { overview: overview, reload: reload })
       : panel === "outliers" ? h(ResearchOutliers, { overview: overview })
+      : panel === "supply" ? h(SupplyDemandView, { overview: overview })
       : panel === "formats" ? h(ResearchFormats, {})
       : panel === "gaps" ? h(ResearchGaps, {})
       : panel === "teardown" ? h(ResearchTeardown, { overview: overview })
@@ -2273,11 +2781,11 @@
       h(ChannelManager, { title: "Followed Channels", defaultOpen: true,
         hint: "Same list as the Trends tab. Every followed channel is snapshotted daily for free (exact views), and its uploads are scored against its own baseline." }),
       h("div", { className: "yti-stats-row" },
-        h(StatCard, { value: String(counts.channels_long != null ? counts.channels_long : (counts.channels || 0)), label: "Channels" }),
-        h(StatCard, { value: String(counts.videos_long != null ? counts.videos_long : (counts.videos || 0)), label: "Long-form videos" }),
-        h(StatCard, { value: String(counts.hits_long != null ? counts.hits_long : (counts.hits || 0)), label: "Hits (≥3× baseline)" }),
-        h(StatCard, { value: String(counts.formats || 0), label: "Formats" }),
-        h(StatCard, { value: String(counts.video_snapshots || 0), label: "Snapshot points" })),
+        h(StatCard, { value: String(counts.channels_long != null ? counts.channels_long : (counts.channels || 0)), label: "Channels", tip: "stat:channels" }),
+        h(StatCard, { value: String(counts.videos_long != null ? counts.videos_long : (counts.videos || 0)), label: "Long-form videos", tip: "stat:videos" }),
+        h(StatCard, { value: String(counts.hits_long != null ? counts.hits_long : (counts.hits || 0)), label: "Hits (≥3× baseline)", tip: "stat:hits" }),
+        h(StatCard, { value: String(counts.formats || 0), label: "Formats", tip: "stat:formats" }),
+        h(StatCard, { value: String(counts.video_snapshots || 0), label: "Snapshot points", tip: "stat:snapshots" })),
       h("div", { className: "yti-subtle", style: { marginTop: -12 } },
         "Long-form only. ",
         counts.videos_short ? formatNumber(counts.videos_short) + " Shorts are kept out of every number, list and format on this tab (they stay in the data for the Short Form page)." : "",

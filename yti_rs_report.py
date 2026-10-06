@@ -110,7 +110,8 @@ def render_d1(d: dict[str, Any]) -> str:
 
 def outlier_register(conn: sqlite3.Connection, *, niche: Optional[str] = None,
                      classes: Optional[list[str]] = None, limit: int = 200, offset: int = 0,
-                     sort: str = "projected_multiple", bucket: str = "long") -> dict[str, Any]:
+                     sort: str = "projected_multiple", bucket: str = "long",
+                     order: str = "desc") -> dict[str, Any]:
     """Scored videos in ONE format bucket (default long-form). Shorts are
     scored against their own baselines and kept in the DB, but never mixed
     into a long-form register."""
@@ -120,20 +121,98 @@ def outlier_register(conn: sqlite3.Connection, *, niche: Optional[str] = None,
     if classes:
         where.append("s.class IN (" + ",".join("?" for _ in classes) + ")"); params.extend(classes)
     w = (" WHERE " + " AND ".join(where)) if where else ""
-    sort_col = {"projected_multiple": "s.projected_multiple", "views": "v.views", "age": "s.age_days",
-                "vs": "s.vs_percentile", "z": "s.log_mad_z", "weight": "s.signal_weight"}.get(sort, "s.projected_multiple")
+    # every column of the register is sortable; sorting happens here because the
+    # tab only loads a page of rows
+    sort_col = {
+        "projected_multiple": "s.projected_multiple", "multiple": "s.multiple", "views": "v.views",
+        "age": "s.age_days", "vs": "s.vs_percentile", "z": "s.log_mad_z", "weight": "s.signal_weight",
+        "title": "v.title COLLATE NOCASE", "niche": "v.niche COLLATE NOCASE",
+        "channel": "COALESCE(c.handle, c.title, v.channel_id) COLLATE NOCASE",
+        "class": "CASE s.class WHEN 'strong_hit' THEN 5 WHEN 'hit' THEN 4 WHEN 'normal' THEN 3 "
+                 "WHEN 'under' THEN 2 ELSE 1 END",
+        # data quality: exact (tier 2) first, then exact views/dates, then the watch flags
+        "flags": "(v.precision_tier * 8 + (1 - v.views_approx) * 4 + (1 - v.published_approx) * 2 "
+                 "+ s.breakout_watch)",
+    }.get(sort, "s.projected_multiple")
+    direction = "ASC" if str(order).lower() == "asc" else "DESC"
     total = conn.execute(f"SELECT COUNT(*) FROM videos v JOIN scores s ON s.video_id = v.video_id{w}", params).fetchone()[0]
     rows = yti_rs_db.rows(conn, f"""
         SELECT v.video_id, v.title, v.niche, v.channel_id, c.handle, c.title AS channel_title, v.published_at,
                v.published_approx, v.views, v.views_approx, v.likes, v.comment_count, v.duration_seconds,
                v.thumbnail_url, v.precision_tier, v.discovered_via, s.*
         FROM videos v JOIN scores s ON s.video_id = v.video_id LEFT JOIN channels c ON c.channel_id = v.channel_id
-        {w} ORDER BY {sort_col} DESC NULLS LAST LIMIT ? OFFSET ?""", params + [limit, offset])
+        {w} ORDER BY {sort_col} {direction} NULLS LAST, s.projected_multiple DESC NULLS LAST, v.video_id
+        LIMIT ? OFFSET ?""", params + [limit, offset])
     counts = {r["class"]: r["n"] for r in yti_rs_db.rows(conn, f"""
         SELECT s.class, COUNT(*) AS n FROM videos v JOIN scores s ON s.video_id = v.video_id
         WHERE s.format_bucket = ?{(' AND v.niche = ?') if niche else ''} GROUP BY s.class""",
         [bucket] + ([niche] if niche else []))}
     return {"rows": rows, "total": total, "counts": counts, "bucket": bucket}
+
+
+# -- supply / demand ------------------------------------------------------------------------
+
+_REL_AGE = re.compile(r'"publishedTimeText":\s*"[^"]*?(\d+)\s*(second|sec|minute|min|hour|hr|day|week|month|year)s?\s+ago', re.I)
+_UNIT_DAYS = {"second": 0.0, "sec": 0.0, "minute": 0.0, "min": 0.0, "hour": 1 / 24, "hr": 1 / 24,
+              "day": 1.0, "week": 7.0, "month": 30.44, "year": 365.25}
+
+
+def supply_demand(conn: sqlite3.Connection, cfg: dict[str, Any], *, niche: Optional[str] = None,
+                  bucket: str = "long", now: Optional[datetime] = None) -> dict[str, Any]:
+    """Points for the supply/demand view: demand = multiple of the channel's
+    normal views, supply = time since publish (the longer an idea has been
+    out, the more of it exists and the less a multiple is worth).
+
+    Each point carries an age RANGE, not a false-precise age: ``a`` is the
+    youngest the video can be and ``s`` the width of the uncertainty in days
+    (0 for exact dates). "2 months ago" means two-to-three months, so its
+    range is [age, age + one month); a date estimated from a channel's
+    upload cadence is symmetric around the estimate.
+    """
+    now = now or datetime.now(timezone.utc)
+    where, params = ["s.format_bucket = ?", "s.class != 'immature'", "s.projected_multiple IS NOT NULL",
+                     "v.published_at IS NOT NULL"], [bucket]
+    if niche:
+        where.append("v.niche = ?"); params.append(niche)
+    rows = conn.execute(f"""
+        SELECT v.video_id, v.title, v.niche, v.channel_id, c.handle, c.title AS channel_title, v.published_at,
+               v.published_approx, v.published_granularity_days, v.views, v.views_approx, v.raw_json,
+               s.projected_multiple, s.multiple, s.class, s.raw_only, s.organic_flag
+        FROM videos v JOIN scores s ON s.video_id = v.video_id
+        LEFT JOIN channels c ON c.channel_id = v.channel_id
+        WHERE {" AND ".join(where)}""", params).fetchall()
+    points = []
+    for r in rows:
+        try:
+            pub = datetime.fromisoformat(str(r["published_at"]).replace("Z", "+00:00"))
+        except ValueError:
+            continue
+        if pub.tzinfo is None:
+            pub = pub.replace(tzinfo=timezone.utc)
+        age = max(0.0, (now - pub).total_seconds() / 86400)
+        lo, span = age, 0.0
+        if r["published_approx"]:
+            m = _REL_AGE.search(r["raw_json"] or "")
+            if m:                                    # "N units ago": N..N+1 units old
+                span = _UNIT_DAYS.get(m.group(2).lower(), 0.0)
+            else:                                    # cadence estimate: symmetric
+                g = float(r["published_granularity_days"] or 0.0)
+                lo, span = max(0.0, age - g), 2 * g
+        flags = []
+        if r["views_approx"]:
+            flags.append("views≈")
+        if r["organic_flag"] == "suspect_paid":
+            flags.append("paid?")
+        if not r["raw_only"] and age < 28:
+            flags.append("projected")
+        points.append({"id": r["video_id"], "t": r["title"], "ch": r["handle"] or r["channel_title"] or r["channel_id"],
+                       "n": r["niche"], "a": round(lo, 2), "s": round(span, 2),
+                       "m": round(float(r["projected_multiple"]), 3), "v": r["views"], "c": r["class"], "f": flags})
+    s_cfg = cfg.get("scoring", {})
+    return {"points": points, "bucket": bucket,
+            "half_life": {n["name"]: float(n.get("signal_half_life_days") or 365) for n in cfg.get("niches") or []},
+            "default_half_life": 365.0, "hit_multiple": float(s_cfg.get("hit_multiple", 3.0)),
+            "niches": sorted({p["n"] for p in points}), "generated_at": now.isoformat()}
 
 
 def render_d2(d: dict[str, Any]) -> str:

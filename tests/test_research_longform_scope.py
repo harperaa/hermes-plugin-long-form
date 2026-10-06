@@ -115,3 +115,17 @@ def test_crawl_never_scores_or_expands_a_short(tmp_home):
     assert rows["biglong"]["provisional_multiple"] == 9.0
     assert [(c.type, c.key) for c in children if c.type == "video"] == [("video", "biglong")] and yield_count == 1
     conn.close()
+
+
+def test_register_sorts_on_any_column_in_either_direction(tmp_home):
+    conn = yti_rs_db.connect()
+    _seed(conn)
+    O.score_all(conn, _cfg(), now=NOW)
+    ids = lambda **kw: [r["video_id"] for r in R.outlier_register(conn, classes=None, limit=3, **kw)["rows"]]
+    assert ids(sort="views", order="desc")[0] == "LHIT" and ids(sort="views", order="asc")[0] == "L0"
+    assert ids(sort="title", order="asc")[0] == "L0" and ids(sort="title", order="desc")[0] == "LHIT"
+    assert ids(sort="class", order="desc")[0] == "LHIT"            # strong_hit ranks highest
+    assert ids(sort="projected_multiple")[0] == "LHIT"             # default direction is descending
+    assert ids(sort="no-such-column")[0] == "LHIT"                 # unknown keys fall back safely
+    assert all(v.startswith("L") for v in ids(sort="views", order="asc"))   # still long-form only
+    conn.close()

@@ -590,12 +590,13 @@ def research_job() -> dict[str, Any]:
 
 @router.get("/research/outliers")
 def research_outliers(niche: str = "", classes: str = "strong_hit,hit", limit: int = 100, offset: int = 0,
-                      sort: str = "projected_multiple") -> dict[str, Any]:
+                      sort: str = "projected_multiple", order: str = "desc") -> dict[str, Any]:
     conn = _rconn()
     try:
         cls = [c for c in classes.split(",") if c] or None
         return yti_rs_report.outlier_register(conn, niche=niche or None, classes=cls,
-                                              limit=max(1, min(limit, 500)), offset=max(0, offset), sort=sort)
+                                              limit=max(1, min(limit, 500)), offset=max(0, offset), sort=sort,
+                                              order=order)
     finally:
         conn.close()
 
@@ -605,6 +606,16 @@ def research_demand() -> dict[str, Any]:
     conn = _rconn()
     try:
         return yti_rs_report.demand_map(conn, yti_rs_config.load_config(conn))
+    finally:
+        conn.close()
+
+
+@router.get("/research/supply-demand")
+def research_supply_demand(niche: str = "") -> dict[str, Any]:
+    """Demand (multiple of normal views) against supply (time since publish)."""
+    conn = _rconn()
+    try:
+        return yti_rs_report.supply_demand(conn, yti_rs_config.load_config(conn), niche=niche or None)
     finally:
         conn.close()
 
