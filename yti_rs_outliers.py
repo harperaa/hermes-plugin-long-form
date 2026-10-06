@@ -213,6 +213,28 @@ def age_days_of(published_at: Optional[str], now: datetime) -> Optional[float]:
     return max(0.0, (now - pub).total_seconds() / 86400)
 
 
+def resolve_unknown_form(conn: sqlite3.Connection) -> int:
+    """Videos with no duration and no Shorts flag sit in the 'unknown' bucket
+    and are never scored. RSS rows keep YouTube's own answer in their raw
+    payload (``/shorts/<id>`` vs ``/watch?v=<id>``) — derive ``is_short`` from
+    it. Returns how many rows were resolved."""
+    import json
+    n = 0
+    for r in conn.execute("SELECT video_id, raw_json FROM videos WHERE is_short IS NULL "
+                          "AND duration_seconds IS NULL AND raw_json LIKE '%\"link\"%'").fetchall():
+        try:
+            link = str(json.loads(r["raw_json"]).get("link") or "")
+        except (TypeError, ValueError):
+            continue
+        form = yti_rs_normalize.is_short_rss(None, link)
+        if form is None:
+            continue
+        conn.execute("UPDATE videos SET is_short = ? WHERE video_id = ?", (int(form), r["video_id"]))
+        n += 1
+    conn.commit()
+    return n
+
+
 # -- score_all ------------------------------------------------------------------------
 
 def score_all(conn: sqlite3.Connection, cfg: dict[str, Any], *, now: Optional[datetime] = None,
@@ -235,6 +257,7 @@ def score_all(conn: sqlite3.Connection, cfg: dict[str, Any], *, now: Optional[da
     curve = curve_meta.get("curve") or DEFAULT_MATURITY_CURVE
     curve_src = curve_meta.get("source", "prior")
 
+    resolved = resolve_unknown_form(conn)
     videos = yti_rs_db.rows(conn, "SELECT * FROM videos WHERE views IS NOT NULL")
     by_channel: dict[str, list[dict[str, Any]]] = {}
     for v in videos:
@@ -287,12 +310,15 @@ def score_all(conn: sqlite3.Connection, cfg: dict[str, Any], *, now: Optional[da
         c["pos_share"] = cs["pos_share"] if cs else None
         c["reply_depth"] = cs["reply_depth"] if cs else None
         c["pos_comment_rate"] = (c["comment_rate"] * c["pos_share"]) if c["comment_rate"] is not None and c["pos_share"] is not None else None
-    cohorts: dict[str, list[dict[str, Any]]] = {}
+    # satisfaction percentiles rank within niche AND format: Shorts carry very
+    # different like/comment rates and view counts, so a mixed cohort would
+    # skew every long-form percentile (and the paid/breakout flags built on them)
+    cohorts: dict[tuple[str, str], list[dict[str, Any]]] = {}
     for c in computed:
-        cohorts.setdefault(c["video"]["niche"], []).append(c)
+        cohorts.setdefault((c["video"]["niche"], c["bucket"]), []).append(c)
     bw_age = float(s.get("breakout_watch_max_age_days", 14))
     bw_pct = float(s.get("breakout_watch_comment_pct", 80))
-    for niche, group in cohorts.items():
+    for (niche, _bucket), group in cohorts.items():
         def dist(key: str) -> list[float]:
             return [g[key] for g in group if g.get(key) is not None]
         d_like, d_comment, d_pos, d_reply = dist("like_rate"), dist("comment_rate"), dist("pos_comment_rate"), dist("reply_depth")
@@ -338,4 +364,8 @@ def score_all(conn: sqlite3.Connection, cfg: dict[str, Any], *, now: Optional[da
              c.get("breakout", 0), c.get("fade", 0), curve_src, int(c["raw_only"]), cls))
     conn.commit()
     yti_rs_db.set_meta(conn, "last_score_run", ts)
-    return {"scored": len(computed), "classes": tally, "maturity_curve": curve_meta}
+    by_bucket: dict[str, int] = {}
+    for c in computed:
+        by_bucket[c["bucket"]] = by_bucket.get(c["bucket"], 0) + 1
+    return {"scored": len(computed), "classes": tally, "buckets": by_bucket,
+            "form_resolved": resolved, "maturity_curve": curve_meta}

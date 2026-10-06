@@ -63,7 +63,8 @@ def load_seeded(conn: sqlite3.Connection, path: Optional[Path] = None) -> int:
 
 def match_seeded(conn: sqlite3.Connection) -> int:
     formats = yti_rs_db.rows(conn, "SELECT format_id, pattern FROM formats WHERE kind = 'seeded' AND pattern IS NOT NULL")
-    videos = yti_rs_db.rows(conn, "SELECT video_id, title FROM videos")
+    # long-form only: Shorts titles ("#shorts", hooks) are a different packaging game
+    videos = yti_rs_db.rows(conn, "SELECT video_id, title FROM videos WHERE is_short = 0")
     conn.execute("DELETE FROM format_matches WHERE format_id IN (SELECT format_id FROM formats WHERE kind = 'seeded')")
     n = 0
     for f in formats:
@@ -149,7 +150,7 @@ def topical_term_set(cfg: dict[str, Any]) -> set[str]:
 
 def mine_into_db(conn: sqlite3.Connection, cfg: dict[str, Any]) -> dict[str, Any]:
     f = cfg.get("formats", {})
-    videos = yti_rs_db.rows(conn, "SELECT video_id, channel_id, niche, title FROM videos")
+    videos = yti_rs_db.rows(conn, "SELECT video_id, channel_id, niche, title FROM videos WHERE is_short = 0")
     mined = mine(videos, min_support=int(f.get("min_support", 4)),
                  min_channels=int(f.get("min_distinct_channels", 3)),
                  min_niches=int(f.get("min_distinct_niches", 2)),

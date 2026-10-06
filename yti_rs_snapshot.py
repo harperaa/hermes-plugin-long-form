@@ -75,7 +75,7 @@ def ingest_latest(rconn: sqlite3.Connection, payload: dict[str, Any], *, niche: 
         # RSS carries no duration; the dashboard's transcript store often does
         # (free), and a /shorts/ link is definitive.
         dur = (durations or {}).get(vid)
-        short = yti_rs_normalize.is_short(dur, None, str(v.get("link") or ""))
+        short = yti_rs_normalize.is_short_rss(dur, str(v.get("link") or ""))
         new = yti_rs_db.upsert_video(rconn, {
             "video_id": vid, "channel_id": channel_id, "title": str(v.get("title") or "untitled"),
             "description": v.get("description"), "published_at": published, "published_approx": 0,

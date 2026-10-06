@@ -253,7 +253,7 @@ def profile_channel(conn: sqlite3.Connection, cfg: dict[str, Any], channel_id: s
         LEFT JOIN packaging p ON p.video_id = v.video_id
         LEFT JOIN transcripts t ON t.video_id = v.video_id
         WHERE v.channel_id = ? AND v.published_at IS NOT NULL AND v.views IS NOT NULL
-          AND (v.is_short IS NULL OR v.is_short = 0)
+          AND v.is_short = 0
         ORDER BY v.published_at ASC""", (channel_id,))
     seeded = {r["video_id"] for r in yti_rs_db.rows(conn, """
         SELECT fm.video_id FROM format_matches fm JOIN formats f ON f.format_id = fm.format_id

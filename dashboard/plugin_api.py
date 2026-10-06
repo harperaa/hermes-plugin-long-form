@@ -640,13 +640,16 @@ def research_channels(niche: str = "", limit: int = 300) -> dict[str, Any]:
             params.append(niche)
         rows = yti_rs_db.rows(conn, f"""
             SELECT c.channel_id, c.handle, c.title, c.niche, c.is_tracked, c.subscriber_count, c.subscriber_approx,
-                   (SELECT COUNT(*) FROM videos v WHERE v.channel_id = c.channel_id) AS videos,
+                   (SELECT COUNT(*) FROM videos v WHERE v.channel_id = c.channel_id AND v.is_short = 0) AS videos,
                    (SELECT COUNT(*) FROM videos v JOIN scores s ON s.video_id = v.video_id
-                     WHERE v.channel_id = c.channel_id AND s.class IN ('hit','strong_hit')) AS hits,
+                     WHERE v.channel_id = c.channel_id AND s.format_bucket = 'long'
+                       AND s.class IN ('hit','strong_hit')) AS hits,
                    (SELECT MAX(s.projected_multiple) FROM videos v JOIN scores s ON s.video_id = v.video_id
-                     WHERE v.channel_id = c.channel_id) AS top_multiple,
+                     WHERE v.channel_id = c.channel_id AND s.format_bucket = 'long') AS top_multiple,
                    (SELECT COUNT(*) FROM channel_profiles p WHERE p.channel_id = c.channel_id) AS profiled
-            FROM channels c{where} ORDER BY hits DESC, videos DESC LIMIT ?""", params + [max(1, min(limit, 1000))])
+            FROM channels c{where}{' AND' if where else ' WHERE'}
+                 (c.is_tracked = 1 OR EXISTS (SELECT 1 FROM videos v WHERE v.channel_id = c.channel_id AND v.is_short = 0))
+            ORDER BY hits DESC, videos DESC LIMIT ?""", params + [max(1, min(limit, 1000))])
         return {"channels": rows}
     finally:
         conn.close()
@@ -681,7 +684,7 @@ def research_profile(channel: str) -> dict[str, Any]:
         series = yti_rs_db.rows(conn, """
             SELECT v.video_id, v.title, v.published_at, v.views, s.projected_views, s.class, s.projected_multiple
             FROM videos v LEFT JOIN scores s ON s.video_id = v.video_id
-            WHERE v.channel_id = ? AND v.published_at IS NOT NULL AND (v.is_short IS NULL OR v.is_short = 0)
+            WHERE v.channel_id = ? AND v.published_at IS NOT NULL AND v.is_short = 0
             ORDER BY v.published_at""", (row["channel_id"],))
         md = yti_rs_report.render_d5(conn, row["channel_id"], prof) if prof else None
         return {"channel": row, "profile": prof, "series": series, "markdown": md}

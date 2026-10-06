@@ -42,11 +42,16 @@ def test_seeded_load_and_match(tmp_home):
     n = F.load_seeded(conn)
     assert n >= 9
     yti_rs_db.upsert_channel(conn, {"channel_id": "UC1", "niche": "n1"})
-    yti_rs_db.upsert_video(conn, {"video_id": "a", "channel_id": "UC1", "niche": "n1",
+    yti_rs_db.upsert_video(conn, {"video_id": "a", "channel_id": "UC1", "niche": "n1", "is_short": 0,
                                   "title": "How to learn Rust so fast it feels like cheating"})
-    yti_rs_db.upsert_video(conn, {"video_id": "b", "channel_id": "UC1", "niche": "n1",
+    yti_rs_db.upsert_video(conn, {"video_id": "b", "channel_id": "UC1", "niche": "n1", "is_short": 0,
                                   "title": "If you don't understand tokens, you don't understand LLM costs"})
-    yti_rs_db.upsert_video(conn, {"video_id": "c", "channel_id": "UC1", "niche": "n1", "title": "plain title"})
+    yti_rs_db.upsert_video(conn, {"video_id": "c", "channel_id": "UC1", "niche": "n1", "is_short": 0, "title": "plain title"})
+    # a Short and a video of unknown length with a matching title are NOT format evidence
+    yti_rs_db.upsert_video(conn, {"video_id": "s", "channel_id": "UC1", "niche": "n1", "is_short": 1,
+                                  "title": "The new rules of prompting #shorts"})
+    yti_rs_db.upsert_video(conn, {"video_id": "u", "channel_id": "UC1", "niche": "n1",
+                                  "title": "The new rules of everything"})
     assert F.match_seeded(conn) == 2
     rows = yti_rs_db.rows(conn, "SELECT format_id, slots_json FROM format_matches ORDER BY format_id")
     assert rows[0]["format_id"] == "if-you-dont-understand-x-y" and "mechanism" in rows[0]["slots_json"]
@@ -65,7 +70,7 @@ def test_validate_and_gap_report(tmp_home):
     for i in range(12):
         niche = "adj1" if i % 2 else "adj2"
         yti_rs_db.upsert_channel(conn, {"channel_id": f"UC{i}", "niche": niche})
-        yti_rs_db.upsert_video(conn, {"video_id": f"v{i}", "channel_id": f"UC{i}", "niche": niche,
+        yti_rs_db.upsert_video(conn, {"video_id": f"v{i}", "channel_id": f"UC{i}", "niche": niche, "is_short": 0,
                                       "title": f"the new rules of thing {i}", "views": 1000})
         cls = "hit" if i < 8 else "under"
         conn.execute("INSERT INTO scores(video_id, computed_at, format_bucket, baseline_n, projected_multiple, signal_weight, organic_flag, class)"
@@ -94,3 +99,16 @@ def test_discriminators_require_both_arms():
     assert ("structure_class", "listicle_dense") in feats
     assert ("structure_class", "narrative") not in feats        # arm n=2 < 5
     assert feats[("structure_class", "listicle_dense")]["hit_rate_with"] == 1.0
+
+
+def test_mine_into_db_ignores_shorts(tmp_home):
+    conn = yti_rs_db.connect()
+    cfg = dict(DEFAULT_CONFIG); cfg["niches"] = []
+    for i in range(4):          # a cross-niche frame that exists ONLY in Shorts
+        yti_rs_db.upsert_channel(conn, {"channel_id": f"UC{i}", "niche": f"n{i % 2}"})
+        yti_rs_db.upsert_video(conn, {"video_id": f"s{i}", "channel_id": f"UC{i}", "niche": f"n{i % 2}",
+                                      "is_short": 1, "title": f"wait for the end {i}"})
+    assert F.mine_into_db(conn, cfg) == {"mined": 0}
+    conn.execute("UPDATE videos SET is_short = 0"); conn.commit()
+    assert F.mine_into_db(conn, cfg)["mined"] >= 1
+    conn.close()

@@ -185,6 +185,17 @@ def is_short(duration_seconds: Optional[int], explicit_flag: Optional[bool] = No
     return duration_seconds <= 180
 
 
+def is_short_rss(duration_seconds: Optional[int], link: Optional[str]) -> Optional[bool]:
+    """Shorts test for RSS (``channel/latest``) rows, which carry no duration.
+    The feed links a Short as ``/shorts/<id>`` and everything else as
+    ``/watch?v=<id>``, so with no duration the link form decides (verified on
+    live data: every watch-link row with a known duration was > 180 s)."""
+    s = is_short(duration_seconds, None, link)
+    if s is None and link and "watch?v=" in link:
+        return False
+    return s
+
+
 # -- tolerant Apify field mapping ------------------------------------------------
 
 VIEW_KEYS = ("viewCount", "views", "viewCountInt", "numberOfViews", "statistics.viewCount")

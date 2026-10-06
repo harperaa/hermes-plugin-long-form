@@ -1984,7 +1984,7 @@
       data == null ? h("div", { className: "yti-empty" }, "Loading…") :
       rows.length === 0 ? h("div", { className: "yti-empty" }, "No scored videos match. Crawl, then Score, on the Run panel.") :
       h("div", { className: "yti-table-wrap" },
-        h("div", { className: "yti-subtle" }, data.total + " videos · ≈ marks approximate Tier-1 numbers · raw = date too coarse to project"),
+        h("div", { className: "yti-subtle" }, data.total + " long-form videos · ≈ marks approximate Tier-1 numbers · raw = date too coarse to project"),
         h("table", { className: "yti-table yti-rs-table" },
           h("thead", null, h("tr", null, h("th", null, ""), h("th", null, "Title"), h("th", null, "Channel"), h("th", null, "Niche"), h("th", null, "Class"),
             h("th", { className: "yti-right yti-strong" }, "× proj"), h("th", { className: "yti-right" }, "× raw"), h("th", { className: "yti-right" }, "z"),
@@ -2273,11 +2273,15 @@
       h(ChannelManager, { title: "Followed Channels", defaultOpen: true,
         hint: "Same list as the Trends tab. Every followed channel is snapshotted daily for free (exact views), and its uploads are scored against its own baseline." }),
       h("div", { className: "yti-stats-row" },
-        h(StatCard, { value: String(counts.channels || 0), label: "Channels seen" }),
-        h(StatCard, { value: String(counts.videos || 0), label: "Videos" }),
-        h(StatCard, { value: String(counts.hits || 0), label: "Hits (≥3× baseline)" }),
+        h(StatCard, { value: String(counts.channels_long != null ? counts.channels_long : (counts.channels || 0)), label: "Channels" }),
+        h(StatCard, { value: String(counts.videos_long != null ? counts.videos_long : (counts.videos || 0)), label: "Long-form videos" }),
+        h(StatCard, { value: String(counts.hits_long != null ? counts.hits_long : (counts.hits || 0)), label: "Hits (≥3× baseline)" }),
         h(StatCard, { value: String(counts.formats || 0), label: "Formats" }),
         h(StatCard, { value: String(counts.video_snapshots || 0), label: "Snapshot points" })),
+      h("div", { className: "yti-subtle", style: { marginTop: -12 } },
+        "Long-form only. ",
+        counts.videos_short ? formatNumber(counts.videos_short) + " Shorts are kept out of every number, list and format on this tab (they stay in the data for the Short Form page)." : "",
+        counts.videos_unknown_form ? " " + counts.videos_unknown_form + " videos of unknown length are held back until their duration is known." : ""),
       h("div", { className: "yti-rs-nav" }, RS_PANELS.map(function (p) {
         return h("button", { key: p[0], className: "yti-rs-pill" + (panel === p[0] ? " yti-rs-pill-on" : ""), onClick: function () { setPanel(p[0]); } }, p[1]);
       })),

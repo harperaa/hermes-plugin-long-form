@@ -55,11 +55,11 @@ def _fmt(x: Any, nd: int = 2) -> str:
 
 # -- D1 -------------------------------------------------------------------------------------
 
-def demand_map(conn: sqlite3.Connection, cfg: dict[str, Any]) -> dict[str, Any]:
+def demand_map(conn: sqlite3.Connection, cfg: dict[str, Any], bucket: str = "long") -> dict[str, Any]:
     rows = yti_rs_db.rows(conn, """
         SELECT v.video_id, v.title, v.niche, v.channel_id, s.class, s.projected_multiple, s.signal_weight
         FROM videos v JOIN scores s ON s.video_id = v.video_id
-        WHERE s.class IN ('hit','strong_hit')""")
+        WHERE s.class IN ('hit','strong_hit') AND s.format_bucket = ?""", (bucket,))
     per_niche: dict[str, Counter] = defaultdict(Counter)
     channels: dict[str, dict[str, set]] = defaultdict(lambda: defaultdict(set))
     for r in rows:
@@ -110,8 +110,11 @@ def render_d1(d: dict[str, Any]) -> str:
 
 def outlier_register(conn: sqlite3.Connection, *, niche: Optional[str] = None,
                      classes: Optional[list[str]] = None, limit: int = 200, offset: int = 0,
-                     sort: str = "projected_multiple") -> dict[str, Any]:
-    where, params = [], []
+                     sort: str = "projected_multiple", bucket: str = "long") -> dict[str, Any]:
+    """Scored videos in ONE format bucket (default long-form). Shorts are
+    scored against their own baselines and kept in the DB, but never mixed
+    into a long-form register."""
+    where, params = ["s.format_bucket = ?"], [bucket]
     if niche:
         where.append("v.niche = ?"); params.append(niche)
     if classes:
@@ -128,8 +131,9 @@ def outlier_register(conn: sqlite3.Connection, *, niche: Optional[str] = None,
         {w} ORDER BY {sort_col} DESC NULLS LAST LIMIT ? OFFSET ?""", params + [limit, offset])
     counts = {r["class"]: r["n"] for r in yti_rs_db.rows(conn, f"""
         SELECT s.class, COUNT(*) AS n FROM videos v JOIN scores s ON s.video_id = v.video_id
-        {(' WHERE v.niche = ?') if niche else ''} GROUP BY s.class""", [niche] if niche else [])}
-    return {"rows": rows, "total": total, "counts": counts}
+        WHERE s.format_bucket = ?{(' AND v.niche = ?') if niche else ''} GROUP BY s.class""",
+        [bucket] + ([niche] if niche else []))}
+    return {"rows": rows, "total": total, "counts": counts, "bucket": bucket}
 
 
 def render_d2(d: dict[str, Any]) -> str:

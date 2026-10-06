@@ -412,4 +412,12 @@ def counts(conn: sqlite3.Connection) -> dict[str, int]:
         "SELECT COUNT(*) FROM channels WHERE is_tracked = 1").fetchone()[0]
     out["hits"] = conn.execute(
         "SELECT COUNT(*) FROM scores WHERE class IN ('hit','strong_hit')").fetchone()[0]
+    # the Research tab is long-form only; Shorts stay in the DB for the Short Form page
+    out["videos_long"] = conn.execute("SELECT COUNT(*) FROM videos WHERE is_short = 0").fetchone()[0]
+    out["videos_short"] = conn.execute("SELECT COUNT(*) FROM videos WHERE is_short = 1").fetchone()[0]
+    out["videos_unknown_form"] = conn.execute("SELECT COUNT(*) FROM videos WHERE is_short IS NULL").fetchone()[0]
+    out["channels_long"] = conn.execute(
+        "SELECT COUNT(DISTINCT channel_id) FROM videos WHERE is_short = 0").fetchone()[0]
+    out["hits_long"] = conn.execute(
+        "SELECT COUNT(*) FROM scores WHERE class IN ('hit','strong_hit') AND format_bucket = 'long'").fetchone()[0]
     return out

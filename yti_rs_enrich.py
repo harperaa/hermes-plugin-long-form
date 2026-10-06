@@ -168,7 +168,8 @@ def run_transcripts(conn: sqlite3.Connection, cfg: dict[str, Any], tapi=None, *,
                      (vid, lang, int(lang.startswith("asr")), yti_rs_db.now_iso(), length, text, json.dumps(segs)))
         if not v.get("duration_seconds") and length:
             yti_rs_db.upsert_video(conn, {"video_id": vid, "duration_seconds": length,
-                                          "is_short": int(length <= 180)})
+                                          "is_short": v["is_short"] if v.get("is_short") is not None
+                                          else int(length <= 180)})
         summary["fetched"] += 1
         log(f"transcript {vid}: {length}s, {lang}")
     conn.commit()

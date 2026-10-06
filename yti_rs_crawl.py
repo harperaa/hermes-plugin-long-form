@@ -428,6 +428,7 @@ class Crawler:
             rows.insert(0, {"video_id": vid, "channel_id": node.key, "title": str(e.get("title") or "untitled"),
                             "published_at": pub, "published_approx": 0, "published_granularity_days": 0.0,
                             "views": ev, "views_approx": 0, "catalog_index": -1,
+                            "is_short": _form_int(yti_rs_normalize.is_short_rss(None, str(e.get("link") or ""))),
                             "description": e.get("description"), "niche": node.niche,
                             "discovered_via": "channel", "discovery_depth": node.depth, "raw_json": e})
         rows = estimate_catalog_dates(rows)
@@ -499,7 +500,11 @@ class Crawler:
                 self.conn, "SELECT views FROM videos WHERE channel_id = ? AND video_id != ? "
                            "AND views IS NOT NULL AND (is_short IS NULL OR is_short = 0) "
                            "ORDER BY COALESCE(published_at,'') DESC LIMIT ?", (cid, vid, window))]
-            pm = provisional_multiple(views, others)
+            # Shorts are recorded (the Short Form page will use them) but never
+            # scored against a long-form baseline, never counted as yield and
+            # never expanded: this crawl researches long-form.
+            is_short_row = rec["is_short"] == 1
+            pm = None if is_short_row else provisional_multiple(views, others)
             rec["provisional_multiple"] = pm
             new = yti_rs_db.upsert_video(self.conn, rec)
             self.stats["videos_new"] += int(new)
@@ -507,7 +512,8 @@ class Crawler:
                 scored.append((pm, rec))
                 if new:
                     yield_count += 1
-            by_views.append((views, rec))
+            if not is_short_row:
+                by_views.append((views, rec))
         self.conn.commit()
         scored.sort(key=lambda t: t[0], reverse=True)
         children = [Node("video", rec["video_id"], node.niche, node.depth + 1, rank=pm)
@@ -534,6 +540,10 @@ def _thumb(r: dict[str, Any]) -> Optional[str]:
         best = max(th, key=lambda t: t.get("width") or 0)
         return best.get("url")
     return None
+
+
+def _form_int(value: Optional[bool]) -> Optional[int]:
+    return None if value is None else int(value)
 
 
 def _short_int(duration: Optional[int]) -> Optional[int]:
