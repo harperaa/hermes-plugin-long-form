@@ -687,7 +687,7 @@
 .yti-rs-page .yti-rs-nav {
   position: sticky; top: 0; z-index: 6;
   min-height: var(--yti-rs-bar-h); box-sizing: border-box; align-items: center;
-  margin: 0 -24px 10px; padding: 8px 24px;
+  margin: 0 0 10px; padding: 8px 0;      /* same left and right edges as the cards below */
   background: var(--yti-rs-fill);
   box-shadow: 0 1px 0 var(--color-border);
 }
