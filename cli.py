@@ -247,12 +247,31 @@ PIPELINE_PROMPT_V4 = (
     "finish by printing that summary for human review."
 )
 
-PIPELINE_PROMPT = PIPELINE_PROMPT_V4 + (
+PIPELINE_PROMPT_V5 = PIPELINE_PROMPT_V4 + (
     " VOICE: before writing any spoken line, follow the "
     "youtube-content-creator skill's operator-voice check "
     "(voice-profile.md + SOUL.md + memories/USER.md when present) — every "
     "script must sound like the operator, never like competitor "
     "transcripts or the insight base."
+)
+
+# The pipeline had drifted into branding EVERY topic as a coined "X OS"
+# with an acronym (1 of 13 topics on 2026-08-02, 6 of 6 daily from 09-23):
+# each run read the earlier folders to avoid repeats and framed the new
+# topic as a sibling of those "named OSes". Nothing asked for it.
+PIPELINE_PROMPT = PIPELINE_PROMPT_V5 + (
+    " NAMING: name every topic, working title and folder slug after the "
+    "viewer's problem or the outcome they want, in plain words they would "
+    "search for. Do NOT brand topics as a coined system: no 'OS', "
+    "'Operating System', 'System', 'Framework', 'Stack', 'Protocol' or "
+    "'Method' label by default, no invented acronyms, and no folder slug "
+    "ending in -os. Earlier recommended folders ending in -os are legacy "
+    "naming — do not continue the pattern. When you survey earlier topics "
+    "to avoid repeats, refer to them by subject, and set a new topic apart "
+    "by what the viewer learns, never as a sibling of a named OS. A coined "
+    "name is allowed only when the video truly teaches one reusable "
+    "multi-step system — at most one topic per run, and even then the "
+    "folder slug describes the problem."
 )
 
 

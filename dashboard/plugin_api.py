@@ -81,7 +81,8 @@ def _migrate_cron_prompt() -> None:
              (mod.CRON_PROMPT_V1,), mod.CRON_PROMPT),
             ("youtube-content-pipeline",
              (mod.PIPELINE_PROMPT_V1, mod.PIPELINE_PROMPT_V2,
-              mod.PIPELINE_PROMPT_V3, mod.PIPELINE_PROMPT_V4),
+              mod.PIPELINE_PROMPT_V3, mod.PIPELINE_PROMPT_V4,
+              mod.PIPELINE_PROMPT_V5),
              mod.PIPELINE_PROMPT),
         ):
             job = cron_jobs.resolve_job_ref(name)

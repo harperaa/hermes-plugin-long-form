@@ -186,6 +186,8 @@ below stand alone.
 * **Own the opinions.** "I think this is backwards" beats "some would argue this approach has drawbacks." The creator has a point of view; hedged both-sides framing reads as machine-generated.
 * **Contractions always.** "It's / don't / you're / that's" — never "it is / do not" unless the line is deliberately slowing down for emphasis.
 
+**Titles and names.** The video title and every name the creator says aloud use the viewer's plain language for the problem or outcome. Do not coin a branded system ("X OS", "the X Framework") or an acronym for it, even when the concept file does — rename it by what it is ("a one-page brief checklist"). A coined name is fine only when the whole video teaches that one reusable system.
+
 Not spoken (the only non-line elements inside a beat):
 
 * `[Screen recording: description]` — production direction in brackets

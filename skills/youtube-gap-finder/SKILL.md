@@ -191,6 +191,17 @@ For each concept, generate **3 separate concept files** — 3 different formats 
 
 All 3 formats use the same concept structure below, but with different thesis angles, insight selection, and tone.
 
+#### Naming topics (all modes)
+
+Name each topic, its working title, and its folder slug after **the viewer's problem or the outcome they want**, in plain words they would search for — "Stop paying for vague AI briefs", not "Vague Brief Tax OS (VBTOS)".
+
+- **Do not brand topics as a coined system.** No "OS", "Operating System", "System", "Framework", "Stack", "Protocol", or "Method" label by default, and no invented acronyms. A folder slug must not end in `-os`.
+- **Earlier `-os` folders are legacy naming, not a convention.** Do not continue the pattern because prior runs used it. When you survey earlier topics to avoid repeats, refer to them by subject ("the brief-quality topic from Oct 4"), and set a new topic apart by what the viewer learns — never as a sibling of a named OS ("≠ dod-router-os").
+- **Name artifacts by what they are** — "a one-page brief checklist", not a branded card with an acronym.
+- **A coined name is the exception.** Use one only when the video truly teaches a single reusable multi-step system; at most one topic per run, and even then the folder slug describes the problem, not the brand.
+
+Why: when every recommendation is "X OS", a week of videos reads as one formula, the titles stop matching what viewers search for, and the naming itself becomes the sameness the Gist Filter punishes.
+
 For each concept file, use the following structure:
 
 **Part 1: Video Summary (~1000 words)**
@@ -261,7 +272,7 @@ youtube/{today}/recommended/
     concepts-contrarian.md
 ```
 
-**Title slugs**: lowercase, hyphens for spaces, strip non-alphanumeric except hyphens, max 80 chars. Derived from the proposed video title (Mode B/C) or the source video title (Mode A).
+**Title slugs**: lowercase, hyphens for spaces, strip non-alphanumeric except hyphens, max 80 chars. Derived from the proposed video title (Mode B/C) or the source video title (Mode A). The proposed title follows the naming rule in Phase 4 — a plain problem/outcome title, so the slug never ends in `-os` or carries an invented acronym.
 
 The `youtube-content-creator` skill will then produce a `script-outline.md` for each concept file.
 
