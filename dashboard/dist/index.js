@@ -1885,6 +1885,131 @@
             onChange: function (e) { props.onChange(e.target.value); } }));
   }
 
+  // ---- Setup: the niche conversation ----------------------------------------
+  // The operator never fills in the niche form: a short conversation with the
+  // host model works out who they serve and saves the whole setup for them.
+  function NicheInterview(props) {
+    const useRef = SDK.hooks.useRef || function () { return { current: null }; };
+    const [st, setSt] = useState(null);
+    const [busy, setBusy] = useState(false);
+    const [err, setErr] = useState(null);
+    const [draft, setDraft] = useState("");
+    const [pending, setPending] = useState(null);     // what was just said, while the reply is on its way
+    const [justDone, setJustDone] = useState(false);
+    const [starting, setStarting] = useState(false);
+    const logRef = useRef(null);
+    useEffect(function () {
+      api("/research/niche-interview").then(setSt).catch(function (e) { setErr(String((e && e.message) || e)); });
+    }, []);
+    useEffect(function () { const el = logRef.current; if (el) el.scrollTop = el.scrollHeight; }, [st, busy, pending]);
+    const call = function (path, body, after, restore) {
+      setBusy(true); setErr(null);
+      post(path, body).then(function (d) { setSt(d); setPending(null); if (after) after(d); })
+        .catch(function (e) {
+          setErr(String((e && e.message) || e)); setPending(null);
+          if (restore) setDraft(restore);               // nothing was lost — the answer goes back in the box
+        })
+        .finally(function () { setBusy(false); setStarting(false); });
+    };
+    const begin = function () {
+      const seed = draft.trim();
+      setJustDone(false); setDraft(""); setPending(seed || null); setStarting(true);
+      call("/research/niche-interview/start", { seed: seed }, null, seed);
+    };
+    const send = function () {
+      const text = draft.trim();
+      if (!text || busy) return;
+      setDraft(""); setPending(text);
+      call("/research/niche-interview/answer", { text: text }, function (d) {
+        if (d.done) { setJustDone(true); if (props.onSaved) props.onSaved(d.config); }
+      }, text);
+    };
+    const cancel = function () { call("/research/niche-interview/cancel", {}); };
+    const undo = function () {
+      call("/research/niche-interview/undo", {}, function (d) { setJustDone(false); if (props.onSaved) props.onSaved(d.config); });
+    };
+    const onKey = function (e) { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); if (st && st.inProgress) send(); else begin(); } };
+    if (!st) return h("div", { className: "yti-card" }, err ? h("div", { className: "yti-notice yti-notice-error" }, err) : h("div", { className: "yti-empty" }, "Loading…"));
+
+    const niches = st.niches || [];
+    const messages = (st.inProgress ? (st.messages || []) : []).concat(pending ? [{ role: "user", text: pending }] : []);
+    const errBox = err ? h("div", { className: "yti-notice yti-notice-error", style: { marginTop: 10, marginBottom: 0 } },
+      "The conversation could not continue: " + err + " — your answer is back in the box; send it again.") : null;
+    const composer = function (placeholder, action, label) {
+      return h("div", { className: "yti-rs-chat-compose" },
+        h("textarea", { value: draft, rows: 2, placeholder: placeholder, disabled: busy, "aria-label": placeholder,
+          onChange: function (e) { setDraft(e.target.value); }, onKeyDown: onKey }),
+        h(Button, { size: "sm", disabled: busy || (action === send && !draft.trim()), onClick: action }, busy ? "Thinking…" : label));
+    };
+
+    if (st.inProgress || starting) {
+      return h("div", { className: "yti-card" },
+        h("div", { className: "yti-rs-head" },
+          h("h3", { className: "yti-rs-h3" }, "Let's work out your niche"),
+          h("span", { className: "yti-rs-linkish", onClick: busy ? null : cancel }, niches.length ? "Stop — keep my current setup" : "Stop")),
+        h("div", { className: "yti-subtle", style: { marginBottom: 8 } },
+          "Answer in your own words. When I understand who you serve, I fill in the research setup for you — no form."),
+        h("div", { className: "yti-rs-chat", ref: logRef, "aria-live": "polite" },
+          messages.map(function (m, i) {
+            return h("div", { key: i, className: "yti-rs-msg yti-rs-msg-" + (m.role === "assistant" ? "a" : "u") }, m.text);
+          }),
+          busy ? h("div", { className: "yti-rs-msg yti-rs-msg-a yti-rs-msg-wait" }, "Thinking… (the last step, writing your setup, can take up to a minute)") : null),
+        errBox,
+        composer("Type your answer — Enter to send, Shift+Enter for a new line", st.inProgress ? send : begin, "Send"));
+    }
+
+    if (!niches.length) {
+      return h("div", { className: "yti-card" },
+        h("h3", { className: "yti-rs-h3" }, "Tell me who you make videos for"),
+        h("div", { className: "yti-rs-chat-intro" },
+          st.hasFoundation
+            ? "You have already described your company in the foundation steps, so I will start from that: I will tell you what I understand about your audience and you confirm or correct it. A couple of short questions, then I set up the research for you."
+            : "A few short questions about who you want to reach and what they are trying to get done — then I set up the research for you. There is no form to fill in."),
+        errBox,
+        composer("Optional: say anything to get started — e.g. \"I help solo founders ship AI apps without getting hacked\"",
+          begin, st.hasFoundation ? "Start from my company foundation" : "Start the conversation"));
+    }
+
+    const list = function (label, tip, values, max) {
+      if (!values || !values.length) return null;
+      const shown = max && values.length > max ? values.slice(0, max) : values;
+      const rest = values.slice(shown.length);
+      return h("div", { className: "yti-rs-nline" },
+        h("span", { className: "yti-rs-nlabel", title: tip }, label),
+        h("span", { className: "yti-rs-nchips" },
+          shown.map(function (v, i) { return h("span", { key: i, className: "yti-rs-nchip" }, v); }),
+          rest.length ? h("span", { className: "yti-rs-nchip yti-rs-nchip-more", title: rest.join(", ") }, "+" + rest.length + " more") : null));
+    };
+    const fresh = function (d) {
+      d = Number(d) || 365;
+      return (d <= 200 ? "Fast-moving" : d <= 450 ? "Steady" : "Evergreen") + " — a winning idea stays useful for about " + Math.round(d) + " days";
+    };
+    return h("div", { className: "yti-card" },
+      h("div", { className: "yti-rs-head" },
+        h("h3", { className: "yti-rs-h3" }, justDone ? "Done — your research is set up" : "Your niche"),
+        h("div", { className: "yti-rs-nactions" },
+          st.canUndo ? h(Button, { size: "sm", variant: "outline", disabled: busy, title: "Put back the setup that was in place before the last conversation", onClick: undo }, "Undo") : null,
+          h(Button, { size: "sm", variant: justDone ? "outline" : undefined, disabled: busy, onClick: begin }, busy ? "Thinking…" : "Change it by talking"),
+          (justDone && props.goRun) ? h(Button, { size: "sm", onClick: props.goRun }, "Next: collect videos →") : null)),
+      (st.summary && st.summary.text) ? h("div", { className: "yti-rs-chat-intro" }, st.summary.text) : null,
+      errBox,
+      niches.map(function (n, i) {
+        return h("div", { key: i, className: "yti-rs-niche" + (n.is_target ? " yti-rs-niche-target" : "") },
+          h("div", { className: "yti-rs-nhead" },
+            h("b", null, n.name),
+            h("span", { className: "yti-rs-nbadge" + (n.is_target ? " yti-rs-nbadge-on" : ""),
+              title: n.is_target ? "Your own audience. Everything is measured for this niche first."
+                : "A neighbouring audience that wants the same kind of result for a different subject. Ideas that already work there, and nobody has made for your audience yet, are your openings." },
+              n.is_target ? "Your niche" : "Neighbouring audience")),
+          n.note ? h("div", { className: "yti-rs-nnote" }, n.note) : null,
+          list("They search for", "The searches used to find videos and channels for this audience — written the way viewers type them.", n.seed_terms),
+          list("They want", "The result these viewers are already after.", n.outcome_terms),
+          list("You teach", "What is actually taught or done to get them that result.", n.mechanism_terms),
+          list("On-topic words", "A video counts as belonging to this niche when its channel and title use this vocabulary. It keeps unrelated videos out of the results.", n.topic_terms, 14),
+          h("div", { className: "yti-rs-nline yti-muted" }, fresh(n.signal_half_life_days)));
+      }));
+  }
+
   // ---- Setup ---------------------------------------------------------------
   function ResearchSetup(props) {
     const ov = props.overview;
@@ -1894,6 +2019,7 @@
     const [doctor, setDoctor] = useState(null);
     const [doctoring, setDoctoring] = useState(false);
     const [advanced, setAdvanced] = useState(false);
+    const [manual, setManual] = useState(false);
     useEffect(function () { if (ov && ov.config && !cfg) setCfg(JSON.parse(JSON.stringify(ov.config))); }, [ov]);  // eslint-disable-line
     if (!cfg) return h("div", { className: "yti-empty" }, "Loading…");
     const niches = cfg.niches || [];
@@ -1933,7 +2059,11 @@
     };
     const sec = (ov && ov.secrets) || {};
     return h("div", null,
-      h("div", { className: "yti-rs-row" },
+      h(NicheInterview, { goRun: props.goRun, onSaved: function (config) {
+        if (config) setCfg(JSON.parse(JSON.stringify(config)));
+        setMsg(null); props.reload();
+      } }),
+      h("div", { className: "yti-rs-row", style: { marginTop: 12 } },
         h("div", { className: "yti-card yti-rs-flex1" },
           h("h3", { className: "yti-rs-h3" }, "Providers"),
           h("div", { className: "yti-rs-secrets" },
@@ -1958,6 +2088,11 @@
               return h("div", { key: "p" + i, className: "yti-rs-check" }, h("span", { className: "yti-rs-dot off" }), "config: ", p);
             })) : null)),
       h("div", { className: "yti-card", style: { marginTop: 12 } },
+        h("div", { className: "yti-channels-toggle", onClick: function () { setManual(!manual); } },
+          (manual ? "▼" : "▶") + " Edit the setup by hand",
+          h("span", { className: "yti-muted", style: { fontWeight: 400, marginLeft: 8, fontSize: 12 } }, "optional — the conversation above fills all of this in")),
+        (ov && ov.configProblems && ov.configProblems.length && !manual) ? h("div", { className: "yti-notice yti-notice-error", style: { marginTop: 10, marginBottom: 0 } }, ov.configProblems.join(" · ")) : null,
+        manual ? h("div", { style: { marginTop: 12 } },
         h("div", { className: "yti-rs-head" },
           h("h3", { className: "yti-rs-h3" }, "Niches"),
           h("div", { className: "yti-actions" },
@@ -1971,7 +2106,7 @@
           String(cfg.crawl.min_subscribers), " and ", String(cfg.crawl.max_subscribers), " subscribers (Advanced), and only when their titles are actually about the niche."),
         msg ? h("div", { className: "yti-notice " + (msg.tone === "error" ? "yti-notice-error" : "yti-notice-ok") }, msg.text) : null,
         (ov && ov.configProblems && ov.configProblems.length) ? h("div", { className: "yti-notice yti-notice-error" }, ov.configProblems.join(" · ")) : null,
-        niches.length === 0 ? h("div", { className: "yti-empty" }, "No niches yet — add your target niche to begin.") : null,
+        niches.length === 0 ? h("div", { className: "yti-empty" }, "No niches yet — the conversation above sets them up, or add one here.") : null,
         niches.map(function (n, i) {
           return h("div", { key: i, className: "yti-rs-niche" + (n.is_target ? " yti-rs-niche-target" : "") },
             h("div", { className: "yti-rs-niche-head" },
@@ -2006,7 +2141,7 @@
            ["apify", "max_comments_per_video"]].map(function (pair) {
             const s = pair[0], k = pair[1];
             return h(Field, { key: s + k, label: s + "." + k, type: "number", step: "any", value: cfg[s][k] == null ? "" : cfg[s][k], onChange: setNum(s, k) });
-          })) : null));
+          })) : null) : null));
   }
 
   // ---- Run -------------------------------------------------------------------
@@ -2793,7 +2928,7 @@
       if (overview && overview.niches && overview.niches.length === 0 && panel === "run") setPanel("setup");
     }, [overview]);  // eslint-disable-line
     const counts = (overview && overview.counts) || {};
-    const body = panel === "setup" ? h(ResearchSetup, { overview: overview, reload: reload })
+    const body = panel === "setup" ? h(ResearchSetup, { overview: overview, reload: reload, goRun: function () { setPanel("run"); } })
       : panel === "run" ? h(ResearchRun, { overview: overview, reload: reload })
       : panel === "outliers" ? h(ResearchOutliers, { overview: overview })
       : panel === "supply" ? h(SupplyDemandView, { overview: overview })

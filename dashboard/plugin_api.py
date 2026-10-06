@@ -762,3 +762,71 @@ def research_report_file(path: str) -> dict[str, Any]:
     if not result.get("ok"):
         raise HTTPException(status_code=400, detail=result.get("error"))
     return result
+
+
+# -- niche interview: the Setup panel talks to the operator and fills the form ----------------
+
+import yti_rs_elicit  # noqa: E402
+
+
+class NicheSeedBody(BaseModel):
+    seed: str = ""
+
+
+class NicheAnswerBody(BaseModel):
+    text: str
+
+
+@router.get("/research/niche-interview")
+def niche_interview_state() -> dict[str, Any]:
+    conn = _rconn()
+    try:
+        return yti_rs_elicit.state(conn)
+    finally:
+        conn.close()
+
+
+@router.post("/research/niche-interview/start")
+def niche_interview_start(body: NicheSeedBody) -> dict[str, Any]:
+    conn = _rconn()
+    try:
+        return yti_rs_elicit.start(conn, body.seed or "")
+    except Exception as exc:  # noqa: BLE001 — model/provider errors reach the page as a message
+        raise HTTPException(status_code=502, detail=str(exc))
+    finally:
+        conn.close()
+
+
+@router.post("/research/niche-interview/answer")
+def niche_interview_answer(body: NicheAnswerBody) -> dict[str, Any]:
+    if not (body.text or "").strip():
+        raise HTTPException(status_code=400, detail="answer text required")
+    conn = _rconn()
+    try:
+        return yti_rs_elicit.answer(conn, body.text)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=502, detail=str(exc))
+    finally:
+        conn.close()
+
+
+@router.post("/research/niche-interview/cancel")
+def niche_interview_cancel() -> dict[str, Any]:
+    conn = _rconn()
+    try:
+        return yti_rs_elicit.cancel(conn)
+    finally:
+        conn.close()
+
+
+@router.post("/research/niche-interview/undo")
+def niche_interview_undo() -> dict[str, Any]:
+    conn = _rconn()
+    try:
+        return yti_rs_elicit.undo(conn)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    finally:
+        conn.close()

@@ -628,6 +628,27 @@
 .yti-rs-field-wide { grid-column: 1 / -1; }
 .yti-rs-field input, .yti-rs-field textarea { width: 100%; box-sizing: border-box; background: transparent; color: inherit; border: 1px solid var(--color-border); border-radius: 6px; padding: 6px 8px; font-size: 13px; font-family: inherit; }
 .yti-rs-field textarea { resize: vertical; }
+.yti-rs-chat { display: flex; flex-direction: column; gap: 8px; max-height: 420px; overflow-y: auto; padding: 4px 2px; }
+.yti-rs-msg { max-width: 82%; padding: 8px 12px; border-radius: 12px; font-size: 14px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
+.yti-rs-msg-a { align-self: flex-start; border: 1px solid var(--color-border); border-bottom-left-radius: 4px; }
+.yti-rs-msg-u { align-self: flex-end; background: color-mix(in srgb, var(--color-ring, #3987e5) 16%, transparent); border: 1px solid color-mix(in srgb, var(--color-ring, #3987e5) 40%, transparent); border-bottom-right-radius: 4px; }
+.yti-rs-msg-wait { color: var(--color-muted-foreground); font-style: italic; }
+.yti-rs-chat-intro { font-size: 14px; line-height: 1.55; margin: 2px 0 4px; max-width: 78ch; }
+.yti-rs-chat-compose { display: flex; gap: 8px; align-items: flex-end; margin-top: 10px; }
+.yti-rs-chat-compose textarea { flex: 1; min-width: 0; box-sizing: border-box; background: transparent; color: inherit; border: 1px solid var(--color-border); border-radius: 8px; padding: 8px 10px; font-size: 14px; font-family: inherit; resize: vertical; }
+.yti-rs-chat-compose textarea:focus-visible { outline: 2px solid var(--color-ring, #3987e5); outline-offset: 1px; }
+.yti-rs-linkish { font-size: 12px; color: var(--color-muted-foreground); cursor: pointer; text-decoration: underline; }
+.yti-rs-nactions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.yti-rs-nchip-more { color: var(--color-muted-foreground); border-style: dashed; cursor: help; }
+.yti-rs-nhead { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 14px; }
+.yti-rs-nbadge { font-size: 11px; font-weight: 600; padding: 1px 8px; border-radius: 10px; border: 1px solid var(--color-border); color: var(--color-muted-foreground); cursor: help; }
+.yti-rs-nbadge-on { border-color: var(--color-ring); color: inherit; }
+.yti-rs-nnote { font-size: 13px; margin: 4px 0 6px; }
+.yti-rs-nline { display: flex; gap: 8px; align-items: baseline; font-size: 12px; margin-top: 5px; }
+.yti-rs-nlabel { flex: 0 0 104px; color: var(--color-muted-foreground); cursor: help; }
+.yti-rs-nchips { display: flex; flex-wrap: wrap; gap: 4px 6px; }
+.yti-rs-nchip { border: 1px solid var(--color-border); border-radius: 10px; padding: 1px 8px; font-size: 12px; }
+@media (max-width: 640px) { .yti-rs-chat-compose { flex-direction: column; align-items: stretch; } .yti-rs-msg { max-width: 94%; } .yti-rs-nline { flex-direction: column; gap: 3px; } .yti-rs-nlabel { flex-basis: auto; } }
 .yti-rs-niche { border: 1px solid var(--color-border); border-radius: 8px; padding: 10px 12px; margin-top: 10px; }
 .yti-rs-niche-target { border-color: var(--color-ring); }
 .yti-rs-niche-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; font-size: 12px; }
