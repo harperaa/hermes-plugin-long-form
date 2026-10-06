@@ -2261,7 +2261,7 @@
       : panel === "gaps" ? h(ResearchGaps, {})
       : panel === "teardown" ? h(ResearchTeardown, { overview: overview })
       : h(ResearchBudget, {});
-    return h("div", { className: "yti-page" },
+    return h("div", { className: "yti-page yti-rs-page" },
       h("div", { className: "yti-header" },
         h("h1", { className: "yti-title" }, "YouTube Research"),
         h("div", { className: "yti-header-actions" }, h(Button, { size: "sm", variant: "outline", onClick: reload }, "Refresh"))),

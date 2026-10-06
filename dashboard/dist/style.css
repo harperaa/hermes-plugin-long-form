@@ -677,3 +677,35 @@
   .yti-rs-chanlist { width: 100%; }
   .yti-rs-grid-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+
+/* ---- Research tab: sticky panel bar + sticky table headers -------------
+ * The page scrolls inside the host's <main>. The panel pills stick to its
+ * top; every Research table's column headers stick just beneath them.
+ * A sticky cell needs an opaque fill (rows pass underneath) and its bottom
+ * rule as a shadow (collapsed borders do not travel with a sticky cell). */
+.yti-rs-page { --yti-rs-bar-h: 48px; --yti-rs-fill: var(--background-base, #0b0f14); }
+.yti-rs-page .yti-rs-nav {
+  position: sticky; top: 0; z-index: 6;
+  min-height: var(--yti-rs-bar-h); box-sizing: border-box; align-items: center;
+  margin: 0 -24px 10px; padding: 8px 24px;
+  background: var(--yti-rs-fill);
+  box-shadow: 0 1px 0 var(--color-border);
+}
+.yti-rs-page .yti-rs-table thead th {
+  position: sticky; top: var(--yti-rs-bar-h); z-index: 5;
+  background-color: var(--yti-rs-fill);
+  border-bottom-color: transparent;
+  box-shadow: inset 0 -1px 0 var(--color-border);
+}
+/* headers inside a card take the card's tint over the opaque fill */
+.yti-rs-page .yti-card .yti-rs-table thead th {
+  background-image: linear-gradient(var(--color-card), var(--color-card));
+}
+/* a horizontally scrolling wrapper would trap the sticky header inside
+ * itself; on screens wide enough for the tables, let them sit in the page */
+@media (min-width: 1100px) {
+  .yti-rs-page .yti-table-wrap { overflow: visible; }
+}
+@media (max-width: 1099px) {
+  .yti-rs-page .yti-table-wrap .yti-rs-table thead th { position: static; }
+}
