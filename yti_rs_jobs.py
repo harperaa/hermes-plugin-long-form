@@ -9,6 +9,7 @@ missing, and the crawler persists its stack on a budget stop.
 """
 from __future__ import annotations
 
+import json
 import threading
 import time
 import traceback
@@ -67,9 +68,25 @@ def state() -> dict[str, Any]:
     return {k: (list(v) if isinstance(v, deque) else v) for k, v in _STATE.items()}
 
 
-def _tapi(budget: yti_rs_budget.Budget) -> yti_rs_clients.TranscriptAPI:
-    s = yti_rs_config.require_secrets("transcriptapi")
-    return yti_rs_clients.TranscriptAPI(s.transcriptapi_key, budget=budget)
+def _tapi(budget: yti_rs_budget.Budget, log_fn: Callable[[str], None] = lambda m: None) -> yti_rs_clients.DataSource:
+    """The pipeline's data source: YouTube Data API for discovery when a key
+    is set (free), TranscriptAPI for the rest and as the fallback."""
+    s = yti_rs_config.require_secrets("discovery")
+    tapi = yti_rs_clients.TranscriptAPI(s.transcriptapi_key, budget=budget) if s.transcriptapi_key else None
+    yt = yti_rs_clients.YouTubeData(s.youtube_key, budget=budget) if s.youtube_key else None
+    return yti_rs_clients.DataSource(tapi, yt, log=log_fn)
+
+
+def full_pass_done(conn, cfg) -> bool:
+    """Has a crawl ever run to exhaustion for the current niche set?"""
+    names = sorted(n["name"] for n in cfg.get("niches") or [])
+    for r in yti_rs_db.rows(conn, "SELECT niches_json FROM crawl_runs WHERE status = 'done'"):
+        try:
+            if sorted(json.loads(r["niches_json"] or "[]")) == names:
+                return True
+        except json.JSONDecodeError:
+            continue
+    return False
 
 
 def _apify(budget: yti_rs_budget.Budget, cfg: dict[str, Any]) -> yti_rs_clients.Apify:
@@ -97,8 +114,18 @@ def job_crawl(conn, cfg, params, log_fn) -> dict[str, Any]:
         return {"dry_run": True, **yti_rs_crawl.plan(cfg, niches)}
     cap = int(params.get("max_credits") or cfg.get("budget", {}).get("crawl_default_credits", 150))
     run_id = params.get("resume") or None
+    # First pass runs the DFS to exhaustion (bounded only by the monthly
+    # budget); later passes only touch nodes the DB has not paid for, so
+    # they stop on their own well under the per-run cap.
+    complete = params.get("complete")
+    if complete is None:
+        complete = not full_pass_done(conn, cfg)
+    if complete and not params.get("max_credits"):
+        cap = max(cap, int(cfg.get("budget", {}).get("transcriptapi_credits", 2000)))
+        log_fn(f"full pass: running the DFS to exhaustion (cap {cap} TranscriptAPI credits; "
+               f"YouTube Data API units are free up to the daily quota)")
     budget = yti_rs_budget.Budget(conn, run_id=run_id, caps={"transcriptapi": cap})
-    crawler = yti_rs_crawl.Crawler(conn, cfg, _tapi(budget), budget, run_id=run_id, log=log_fn)
+    crawler = yti_rs_crawl.Crawler(conn, cfg, _tapi(budget, log_fn), budget, run_id=run_id, log=log_fn)
     budget.run_id = crawler.run_id
     if run_id:
         if not crawler.resume(run_id):
@@ -330,6 +357,19 @@ def doctor(run_sample: bool = False) -> dict[str, Any]:
         out["counts"] = yti_rs_db.counts(conn)
         out["db_path"] = str(yti_rs_db.db_path())
         budget = yti_rs_budget.Budget(conn, run_id="doctor")
+        if secrets.youtube_key:
+            try:
+                yt = yti_rs_clients.YouTubeData(secrets.youtube_key, budget=budget)
+                ch = yt.channel("@youtube")
+                used = yt.units_used_today()
+                out["checks"].append({"name": "youtube data api (1 unit)", "ok": bool(ch and ch.get("channel_id")),
+                                      "detail": f"key works — {used} of {yt.daily_units} units used today (resets midnight Pacific)"
+                                      if ch else "no channel returned"})
+            except Exception as exc:  # noqa: BLE001
+                out["checks"].append({"name": "youtube data api", "ok": False, "detail": redact(str(exc))})
+        else:
+            out["checks"].append({"name": "youtube data api", "ok": False,
+                                  "detail": "YOUTUBE_API_KEY missing — optional, but free discovery; see the Setup panel"})
         if secrets.transcriptapi_key:
             try:
                 tapi = yti_rs_clients.TranscriptAPI(secrets.transcriptapi_key, budget=budget)
@@ -342,7 +382,9 @@ def doctor(run_sample: bool = False) -> dict[str, Any]:
             except Exception as exc:  # noqa: BLE001
                 out["checks"].append({"name": "transcriptapi", "ok": False, "detail": redact(str(exc))})
         else:
-            out["checks"].append({"name": "transcriptapi", "ok": False, "detail": "TRANSCRIPT_API_KEY missing"})
+            out["checks"].append({"name": "transcriptapi", "ok": False,
+                                  "detail": "TRANSCRIPT_API_KEY missing — needed for transcripts and free snapshots"
+                                  + ("" if secrets.youtube_key else "; without a YouTube key, discovery cannot run either")})
         if secrets.apify_token:
             try:
                 apify = yti_rs_clients.Apify(secrets.apify_token, budget=budget)
@@ -371,5 +413,6 @@ def doctor(run_sample: bool = False) -> dict[str, Any]:
         out["maturity_curve"] = yti_rs_db.get_meta_json(conn, "maturity_curve")
     finally:
         conn.close()
-    out["ok"] = all(c["ok"] for c in out["checks"] if c["name"].startswith("transcriptapi")) and not out["config_problems"]
+    discovery_ok = any(c["ok"] for c in out["checks"] if c["name"].startswith(("transcriptapi", "youtube")))
+    out["ok"] = discovery_ok and not out["config_problems"]
     return out

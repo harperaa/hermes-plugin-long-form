@@ -482,6 +482,8 @@ class Crawler:
         # Channels whose whole catalogue fit on page 1 cost one credit.
         if pages > 1 and data.get("has_more"):
             try:
+                # TranscriptAPI: the popular feed. Data API: the next ~100
+                # chronological uploads instead (no popular feed, but cheap)
                 pop = self.tapi.channel_videos(ident, sort="popular")
             except ClientError as exc:
                 self.log(f"channel {ident} popular page failed: {exc}")
@@ -556,10 +558,16 @@ class Crawler:
                 "thumbnail_url": _thumb(r), "niche": node.niche,
                 "discovered_via": "channel" if idx is not None else "channel_popular",
                 "discovery_depth": node.depth, "raw_json": r,
+                "precision_tier": 2 if r.get("_exact") else 1,
             }
-            if idx is None and r.get("publishedTimeText"):
+            if r.get("description"):
+                rec["description"] = r.get("description")
+            if r.get("publishedTimeText"):
                 pub, pub_approx, gran = yti_rs_normalize.parse_published(r.get("publishedTimeText"), self.now)
-                rec["published_at"], rec["published_approx"], rec["published_granularity_days"] = pub, int(pub_approx), gran
+                # an exact date (Data API) is used for every row; a relative
+                # one only for sorted pages, where the catalogue position is unknown
+                if pub and (not pub_approx or idx is None):
+                    rec["published_at"], rec["published_approx"], rec["published_granularity_days"] = pub, int(pub_approx), gran
             if vid in exact:
                 e = exact[vid]
                 ev, _ = yti_rs_normalize.parse_views(e.get("viewCount"))
@@ -658,7 +666,10 @@ class Crawler:
                 "is_short": _short_int(dur), "views": views, "views_approx": int(approx),
                 "thumbnail_url": _thumb(r), "niche": node.niche, "discovered_via": via,
                 "discovery_depth": node.depth, "raw_json": r,
+                "precision_tier": 2 if r.get("_exact") else 1,
             }
+            if r.get("description"):
+                rec["description"] = r.get("description")
             others = [x["views"] for x in yti_rs_db.rows(
                 self.conn, "SELECT views FROM videos WHERE channel_id = ? AND video_id != ? "
                            "AND views IS NOT NULL AND (is_short IS NULL OR is_short = 0) "

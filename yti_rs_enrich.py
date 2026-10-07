@@ -145,8 +145,9 @@ def lookup_channel_size(conn: sqlite3.Connection, tapi, channel: dict[str, Any])
         if known is None:
             continue
         if known["subscriber_count"] is None or known["subscriber_approx"]:
-            conn.execute("UPDATE channels SET subscriber_count = ?, subscriber_approx = 1, handle = COALESCE(handle, ?) "
-                         "WHERE channel_id = ?", (subs, yti_rs_normalize.channel_handle_clean(r.get("handle")), cid))
+            conn.execute("UPDATE channels SET subscriber_count = ?, subscriber_approx = ?, handle = COALESCE(handle, ?) "
+                         "WHERE channel_id = ?", (subs, 0 if r.get("_exact") else 1,
+                                                  yti_rs_normalize.channel_handle_clean(r.get("handle")), cid))
         if cid == channel["channel_id"]:
             found = subs if known["subscriber_count"] is None or known["subscriber_approx"] else known["subscriber_count"]
     conn.commit()

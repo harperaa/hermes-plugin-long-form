@@ -203,13 +203,18 @@ def get_secrets() -> Secrets:
         transcriptapi_key=env_value("TRANSCRIPT_API_KEY"),
         apify_token=env_value("APIFY_API_TOKEN") or env_value("APIFY_TOKEN"),
         anthropic_key=env_value("ANTHROPIC_API_KEY"),
+        youtube_key=env_value("YOUTUBE_API_KEY") or env_value("YOUTUBE_DATA_API_KEY"),
     )
 
 
 def require_secrets(*providers: str) -> Secrets:
-    """Fail before any network call with the list of missing variables."""
+    """Fail before any network call with the list of missing variables.
+    ``"discovery"`` is satisfied by either YOUTUBE_API_KEY or TRANSCRIPT_API_KEY."""
     s = get_secrets()
-    missing = s.missing(tuple(providers))
+    wants_discovery = "discovery" in providers
+    missing = s.missing(tuple(p for p in providers if p != "discovery"))
+    if wants_discovery and not (s.youtube_key or s.transcriptapi_key):
+        missing.append("YOUTUBE_API_KEY (or TRANSCRIPT_API_KEY)")
     if missing:
         raise RuntimeError("missing required environment variables: " + ", ".join(missing)
                            + " — set them on the dashboard Keys page or in ~/.hermes/.env")

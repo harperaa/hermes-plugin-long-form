@@ -1791,9 +1791,9 @@
     nodes: "Nodes — how many steps the crawl took. A step is one search phrase, one video or one channel explored.",
     newvideos: "New videos — videos recorded for the first time by this run.",
     newoutliers: "New outliers — videos first seen in this run that already look like standouts (about 3× their channel's usual views on the rough search-result numbers). The Score job makes the final call.",
-    credits: "Credits — units charged by the data provider. TranscriptAPI charges 1 credit per successful search, channel page or transcript; Apify counts one per result returned. Failed calls cost nothing.",
+    credits: "Credits — units charged by the data provider. TranscriptAPI charges 1 credit per successful search, channel page or transcript; the YouTube Data API counts Google's quota units (a search is 100, a channel or video lookup 1; 10,000 free per day, reset at midnight Pacific); Apify counts one per result returned. Failed calls cost nothing.",
     stopreason: "Stop reason — why the run ended: 'exhausted' (nothing left to explore) or the budget message when it reached the credit cap.",
-    provider: "Provider — the service that was called: transcriptapi (search, channel pages, free daily snapshots, transcripts), apify (exact numbers and comments) or anthropic (optional AI analysis).",
+    provider: "Provider — the service that was called: youtube (Google's free Data API: searches, channel catalogues, channel sizes — exact numbers), transcriptapi (transcripts, free daily snapshots, and discovery when no YouTube key is set or the day's quota is spent), apify (exact numbers and comments) or anthropic (optional AI analysis).",
     endpoint: "Endpoint — the specific operation called at the provider.\nExample: 'channel/latest' is the free feed of a channel's 15 newest uploads; 'search' is a keyword search.",
     calls: "Calls — how many requests were made, including failed ones.",
     failures: "Failures — requests that returned an error or no response. They are recorded but cost no credits.",
@@ -2020,6 +2020,7 @@
     const [doctoring, setDoctoring] = useState(false);
     const [advanced, setAdvanced] = useState(false);
     const [manual, setManual] = useState(false);
+    const [keyHelp, setKeyHelp] = useState(false);
     useEffect(function () { if (ov && ov.config && !cfg) setCfg(JSON.parse(JSON.stringify(ov.config))); }, [ov]);  // eslint-disable-line
     if (!cfg) return h("div", { className: "yti-empty" }, "Loading…");
     const niches = cfg.niches || [];
@@ -2067,13 +2068,34 @@
         h("div", { className: "yti-card yti-rs-flex1" },
           h("h3", { className: "yti-rs-h3" }, "Providers"),
           h("div", { className: "yti-rs-secrets" },
+            h("span", { className: "yti-rs-dot " + (sec.youtube ? "on" : "off") }), "YOUTUBE_API_KEY ",
+            h("span", { className: "yti-muted" }, sec.youtube
+              ? "set — discovery runs on Google's free quota (10,000 units a day; exact views, dates and durations). TranscriptAPI is only charged for transcripts and used as the fallback."
+              : "missing — recommended. Free from Google; takes discovery (searches, channel catalogues, channel sizes) off your TranscriptAPI credits and makes the numbers exact."),
+            h("br"),
             h("span", { className: "yti-rs-dot " + (sec.transcriptapi ? "on" : "off") }), "TRANSCRIPT_API_KEY ",
-            h("span", { className: "yti-muted" }, sec.transcriptapi ? "set — Tier 0/1/3 (discovery, transcripts, free daily snapshots)" : "missing — required"),
+            h("span", { className: "yti-muted" }, sec.transcriptapi
+              ? (sec.youtube ? "set — transcripts, free daily snapshots, and the fallback when the daily Google quota is spent" : "set — Tier 0/1/3 (discovery, transcripts, free daily snapshots)")
+              : (sec.youtube ? "missing — transcripts and the free daily snapshots need it" : "missing — required until a YouTube key is set")),
             h("br"),
             h("span", { className: "yti-rs-dot " + (sec.apify ? "on" : "off") }), "APIFY_API_TOKEN ",
             h("span", { className: "yti-muted" }, sec.apify ? "set — Tier 2/3 (exact metrics, comments)" : "missing — precision + comments stages are skipped")),
           h("div", { className: "yti-subtle", style: { marginTop: 8 } }, "Keys live only in the environment / ",
             h("a", { href: "/env" }, "Keys page"), ". They are never written to config, logs, or URLs."),
+          sec.youtube ? null : h("div", { className: "yti-rs-keyhelp" },
+            h("div", { className: "yti-actions" },
+              h(Button, { size: "sm", onClick: function () { setKeyHelp(!keyHelp); } }, (keyHelp ? "▼ " : "▶ ") + "How to get a free YouTube API key (about 3 minutes)"),
+              h("a", { className: "yti-rs-btnlink", href: "https://console.cloud.google.com/apis/library/youtube.googleapis.com", target: "_blank", rel: "noreferrer",
+                title: "Opens the YouTube Data API v3 page in the Google Cloud console in a new tab" }, "Open Google Cloud console ↗"),
+              h("a", { className: "yti-rs-btnlink", href: "/env", title: "Paste the key as YOUTUBE_API_KEY on the Keys page" }, "Add the key on the Keys page →")),
+            keyHelp ? h("ol", { className: "yti-rs-steps-list" },
+              h("li", null, h("b", null, "Open the console. "), "Use the button above, or go to console.cloud.google.com. Sign in with any Google account — a normal Gmail account is fine. No billing account is needed; the YouTube Data API's 10,000 units a day are free."),
+              h("li", null, h("b", null, "Pick or create a project. "), "The project selector is at the top of the page. If you have none, choose \"New project\", name it anything (e.g. youtube-research) and wait a few seconds for it to be created, then select it."),
+              h("li", null, h("b", null, "Enable the YouTube Data API v3. "), "On the API page that opened, click \"Enable\". (If you landed elsewhere: left menu → APIs & Services → Library → search \"YouTube Data API v3\" → Enable.)"),
+              h("li", null, h("b", null, "Create the key. "), "Left menu → APIs & Services → Credentials → \"+ Create credentials\" → \"API key\". A key starting with AIza… appears. Copy it."),
+              h("li", null, h("b", null, "Restrict it (recommended). "), "On that key, click \"Edit API key\" → under \"API restrictions\" choose \"Restrict key\" and tick only \"YouTube Data API v3\" → Save. Leave \"Application restrictions\" on None — this server calls Google directly, so there is no website or app to restrict to."),
+              h("li", null, h("b", null, "Paste it here. "), "Open the ", h("a", { href: "/env" }, "Keys page"), ", add a variable named ", h("code", null, "YOUTUBE_API_KEY"), " with the key as its value, and save. Then come back and press \"Doctor\" below: the check \"youtube data api\" should say the key works and show today's unit count."),
+              h("li", null, h("b", null, "What it changes. "), "Discovery (searches, channel catalogues, channel sizes) moves to Google's free quota with exact numbers; a full first crawl uses roughly 5,000–7,000 units, a daily refresh about 5,000. If the day's quota runs out mid-run, the remaining calls fall back to TranscriptAPI automatically. Transcripts still need TRANSCRIPT_API_KEY.")) : null),
           h("div", { className: "yti-actions", style: { marginTop: 8 } },
             h(Button, { size: "sm", variant: "outline", disabled: doctoring, onClick: function () { runDoctor(false); } }, doctoring ? "Checking…" : "Doctor"),
             h(Button, { size: "sm", variant: "outline", disabled: doctoring || !sec.apify, title: "Also runs one Apify result to verify field names (costs one result)",
@@ -2191,12 +2213,18 @@
             h("div", { className: "yti-muted yti-small" }, "Exact daily views for every followed + tracked channel. Cron this daily; it is the moat."),
             btn("Snapshot", "snapshot", {}, "Free RSS snapshot of the latest ~15 uploads per tracked channel")),
           h("div", { className: "yti-rs-step" }, h("b", null, h(Tip, { k: "tier1" }, "Tier 1 · Discovery")),
-            h("div", { className: "yti-muted yti-small" }, "Depth-first crawl on approximate data (1 credit per ~20-100 rows). Barren branches are pruned."),
+            h("div", { className: "yti-muted yti-small" },
+              (ov && ov.fullPassDone)
+                ? "Full pass done for this niche set. A crawl now only touches what the database has not paid for: searches run again (page 1), new channels are catalogued once, known channels refresh through the free call. It stops on its own, usually well under the cap."
+                : "No full pass yet for this niche set: the next crawl runs the depth-first search to exhaustion (bounded by the monthly budget, not the per-run cap). After that, crawls are incremental and cheap.",
+              (sec.youtube ? " Discovery is on the YouTube Data API's free quota." : " Add a YouTube API key on Setup to make discovery free.")),
             h("div", { className: "yti-rs-inline" },
               h("input", { className: "yti-rs-mini", placeholder: "max credits (" + (ov && ov.config ? ov.config.budget.crawl_default_credits : 150) + ")", value: maxCredits,
                 onChange: function (e) { setMaxCredits(e.target.value); } }),
               btn("Dry run", "crawl", { dry_run: true }, "Plan the calls and projected credits without spending anything"),
-              btn("Crawl", "crawl", { max_credits: cp(maxCredits) }, "Run the DFS crawl", "default"))),
+              btn((ov && ov.fullPassDone) ? "Crawl (new nodes only)" : "Crawl to completion", "crawl", { max_credits: cp(maxCredits) },
+                (ov && ov.fullPassDone) ? "Incremental crawl: only nodes not paid for yet" : "Run the DFS until the stack is empty", "default"),
+              (ov && ov.fullPassDone) ? btn("Full pass again", "crawl", { max_credits: cp(maxCredits), complete: true }, "Ignore the per-run cap and run until exhausted (nodes inside the refresh window are still skipped)") : null)),
           h("div", { className: "yti-rs-step" }, h("b", null, h(Tip, { k: "tier2" }, "Tier 2 · Precision")),
             h("div", { className: "yti-muted yti-small" }, "Apify exact views / likes / comments / duration / subscribers for the shortlist only."),
             h("div", { className: "yti-rs-inline" },
