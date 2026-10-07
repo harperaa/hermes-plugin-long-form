@@ -2133,7 +2133,7 @@
           (advanced ? "▼" : "▶") + " Advanced: crawl / scoring / formats / budget"),
         advanced ? h("div", { className: "yti-rs-grid yti-rs-grid-4" },
           [["crawl", "max_depth"], ["crawl", "search_pages_per_term"], ["crawl", "channel_pages_per_channel"], ["crawl", "outliers_to_expand_per_node"],
-           ["crawl", "prune_after_barren_nodes"], ["crawl", "recommendations_per_video"], ["crawl", "min_subscribers"], ["crawl", "max_subscribers"], ["crawl", "channel_relevance_min"],
+           ["crawl", "prune_after_barren_nodes"], ["crawl", "recommendations_per_video"], ["crawl", "min_subscribers"], ["crawl", "max_subscribers"], ["crawl", "channel_relevance_min"], ["crawl", "refresh_after_days"],
            ["scoring", "baseline_window"], ["scoring", "min_baseline_videos"], ["scoring", "hit_multiple"], ["scoring", "strong_multiple"],
            ["scoring", "underperformer_multiple"], ["scoring", "breakout_watch_max_age_days"], ["scoring", "breakout_watch_comment_pct"],
            ["formats", "min_support"], ["formats", "min_distinct_channels"], ["formats", "min_distinct_niches"], ["formats", "gap_min_wilson_lb"],

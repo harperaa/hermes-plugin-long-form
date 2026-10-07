@@ -287,6 +287,11 @@ def connect(path: Optional[Path] = None) -> sqlite3.Connection:
         # migration: topical-relevance verdict per scored video
         if "in_niche" not in {r["name"] for r in conn.execute("PRAGMA table_info(scores)")}:
             conn.execute("ALTER TABLE scores ADD COLUMN in_niche INTEGER NOT NULL DEFAULT 1")
+        node_cols = {r["name"] for r in conn.execute("PRAGMA table_info(crawl_nodes)")}
+        if "result_hash" not in node_cols:
+            # fingerprint of the video ids a node returned + how many were new
+            conn.execute("ALTER TABLE crawl_nodes ADD COLUMN result_hash TEXT")
+            conn.execute("ALTER TABLE crawl_nodes ADD COLUMN new_count INTEGER NOT NULL DEFAULT 0")
             conn.commit()
     return conn
 

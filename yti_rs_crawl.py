@@ -10,6 +10,7 @@ never written to ``scores`` — the §8 pass does that after enrichment.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import sqlite3
 import statistics
@@ -102,7 +103,9 @@ class Crawler:
         self.barren: dict[Optional[int], int] = {}
         self.stats: dict[str, Any] = {"nodes": 0, "videos_new": 0, "outliers_new": 0,
                                       "channels_new": 0, "pruned": 0, "errors": 0,
-                                      "quarantined": 0, "skipped_offtopic": 0, "skipped_size": 0}
+                                      "quarantined": 0, "skipped_offtopic": 0, "skipped_size": 0,
+                                      "skipped_fresh": 0, "channels_refreshed_free": 0}
+        self._last_hash: Optional[str] = None
         self.vocabs = {n["name"]: yti_rs_relevance.niche_vocab(n) for n in cfg.get("niches") or []}
         self.stop_reason: Optional[str] = None
 
@@ -120,11 +123,37 @@ class Crawler:
                                     (self.run_id, node.type, node.key)).fetchone()
             node.id = row["id"] if row else None
 
-    def _set_status(self, node_id: Optional[int], status: str, yield_count: int = 0) -> None:
+    def _set_status(self, node_id: Optional[int], status: str, yield_count: int = 0, *,
+                    result_hash: Optional[str] = None, new_count: int = 0) -> None:
         if node_id is None:
             return
-        self.conn.execute("UPDATE crawl_nodes SET status=?, yield_count=? WHERE id=?",
-                          (status, yield_count, node_id))
+        self.conn.execute("UPDATE crawl_nodes SET status=?, yield_count=?, result_hash=COALESCE(?, result_hash),"
+                          " new_count=? WHERE id=?", (status, yield_count, result_hash, new_count, node_id))
+
+    def _fresh_elsewhere(self, node: Node) -> Optional[str]:
+        """When this node was already expanded recently in an earlier run,
+        the date it was done — paid work is not repeated inside the refresh
+        window. Seed terms are free and never skipped."""
+        days = float(self.c.get("refresh_after_days", 14) or 0)
+        if node.type == "seed_term" or days <= 0:
+            return None
+        row = self.conn.execute(
+            "SELECT MAX(created_at) AS at FROM crawl_nodes WHERE node_type=? AND node_key=? AND run_id != ?"
+            " AND status IN ('done', 'pruned', 'refreshed')", (node.type, node.key, self.run_id)).fetchone()
+        at = row["at"] if row else None
+        if not at:
+            return None
+        try:
+            done = datetime.fromisoformat(at)
+        except ValueError:
+            return None
+        if done.tzinfo is None:
+            done = done.replace(tzinfo=timezone.utc)
+        return at if (self.now - done) < timedelta(days=days) else None
+
+    def _has_catalogue(self, channel_id: str) -> bool:
+        return bool(self.conn.execute("SELECT 1 FROM videos WHERE channel_id = ? AND discovered_via = 'channel' LIMIT 1",
+                                      (channel_id,)).fetchone())
 
     def _save_run(self, status: str) -> None:
         self.conn.execute(
@@ -221,14 +250,27 @@ class Crawler:
                                          self.budget.caps.get("transcriptapi", 0))
                 node = self.stack.pop()
                 if (node.type, node.key) in self.visited:
-                    self._set_status(node.id, "done")
+                    # the same node pushed by two parents: the first expansion's
+                    # counts stand, only a still-pending row is closed
+                    if node.id is not None:
+                        self.conn.execute("UPDATE crawl_nodes SET status='done' WHERE id=? AND status='pending'", (node.id,))
                     continue
                 self.visited.add((node.type, node.key))
                 if node.id is None:
                     self._insert_node(node)
+                fresh = self._fresh_elsewhere(node)
+                if fresh:
+                    self._set_status(node.id, "skipped")
+                    self.stats["skipped_fresh"] += 1
+                    self.log(f"[{node.depth}] {node.type} {node.key!r} skipped — expanded {fresh[:10]}, "
+                             f"inside the {self.c.get('refresh_after_days', 14)}-day refresh window")
+                    continue
+                before_new = self.stats["videos_new"]
+                self._last_hash = None
                 try:
                     children, yield_count = self.expand(node)
-                    self._set_status(node.id, "done", yield_count)
+                    self._set_status(node.id, "done", yield_count, result_hash=self._last_hash,
+                                     new_count=self.stats["videos_new"] - before_new)
                 except CreditsExhausted:
                     raise
                 except BudgetExceeded:
@@ -243,7 +285,7 @@ class Crawler:
                 self.stats["nodes"] += 1
                 self.stats["outliers_new"] += yield_count
                 self.log(f"[{node.depth}] {node.type} {node.key!r} → {len(children)} children, "
-                         f"yield {yield_count}")
+                         f"{self.stats['videos_new'] - before_new} new videos, yield {yield_count}")
                 # barren-branch pruning (§7.2): count consecutive zero-yield
                 # children per parent; on the threshold, drop the parent's
                 # remaining children from the stack.
@@ -309,8 +351,17 @@ class Crawler:
             children.append(Node("search_term", term, node.niche, node.depth + 1))
         return children, 0
 
+    def _seen_before(self, node: Node) -> bool:
+        return bool(self.conn.execute(
+            "SELECT 1 FROM crawl_nodes WHERE node_type=? AND node_key=? AND run_id != ? AND status IN ('done', 'pruned')"
+            " LIMIT 1", (node.type, node.key, self.run_id)).fetchone())
+
     def _expand_search(self, node: Node) -> tuple[list[Node], int]:
         pages = int(self.c.get("search_pages_per_term", 2))
+        # a search we have run before only needs its first page again: what is
+        # new surfaces at the top, and the deeper pages were absorbed last time
+        if pages > 1 and self._seen_before(node):
+            pages = 1
         results: list[dict[str, Any]] = []
         continuation = None
         for page in range(pages):
@@ -415,52 +466,28 @@ class Crawler:
                 "niche": (ch or {}).get("niche") or node.niche, "raw_json": chinfo})
             for r in latest["results"]:
                 exact[str(r.get("videoId"))] = r
-        pages = int(self.c.get("channel_pages_per_channel", 2))
         rows: list[dict[str, Any]] = []
-        continuation = None
-        idx = 0
-        for page in range(pages):
+        popular: list[dict[str, Any]] = []
+        # A channel whose catalogue is already in the DB is never paged again:
+        # the free channel/latest call above already holds anything new.
+        if self._has_catalogue(node.key) and not self.c.get("repage_known_channels", False):
+            self.stats["channels_refreshed_free"] += 1
+            return self._refresh_known_channel(node, exact)
+        pages = int(self.c.get("channel_pages_per_channel", 2))
+        data = self.tapi.channel_videos(ident)          # ~100 newest uploads: the baseline
+        idx = self._channel_rows(data, node, exact, rows, 0)
+        # Page 2 is the channel's most-viewed uploads, not uploads 101-200 in
+        # date order: for the same credit it catches the evergreen hit that
+        # sits at upload #250, which a chronological page never reaches.
+        # Channels whose whole catalogue fit on page 1 cost one credit.
+        if pages > 1 and data.get("has_more"):
             try:
-                data = self.tapi.channel_videos(ident, continuation)
+                pop = self.tapi.channel_videos(ident, sort="popular")
             except ClientError as exc:
-                if page == 0:
-                    raise
-                self.log(f"channel {ident} page {page + 1} failed: {exc}")
+                self.log(f"channel {ident} popular page failed: {exc}")
                 self.stats["errors"] += 1
-                break
-            for r in data.get("results") or []:
-                vid = str(r.get("videoId") or "")
-                if not vid:
-                    continue
-                views, approx = yti_rs_normalize.parse_views(r.get("viewCountText"))
-                rec = {
-                    "video_id": vid, "channel_id": node.key,
-                    "title": str(r.get("title") or "untitled"),
-                    "duration_seconds": yti_rs_normalize.parse_duration(r.get("lengthText")),
-                    "catalog_index": int(r.get("index")) if str(r.get("index", "")).isdigit() else idx,
-                    "views": views, "views_approx": int(approx),
-                    "thumbnail_url": _thumb(r), "niche": node.niche,
-                    "discovered_via": "channel", "discovery_depth": node.depth, "raw_json": r,
-                }
-                if vid in exact:
-                    e = exact[vid]
-                    ev, _ = yti_rs_normalize.parse_views(e.get("viewCount"))
-                    pub, _, _ = yti_rs_normalize.parse_published(e.get("published"))
-                    if ev is not None:
-                        rec["views"], rec["views_approx"] = ev, 0
-                    rec["published_at"], rec["published_approx"] = pub, 0
-                    rec["published_granularity_days"] = 0.0
-                    rec["description"] = e.get("description")
-                if rec["views"] is None:
-                    yti_rs_db.quarantine(self.conn, "transcriptapi", "channel/videos: unparseable views", r)
-                    self.stats["quarantined"] += 1
-                    continue
-                rec["is_short"] = _short_int(rec["duration_seconds"])
-                rows.append(rec)
-                idx += 1
-            continuation = data.get("continuation_token")
-            if not data.get("has_more") or not continuation:
-                break
+            else:
+                self._channel_rows(pop, node, exact, popular, None, skip={r["video_id"] for r in rows})
         # any exact rows not in the paged catalogue (e.g. a brand-new upload)
         known = {r["video_id"] for r in rows}
         for vid, e in exact.items():
@@ -488,6 +515,13 @@ class Crawler:
         for i, r in enumerate(longform):
             older = [x["views"] for x in longform[i + 1:i + 1 + window]]
             r["provisional_multiple"] = provisional_multiple(r["views"], older)
+        # popular-page rows sit beyond page 1, so their neighbours are unknown:
+        # score them against the channel's typical upload (page 1's median)
+        typical = [x["views"] for x in longform]
+        for r in popular:
+            r["provisional_multiple"] = None if r.get("is_short") == 1 else provisional_multiple(r["views"], typical)
+        rows = rows + popular
+        self._last_hash = _ids_hash(r["video_id"] for r in rows)
         for r in rows:
             new = yti_rs_db.upsert_video(self.conn, r)
             self.stats["videos_new"] += int(new)
@@ -497,6 +531,90 @@ class Crawler:
                 if new:
                     yield_count += 1
         self.conn.commit()
+        n = int(self.c.get("outliers_to_expand_per_node", 4))
+        outliers.sort(key=lambda r: r["provisional_multiple"], reverse=True)
+        children = [Node("video", r["video_id"], node.niche, node.depth + 1, rank=r["provisional_multiple"])
+                    for r in outliers[:n] if ("video", r["video_id"]) not in self.visited]
+        return children, yield_count
+
+    def _channel_rows(self, data: dict[str, Any], node: Node, exact: dict[str, dict[str, Any]],
+                      out: list[dict[str, Any]], idx: Optional[int], skip: set[str] = frozenset()) -> int:
+        """Turn one channel/videos page into video rows. ``idx`` numbers the
+        chronological catalogue; ``None`` means a sorted page, whose rows get no
+        catalogue position and are dated from their own "N years ago" text."""
+        for r in data.get("results") or []:
+            vid = str(r.get("videoId") or "")
+            if not vid or vid in skip:
+                continue
+            views, approx = yti_rs_normalize.parse_views(r.get("viewCountText"))
+            rec = {
+                "video_id": vid, "channel_id": node.key,
+                "title": str(r.get("title") or "untitled"),
+                "duration_seconds": yti_rs_normalize.parse_duration(r.get("lengthText")),
+                "catalog_index": None if idx is None else (int(r.get("index")) if str(r.get("index", "")).isdigit() else idx),
+                "views": views, "views_approx": int(approx),
+                "thumbnail_url": _thumb(r), "niche": node.niche,
+                "discovered_via": "channel" if idx is not None else "channel_popular",
+                "discovery_depth": node.depth, "raw_json": r,
+            }
+            if idx is None and r.get("publishedTimeText"):
+                pub, pub_approx, gran = yti_rs_normalize.parse_published(r.get("publishedTimeText"), self.now)
+                rec["published_at"], rec["published_approx"], rec["published_granularity_days"] = pub, int(pub_approx), gran
+            if vid in exact:
+                e = exact[vid]
+                ev, _ = yti_rs_normalize.parse_views(e.get("viewCount"))
+                pub, _, _ = yti_rs_normalize.parse_published(e.get("published"))
+                if ev is not None:
+                    rec["views"], rec["views_approx"] = ev, 0
+                rec["published_at"], rec["published_approx"] = pub, 0
+                rec["published_granularity_days"] = 0.0
+                rec["description"] = e.get("description")
+            if rec["views"] is None:
+                yti_rs_db.quarantine(self.conn, "transcriptapi", "channel/videos: unparseable views", r)
+                self.stats["quarantined"] += 1
+                continue
+            rec["is_short"] = _short_int(rec["duration_seconds"])
+            out.append(rec)
+            if idx is not None:
+                idx += 1
+        return idx or 0
+
+    def _refresh_known_channel(self, node: Node, exact: dict[str, dict[str, Any]]) -> tuple[list[Node], int]:
+        """Free refresh of a channel we already paged: record the newest exact
+        uploads from channel/latest, score them against the channel's known
+        long-form baseline, and expand any new outlier."""
+        window = int(self.s.get("baseline_window", 20))
+        hit = float(self.s.get("hit_multiple", 3.0))
+        baseline = [x["views"] for x in yti_rs_db.rows(
+            self.conn, "SELECT views FROM videos WHERE channel_id = ? AND views IS NOT NULL "
+                       "AND (is_short IS NULL OR is_short = 0) ORDER BY COALESCE(published_at,'') DESC LIMIT ?",
+            (node.key, window))]
+        outliers: list[dict[str, Any]] = []
+        yield_count = 0
+        ids: list[str] = []
+        for vid, e in exact.items():
+            ev, _ = yti_rs_normalize.parse_views(e.get("viewCount"))
+            pub, _, _ = yti_rs_normalize.parse_published(e.get("published"))
+            if ev is None:
+                continue
+            ids.append(vid)
+            is_short = yti_rs_normalize.is_short_rss(None, str(e.get("link") or ""))
+            rec = {"video_id": vid, "channel_id": node.key, "title": str(e.get("title") or "untitled"),
+                   "published_at": pub, "published_approx": 0, "published_granularity_days": 0.0,
+                   "views": ev, "views_approx": 0, "is_short": _form_int(is_short),
+                   "description": e.get("description"), "niche": node.niche,
+                   "discovered_via": "channel", "discovery_depth": node.depth, "raw_json": e}
+            others = [v for v in baseline if v is not None]
+            rec["provisional_multiple"] = None if is_short else provisional_multiple(ev, others)
+            new = yti_rs_db.upsert_video(self.conn, rec)
+            self.stats["videos_new"] += int(new)
+            pm = rec["provisional_multiple"]
+            if pm is not None and pm >= hit:
+                outliers.append(rec)
+                if new:
+                    yield_count += 1
+        self.conn.commit()
+        self._last_hash = _ids_hash(ids)
         n = int(self.c.get("outliers_to_expand_per_node", 4))
         outliers.sort(key=lambda r: r["provisional_multiple"], reverse=True)
         children = [Node("video", r["video_id"], node.niche, node.depth + 1, rank=r["provisional_multiple"])
@@ -566,6 +684,7 @@ class Crawler:
             if not is_short_row:
                 by_views.append((views, rec))
         self.conn.commit()
+        self._last_hash = _ids_hash(str(r.get("videoId") or "") for r in results)
         scored.sort(key=lambda t: t[0], reverse=True)
         children = [Node("video", rec["video_id"], node.niche, node.depth + 1, rank=pm)
                     for pm, rec in scored[:n] if ("video", rec["video_id"]) not in self.visited]
@@ -583,6 +702,12 @@ class Crawler:
                 if len(seen) >= n:
                     break
         return children, yield_count
+
+
+def _ids_hash(ids) -> str:
+    """Order-free fingerprint of a result set, so a repeated search that
+    returns the same videos is recognisable without re-reading the rows."""
+    return hashlib.sha1("\n".join(sorted(set(i for i in ids if i))).encode()).hexdigest()[:16]
 
 
 def _thumb(r: dict[str, Any]) -> Optional[str]:
@@ -616,10 +741,12 @@ def plan(cfg: dict[str, Any], niche_names: Optional[list[str]] = None) -> dict[s
     for n in niches:
         terms = len(n.get("seed_terms") or [])
         search_calls = terms * variants * pages
-        # worst case: every search term expands `per_node` channels, each
-        # channel `ch_pages` paid pages, each channel yields `per_node` video
-        # nodes costing one recommendation search each (depth cap 3 applies)
-        channel_calls = terms * variants * per_node * ch_pages
+        # worst case: every search term expands `per_node` NEW channels (known
+        # ones refresh free), each at most `ch_pages` paid pages (page 1 plus
+        # the popular page when the catalogue runs past 100 uploads), each
+        # yielding `per_node` video nodes costing one recommendation search
+        # each (depth cap 3 applies)
+        channel_calls = terms * variants * per_node * min(ch_pages, 2)
         video_calls = terms * variants * per_node * per_node * recs
         est = search_calls + channel_calls + video_calls
         total += est

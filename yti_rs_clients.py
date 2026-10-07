@@ -268,8 +268,14 @@ class TranscriptAPI(_Base):
         params = {"continuation": continuation} if continuation else {"q": q, "type": type_}
         return self.get("search", params, credits=1, cache_secs=self.SEARCH_CACHE_SECS)
 
-    def channel_videos(self, channel: str, continuation: Optional[str] = None) -> dict[str, Any]:
+    def channel_videos(self, channel: str, continuation: Optional[str] = None, *,
+                       sort: Optional[str] = None) -> dict[str, Any]:
+        """One page of the channel's Videos tab (never Shorts). Unsorted pages
+        hold ~100 uploads newest-first; ``sort="popular"`` is YouTube's sorted
+        feed (~30 most-viewed uploads). Each page is one credit."""
         params = {"continuation": continuation} if continuation else {"channel": channel}
+        if sort and not continuation:
+            params["sort"] = sort
         return self.get("channel/videos", params, credits=1, cache_secs=self.SEARCH_CACHE_SECS)
 
     def channel_search(self, channel: str, q: str, continuation: Optional[str] = None) -> dict[str, Any]:

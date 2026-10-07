@@ -147,3 +147,86 @@ def test_followed_channels_seed_as_channel_nodes(tmp_home):
     assert ch["niche"] == "n1" and ch["is_tracked"] == 1
     assert yti_rs_db.one(conn, "SELECT provisional_multiple FROM videos WHERE video_id = 'f0'")["provisional_multiple"] == 10.0
     conn.close()
+
+
+class SortingTAPI(FakeTAPI):
+    """Channel pages like the real API: page 1 says has_more for big
+    catalogues; sort=popular is a separate ~30-row feed."""
+
+    def __init__(self, searches, channels, popular, big=()):
+        super().__init__(searches, channels)
+        self.popular, self.big = popular, set(big)
+
+    def channel_videos(self, channel, continuation=None, *, sort=None):
+        self.calls.append(("channel_videos", channel, sort))
+        if sort == "popular":
+            return {"results": self.popular.get(channel, []), "has_more": True, "continuation_token": "x"}
+        return {"results": self.channels.get(channel, []), "has_more": channel in self.big,
+                "continuation_token": "tok" if channel in self.big else None}
+
+
+def test_second_channel_page_is_the_popular_feed(tmp_home):
+    conn = yti_rs_db.connect()
+    searches = {"alpha": [_sr("a1", "UCbig", "50K views"), _sr("a2", "UCsmall", "40K views")]}
+    channels = {"@UCbig": [_cv(f"b{i}", "10K views", i) for i in range(12)],
+                "@UCsmall": [_cv(f"s{i}", "10K views", i) for i in range(12)]}
+    popular = {"@UCbig": [dict(_cv("b_old_hit", "900K views", 250), publishedTimeText="3 years ago"),
+                          _cv("b1", "10K views", 1)]}                      # b1 is already on page 1
+    tapi = SortingTAPI(searches, channels, popular, big=["@UCbig"])
+    cfg = _cfg()
+    cfg["crawl"]["channel_pages_per_channel"] = 2
+    crawler = C.Crawler(conn, cfg, tapi, yti_rs_budget.Budget(conn, caps={"transcriptapi": 100}), run_id="r_pop")
+    crawler.seed()
+    crawler.run()
+    pages = [c for c in tapi.calls if c[0] == "channel_videos"]
+    assert ("channel_videos", "@UCbig", None) in pages and ("channel_videos", "@UCbig", "popular") in pages
+    assert ("channel_videos", "@UCsmall", "popular") not in pages         # whole catalogue fit on page 1: 1 credit
+    hit = yti_rs_db.one(conn, "SELECT * FROM videos WHERE video_id = 'b_old_hit'")
+    assert hit["discovered_via"] == "channel_popular" and hit["catalog_index"] is None
+    assert hit["published_at"].startswith("20") and hit["published_approx"] == 1
+    assert hit["provisional_multiple"] == 90.0                             # against page 1's typical upload
+    assert yti_rs_db.one(conn, "SELECT COUNT(*) AS n FROM videos WHERE video_id = 'b1'")["n"] == 1
+    assert yti_rs_db.one(conn, "SELECT result_hash, new_count FROM crawl_nodes WHERE node_key = 'UCbig'")["new_count"] == 13
+    conn.close()
+
+
+def test_known_channels_refresh_free_and_fresh_nodes_are_skipped(tmp_home):
+    conn = yti_rs_db.connect()
+    searches = {"alpha": [_sr("a1", "UCgood", "50K views")]}
+    # titles mention the niche so the relevance gate keeps the channel on later runs
+    channels = {"@UCgood": [dict(_cv(f"g{i}", "10K views", i), title=f"alpha lesson {i}") for i in range(12)]}
+    tapi = FakeTAPI(searches, channels)
+    cfg = _cfg()
+    cfg["crawl"]["search_pages_per_term"] = 2
+    crawler = C.Crawler(conn, cfg, tapi, yti_rs_budget.Budget(conn, caps={"transcriptapi": 100}), run_id="r_first")
+    crawler.seed()
+    first = crawler.run()
+    assert [c for c in tapi.calls if c[0] == "channel_videos"] == [("channel_videos", "@UCgood")]
+
+    # a second run the same day: the search is inside the refresh window and
+    # costs nothing; nothing is paged again
+    tapi2 = FakeTAPI(searches, channels)
+    crawler2 = C.Crawler(conn, cfg, tapi2, yti_rs_budget.Budget(conn, caps={"transcriptapi": 100}), run_id="r_same_day")
+    crawler2.seed()
+    second = crawler2.run()
+    assert second["skipped_fresh"] == 1 and not [c for c in tapi2.calls if c[0] in ("search", "channel_videos")]
+    assert yti_rs_db.one(conn, "SELECT status FROM crawl_nodes WHERE run_id='r_same_day' AND node_type='search_term'")["status"] == "skipped"
+
+    # a month later: the search runs again (paid), but the channel we already
+    # paged is refreshed from the free channel/latest call only — and a new
+    # upload that beats the baseline still becomes an outlier node
+    from datetime import datetime, timedelta, timezone
+    later = datetime.now(timezone.utc) + timedelta(days=40)
+    latest = {"@UCgood": {"results": [{"videoId": "g_new", "title": "alpha: the new hit", "viewCount": "120000",
+                                       "published": later.isoformat(), "link": "https://youtube.com/watch?v=g_new"}]}}
+    tapi3 = FakeTAPI(searches, channels, latest)
+    crawler3 = C.Crawler(conn, cfg, tapi3, yti_rs_budget.Budget(conn, caps={"transcriptapi": 100}), run_id="r_later", now=later)
+    crawler3.seed()
+    third = crawler3.run()
+    assert ("latest", "@UCgood") in tapi3.calls and not [c for c in tapi3.calls if c[0] == "channel_videos"]
+    assert tapi3.calls.count(("search", "alpha")) == 1                   # a repeated search re-reads page 1 only
+    assert third["channels_refreshed_free"] == 1
+    new = yti_rs_db.one(conn, "SELECT * FROM videos WHERE video_id = 'g_new'")
+    assert new["views"] == 120000 and new["provisional_multiple"] == 12.0
+    assert yti_rs_db.one(conn, "SELECT status, new_count FROM crawl_nodes WHERE run_id='r_later' AND node_key='UCgood'")["new_count"] == 1
+    conn.close()
