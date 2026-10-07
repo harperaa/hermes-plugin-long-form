@@ -58,6 +58,15 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "breakout_watch_comment_pct": 80,
         "exclude_suspect_paid_from_formats": True,
     },
+    # Tier 3 (transcripts, comments) is spent on the focus quadrant of the
+    # Supply / Demand view only: recent AND running well above normal.
+    # focus_multiple 0 means "use scoring.hit_multiple"; focus_only False
+    # tears down every hit (the old behaviour).
+    "teardown": {
+        "focus_only": True,
+        "focus_days": 7,
+        "focus_multiple": 0,
+    },
     "formats": {
         "min_distinct_channels": 3,
         "min_distinct_niches": 2,

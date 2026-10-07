@@ -4,6 +4,8 @@ and quarantines unparseable records instead of defaulting to zero.
 """
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
+
 import json
 import sqlite3
 from typing import Any, Callable, Optional
@@ -22,11 +24,32 @@ except ImportError:  # pragma: no cover
 DEFAULT_CLASSES = ("hit", "strong_hit")
 
 
+def focus_window(cfg: dict[str, Any], params: Optional[dict[str, Any]] = None) -> Optional[tuple[float, float]]:
+    """(days, multiple) of the focus quadrant Tier 3 is limited to, or None
+    when the operator asked for every hit (``params.all`` or
+    teardown.focus_only off). Explicit ``focus_days`` / ``focus_multiple``
+    params (the Supply / Demand view's current settings) win over config."""
+    params = params or {}
+    t = cfg.get("teardown", {}) or {}
+    if params.get("all"):
+        return None
+    if params.get("focus_days") is None and not t.get("focus_only", True):
+        return None
+    days = float(params.get("focus_days") or t.get("focus_days", 7) or 7)
+    mult = float(params.get("focus_multiple") or t.get("focus_multiple") or 0) \
+        or float(cfg.get("scoring", {}).get("hit_multiple", 3.0))
+    return days, mult
+
+
 def shortlist(conn: sqlite3.Connection, classes: tuple[str, ...] = DEFAULT_CLASSES, *,
               limit: int = 200, tier_below: Optional[int] = 2, hit_multiple: float = 3.0,
-              include_under: bool = False) -> list[dict[str, Any]]:
+              include_under: bool = False, focus: Optional[tuple[float, float]] = None,
+              now: Optional[datetime] = None) -> list[dict[str, Any]]:
     """Videos worth paying for: scored hits (or provisional outliers when
-    unscored), long-form, optionally only those still at precision tier 1."""
+    unscored), long-form, optionally only those still at precision tier 1.
+    With ``focus`` = (days, multiple) only the focus quadrant: in-niche,
+    published within ``days`` and at ``multiple``× the channel's normal views
+    or more — the videos the Supply / Demand view highlights."""
     cls = list(classes) + (["under"] if include_under else [])
     marks = ",".join("?" for _ in cls)
     sql = f"""
@@ -35,6 +58,12 @@ def shortlist(conn: sqlite3.Connection, classes: tuple[str, ...] = DEFAULT_CLASS
         WHERE (v.is_short IS NULL OR v.is_short = 0)
           AND ((s.class IN ({marks})) OR (s.class IS NULL AND v.provisional_multiple >= ?))"""
     params: list[Any] = cls + [hit_multiple]
+    if focus is not None:
+        days, mult = focus
+        since = ((now or datetime.now(timezone.utc)) - timedelta(days=days)).isoformat()
+        sql += (" AND v.published_at >= ? AND COALESCE(s.in_niche, 1) = 1"
+                " AND COALESCE(s.projected_multiple, v.provisional_multiple) >= ?")
+        params += [since, mult]
     if tier_below is not None:
         sql += " AND v.precision_tier < ?"
         params.append(tier_below)
@@ -193,13 +222,16 @@ def _transcriptapi_fetch(tapi) -> TranscriptFn:
 
 def run_transcripts(conn: sqlite3.Connection, cfg: dict[str, Any], tapi=None, *, fetch: Optional[TranscriptFn] = None,
                     classes: tuple[str, ...] = DEFAULT_CLASSES, max_n: int = 50, include_under: bool = True,
+                    focus: Optional[tuple[float, float]] = None,
                     log: Callable[[str], None] = lambda m: None) -> dict[str, Any]:
     """Transcripts are immutable: cached forever, never refetched. 404 / no
     captions is a normal terminal outcome recorded in ``transcript_misses``."""
     fetch = fetch or _transcriptapi_fetch(tapi)
     hit = float(cfg.get("scoring", {}).get("hit_multiple", 3.0))
+    if focus:
+        log(f"transcripts limited to the focus quadrant: ≥{focus[1]:g}× and under {focus[0]:g} days old")
     todo = [v for v in shortlist(conn, classes, limit=max_n * 3, tier_below=None, hit_multiple=hit,
-                                 include_under=include_under)
+                                 include_under=include_under, focus=focus)
             if not conn.execute("SELECT 1 FROM transcripts WHERE video_id = ?", (v["video_id"],)).fetchone()
             and not conn.execute("SELECT 1 FROM transcript_misses WHERE video_id = ?", (v["video_id"],)).fetchone()]
     todo = todo[:max_n]
@@ -264,11 +296,14 @@ def map_comment(item: dict[str, Any], video_id: str, idx: int) -> Optional[dict[
 
 def run_comments(conn: sqlite3.Connection, cfg: dict[str, Any], apify, *, classes: tuple[str, ...] = DEFAULT_CLASSES,
                  max_per_video: int = 300, max_videos: int = 30, include_under: bool = True,
+                 focus: Optional[tuple[float, float]] = None,
                  log: Callable[[str], None] = lambda m: None) -> dict[str, Any]:
     actor = cfg.get("apify", {}).get("comments_actor", "streamers/youtube-comments-scraper")
     hit = float(cfg.get("scoring", {}).get("hit_multiple", 3.0))
+    if focus:
+        log(f"comments limited to the focus quadrant: ≥{focus[1]:g}× and under {focus[0]:g} days old")
     todo = [v for v in shortlist(conn, classes, limit=max_videos * 3, tier_below=None, hit_multiple=hit,
-                                 include_under=include_under)
+                                 include_under=include_under, focus=focus)
             if not conn.execute("SELECT 1 FROM comments WHERE video_id = ? LIMIT 1", (v["video_id"],)).fetchone()][:max_videos]
     summary: dict[str, Any] = {"videos": len(todo), "comments": 0, "early_adopter": 0, "errors": []}
     for v in todo:

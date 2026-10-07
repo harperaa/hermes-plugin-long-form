@@ -126,7 +126,8 @@ def job_transcripts(conn, cfg, params, log_fn) -> dict[str, Any]:
     budget = yti_rs_budget.Budget(conn, run_id="transcripts", caps={"transcriptapi": cap + 5})
     classes = tuple(params.get("classes") or yti_rs_enrich.DEFAULT_CLASSES)
     return yti_rs_enrich.run_transcripts(conn, cfg, _tapi(budget), classes=classes, max_n=cap,
-                                         include_under=bool(params.get("include_under", True)), log=log_fn)
+                                         include_under=bool(params.get("include_under", True)),
+                                         focus=yti_rs_enrich.focus_window(cfg, params), log=log_fn)
 
 
 def job_comments(conn, cfg, params, log_fn) -> dict[str, Any]:
@@ -135,7 +136,23 @@ def job_comments(conn, cfg, params, log_fn) -> dict[str, Any]:
     budget = yti_rs_budget.Budget(conn, run_id="comments", caps={"apify": int(cfg.get("budget", {}).get("apify_max_results", 5000))})
     classes = tuple(params.get("classes") or yti_rs_enrich.DEFAULT_CLASSES)
     return yti_rs_enrich.run_comments(conn, cfg, _apify(budget, cfg), classes=classes, max_per_video=per,
-                                      max_videos=max_videos, include_under=bool(params.get("include_under", True)), log=log_fn)
+                                      max_videos=max_videos, include_under=bool(params.get("include_under", True)),
+                                      focus=yti_rs_enrich.focus_window(cfg, params), log=log_fn)
+
+
+def job_teardown(conn, cfg, params, log_fn) -> dict[str, Any]:
+    """Tier 3 for the focus quadrant in one go: transcripts, comments when
+    Apify is configured, then packaging. The Supply / Demand view passes its
+    current window as ``focus_days`` / ``focus_multiple``."""
+    out: dict[str, Any] = {"transcripts": job_transcripts(conn, cfg, params, log_fn)}
+    if yti_rs_config.get_secrets().present()["apify"]:
+        try:
+            out["comments"] = job_comments(conn, cfg, params, log_fn)
+        except Exception as exc:  # noqa: BLE001 — comments are optional depth
+            out["comments"] = {"error": str(exc)}
+            log_fn(f"comments failed: {exc}")
+    out["packaging"] = job_packaging(conn, cfg, {}, log_fn)
+    return out
 
 
 def job_score(conn, cfg, params, log_fn) -> dict[str, Any]:
@@ -223,6 +240,7 @@ JOBS: dict[str, Callable] = {
     "snapshot": job_snapshot, "crawl": job_crawl, "enrich": job_enrich, "transcripts": job_transcripts,
     "comments": job_comments, "score": job_score, "packaging": job_packaging, "formats": job_formats,
     "profile": job_profile, "report": job_report, "pipeline": job_pipeline, "sizes": job_sizes,
+    "teardown": job_teardown,
 }
 
 

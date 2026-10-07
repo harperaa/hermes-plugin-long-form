@@ -2137,7 +2137,7 @@
            ["scoring", "baseline_window"], ["scoring", "min_baseline_videos"], ["scoring", "hit_multiple"], ["scoring", "strong_multiple"],
            ["scoring", "underperformer_multiple"], ["scoring", "breakout_watch_max_age_days"], ["scoring", "breakout_watch_comment_pct"],
            ["formats", "min_support"], ["formats", "min_distinct_channels"], ["formats", "min_distinct_niches"], ["formats", "gap_min_wilson_lb"],
-           ["formats", "min_actionable_n"], ["budget", "transcriptapi_credits"], ["budget", "crawl_default_credits"], ["budget", "apify_max_results"],
+           ["formats", "min_actionable_n"], ["teardown", "focus_days"], ["teardown", "focus_multiple"], ["budget", "transcriptapi_credits"], ["budget", "crawl_default_credits"], ["budget", "apify_max_results"],
            ["apify", "max_comments_per_video"]].map(function (pair) {
             const s = pair[0], k = pair[1];
             return h(Field, { key: s + k, label: s + "." + k, type: "number", step: "any", value: cfg[s][k] == null ? "" : cfg[s][k], onChange: setNum(s, k) });
@@ -2203,10 +2203,18 @@
               btn("Enrich", "enrich", {}, sec.apify ? "Enrich hits with exact numbers" : "APIFY_API_TOKEN missing"),
               btn("Channel sizes", "sizes", {}, "Look up subscriber counts for channels that have none (1 TranscriptAPI credit per channel, most useful first)"))),
           h("div", { className: "yti-rs-step" }, h("b", null, h(Tip, { k: "tier3" }, "Tier 3 · Depth")),
-            h("div", { className: "yti-muted yti-small" }, "Transcripts (packaging + structure) and comments (satisfaction + sentiment) for the shortlist."),
+            h("div", { className: "yti-muted yti-small" },
+              "Transcripts (packaging + structure) and comments (satisfaction + sentiment) — spent only on the focus quadrant: ",
+              (ov && ov.config && ov.config.teardown && ov.config.teardown.focus_only === false)
+                ? "off (every hit is torn down; Advanced → teardown.focus_only)"
+                : "videos under " + String((ov && ov.config && ov.config.teardown && ov.config.teardown.focus_days) || 7) + " days old running at " +
+                  String((ov && ov.config && ((ov.config.teardown && ov.config.teardown.focus_multiple) || (ov.config.scoring && ov.config.scoring.hit_multiple))) || 3) +
+                  "× or more (change in Advanced, or pick the window on Supply / Demand)."),
             h("div", { className: "yti-rs-inline" },
-              btn("Transcripts", "transcripts", {}, "Free caption check first; one credit per transcript"),
-              btn("Comments", "comments", {}, sec.apify ? "Apify comment bodies" : "APIFY_API_TOKEN missing"))),
+              btn("Tear down focus", "teardown", {}, "Transcripts, comments (when Apify is set) and packaging for the focus quadrant", "default"),
+              btn("Transcripts", "transcripts", {}, "Free caption check first; one credit per transcript (focus quadrant)"),
+              btn("Comments", "comments", {}, sec.apify ? "Apify comment bodies (focus quadrant)" : "APIFY_API_TOKEN missing"),
+              btn("Everything, not just focus", "transcripts", { all: true }, "Transcripts for every hit — the old behaviour; 1 credit each"))),
           h("div", { className: "yti-rs-step" }, h("b", null, "Analysis"),
             h("div", { className: "yti-muted yti-small" }, "Recompute every derived score from raw rows; mine + validate formats; write D1–D5."),
             h("div", { className: "yti-rs-inline" },
@@ -2417,6 +2425,16 @@
     const [size, setSize] = useState("band");
     const [recent, setRecent] = useState(7);          // default focus: 3× and under one week
     const [threshold, setThreshold] = useState(null);
+    const [td, setTd] = useState(null);                // "tear down these" request state
+    const tearDown = function (n, days, mult) {
+      setTd({ busy: true });
+      post("/research/run", { job: "teardown", params: { focus_days: days, focus_multiple: mult } })
+        .then(function (r) {
+          if (r && r.alreadyRunning) { setTd({ text: "A job is already running (" + r.job + ")." }); return; }
+          setTd({ text: "Tearing down " + n + " video" + (n === 1 ? "" : "s") + ": transcripts, comments and packaging — progress is on the Run tab, results on Teardown." });
+        })
+        .catch(function (e) { setTd({ text: String((e && e.message) || e) }); });
+    };
     const [hover, setHover] = useState(null);
     const sdSort = useSort("adj", "desc");
     const wrapRef = useRef(null);
@@ -2568,7 +2586,12 @@
             h("span", null, h("i", { className: "yti-sd-key yti-sd-key-hollow", style: { borderColor: pal.context } }), "date approximate"))),
         h("div", { className: "yti-subtle", style: { marginBottom: 8 } },
           q.focus.length + " of " + m.recentTotal + " videos from the last " + (SD_RECENTS.filter(function (o) { return o[0] === recent; })[0] || [0, Math.round(recent) + " days"])[1] + " (" + pct + "%) are running at " + thr + "× their channel's normal views or more. ",
-          "Each dot is one long-form, in-niche video from the last 3 months; time since publish stands in for supply."),
+          "Each dot is one long-form, in-niche video from the last 3 months; time since publish stands in for supply. ",
+          q.focus.length ? h(Button, { size: "sm", variant: "outline", disabled: !!(td && td.busy), style: { marginLeft: 6 },
+              title: "Pull transcripts and comments for exactly these videos (one TranscriptAPI credit per transcript), then compute their packaging. Nothing outside this quadrant is paid for.",
+              onClick: function () { tearDown(q.focus.length, recent, thr); } },
+              (td && td.busy) ? "Starting…" : "Tear down these " + q.focus.length) : null,
+          (td && td.text) ? h("span", { className: "yti-muted", style: { marginLeft: 8 } }, td.text) : null),
         h("div", { className: "yti-sd-wrap", ref: wrapRef },
           h("svg", { className: "yti-sd-svg", viewBox: "0 0 " + SD_W + " " + SD_H, role: "img",
               "aria-label": "Scatter of long-form videos: multiple of normal views against time since publish. " +
