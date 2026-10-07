@@ -661,6 +661,8 @@
 .yti-rs-btnlink:hover { border-color: var(--color-ring); }
 .yti-rs-steps-list { list-style: decimal; margin: 10px 0 0; padding-left: 24px; font-size: 13px; line-height: 1.55; max-width: 80ch; }
 .yti-rs-steps-list li { margin-bottom: 6px; }
+.yti-rs-substeps { list-style: disc; margin: 4px 0 0; padding-left: 18px; }
+.yti-rs-substeps li { margin-bottom: 3px; }
 .yti-rs-steps-list code { font-size: 12px; padding: 0 4px; border: 1px solid var(--color-border); border-radius: 4px; }
 .yti-rs-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; background: #6b7280; }
 .yti-rs-dot.on { background: #22c55e; }
