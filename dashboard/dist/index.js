@@ -2587,11 +2587,12 @@
     const x0 = SD_M.l, x1 = SD_W - SD_M.r, y0 = SD_M.t, y1 = SD_H - SD_M.b;
     const xr = m.X(Math.min(recent, m.xMax)), yt = m.Y(thr), yn = m.Y(1);
 
-    // sparing direct labels: the strongest few in the focus quadrant, skipped on collision
+    // direct labels: the ten strongest in the focus quadrant, each skipped when
+    // its box would collide with one already placed or leave the plot
     const labels = [];
     const boxes = [];
-    q.focus.slice(0, 12).forEach(function (d) {
-      if (labels.length >= 4 || d.p.m < SD_Y_MIN) return;
+    q.focus.slice(0, 10).forEach(function (d) {
+      if (d.p.m < SD_Y_MIN) return;
       const text = d.p.t.length > 38 ? d.p.t.slice(0, 37) + "…" : d.p.t;
       const w = text.length * 6.1 + 6;
       const right = d.x + 9 + w < x1;
