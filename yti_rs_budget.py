@@ -121,3 +121,72 @@ def ledger(conn: sqlite3.Connection, days: int = 30) -> dict[str, Any]:
         WHERE substr(ts,1,10) = date('now') GROUP BY provider""")
     return {"byDay": by_day, "byEndpoint": by_endpoint, "totals": totals, "today": today,
             "days": days}
+
+
+# -- what is left ------------------------------------------------------------------------------
+
+def _pt_day_start_utc() -> str:
+    from datetime import datetime, timezone
+    try:
+        from zoneinfo import ZoneInfo
+        now_pt = datetime.now(ZoneInfo("America/Los_Angeles"))
+        start = now_pt.replace(hour=0, minute=0, second=0, microsecond=0)
+        return start.astimezone(timezone.utc).isoformat()
+    except Exception:  # noqa: BLE001
+        return datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
+
+
+def available(conn, secrets, *, youtube_daily_units: int = 10000, apify_fetch=None) -> dict:
+    """Remaining balance per provider, as far as each one lets us know.
+
+    - youtube: Google's quota is per Pacific day; remaining = quota - units
+      recorded since midnight Pacific.
+    - transcriptapi: the API has no balance endpoint, so the operator records
+      the balance shown on transcriptapi.com once (meta ``transcriptapi_balance``)
+      and the ledger counts down from there.
+    - apify: the account's monthly usage and limit, from its limits endpoint.
+    """
+    import json as _json
+    from datetime import datetime, timezone
+    out: dict = {}
+    used = conn.execute("SELECT COALESCE(SUM(credits), 0) FROM api_usage WHERE provider='youtube' AND ts >= ?",
+                        (_pt_day_start_utc(),)).fetchone()[0]
+    out["youtube"] = {"configured": bool(getattr(secrets, "youtube_key", "")), "used_today": int(used),
+                      "quota": youtube_daily_units, "remaining": max(0, youtube_daily_units - int(used)),
+                      "resets": "midnight Pacific"}
+    row = conn.execute("SELECT value FROM meta WHERE key='transcriptapi_balance'").fetchone()
+    t = {"configured": bool(getattr(secrets, "transcriptapi_key", "")), "balance": None, "set_at": None,
+         "charged_since": None, "remaining": None}
+    if row:
+        try:
+            rec = _json.loads(row[0])
+            since = rec.get("at")
+            charged = conn.execute("SELECT COALESCE(SUM(credits), 0) FROM api_usage WHERE provider='transcriptapi' AND ts >= ?",
+                                   (since,)).fetchone()[0]
+            t.update({"balance": int(rec.get("balance") or 0), "set_at": since, "charged_since": int(charged),
+                      "remaining": max(0, int(rec.get("balance") or 0) - int(charged))})
+        except (ValueError, TypeError):
+            pass
+    out["transcriptapi"] = t
+    a = {"configured": bool(getattr(secrets, "apify_token", "")), "usage_usd": None, "limit_usd": None, "cycle_ends": None}
+    if a["configured"] and apify_fetch is not None:
+        try:
+            lim = apify_fetch(secrets.apify_token) or {}
+            cur, limits = lim.get("current") or {}, lim.get("limits") or {}
+            a.update({"usage_usd": round(float(cur.get("monthlyUsageUsd") or 0), 2),
+                      "limit_usd": limits.get("maxMonthlyUsageUsd"),
+                      "cycle_ends": (lim.get("monthlyUsageCycle") or {}).get("endAt")})
+        except Exception as exc:  # noqa: BLE001 — a balance lookup never breaks the page
+            a["error"] = str(exc)[:120]
+    out["apify"] = a
+    out["checked_at"] = datetime.now(timezone.utc).isoformat()
+    return out
+
+
+def fetch_apify_limits(token: str) -> dict:
+    import json as _json
+    import urllib.request
+    req = urllib.request.Request("https://api.apify.com/v2/users/me/limits",
+                                 headers={"Authorization": f"Bearer {token}", "Accept": "application/json"})
+    with urllib.request.urlopen(req, timeout=20) as r:
+        return (_json.load(r) or {}).get("data") or {}

@@ -726,7 +726,27 @@ def research_budget(days: int = 30) -> dict[str, Any]:
     try:
         cfg = yti_rs_config.load_config(conn)
         return {**yti_rs_budget.ledger(conn, max(1, min(days, 365))), "caps": cfg.get("budget", {}),
-                "quarantine": conn.execute("SELECT COUNT(*) FROM quarantine").fetchone()[0]}
+                "quarantine": conn.execute("SELECT COUNT(*) FROM quarantine").fetchone()[0],
+                "available": yti_rs_budget.available(conn, yti_rs_config.get_secrets(),
+                                                     apify_fetch=yti_rs_budget.fetch_apify_limits)}
+    finally:
+        conn.close()
+
+
+class BalanceBody(BaseModel):
+    balance: int
+
+
+@router.post("/research/budget/transcriptapi-balance")
+def research_set_balance(body: BalanceBody) -> dict[str, Any]:
+    """Record the TranscriptAPI balance shown on transcriptapi.com; the ledger
+    counts down from this moment (the API itself has no balance endpoint)."""
+    if body.balance < 0:
+        raise HTTPException(status_code=400, detail="balance must be 0 or more")
+    conn = _rconn()
+    try:
+        yti_rs_db.set_meta(conn, "transcriptapi_balance", {"balance": int(body.balance), "at": yti_rs_db.now_iso()})
+        return {"ok": True, "available": yti_rs_budget.available(conn, yti_rs_config.get_secrets())}
     finally:
         conn.close()
 

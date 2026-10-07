@@ -2969,6 +2969,8 @@
     const [data, setData] = useState(null);
     const [reports, setReports] = useState(null);
     const [view, setView] = useState(null);
+    const [bal, setBal] = useState("");
+    const [balMsg, setBalMsg] = useState(null);
     const epSort = useSort("credits", "desc");
     const daySort = useSort("day", "desc");
     useEffect(function () {
@@ -2980,7 +2982,29 @@
     };
     if (!data) return h("div", { className: "yti-empty" }, "Loading…");
     const totals = data.totals || [];
+    const av = data.available || {};
+    const yt = av.youtube || {}, ta = av.transcriptapi || {}, ap = av.apify || {};
+    const saveBalance = function () {
+      const n = Number(bal);
+      if (!(n >= 0)) { setBalMsg("Enter the credit balance shown on transcriptapi.com"); return; }
+      post("/research/budget/transcriptapi-balance", { balance: Math.round(n) })
+        .then(function (r) { setData(Object.assign({}, data, { available: r.available })); setBal(""); setBalMsg("Saved — counting down from now."); })
+        .catch(function (e) { setBalMsg(String((e && e.message) || e)); });
+    };
     return h("div", null,
+      h("div", { className: "yti-card" },
+        h("h3", { className: "yti-rs-h3" }, "Available right now"),
+        h("div", { className: "yti-stats-row" },
+          h(StatCard, { value: yt.configured ? formatNumber(yt.remaining) : "—", label: yt.configured ? "YouTube units left today (" + formatNumber(yt.used_today) + " of " + formatNumber(yt.quota) + " used · resets " + yt.resets + ")" : "YouTube Data API — no key" }),
+          h(StatCard, { value: ta.remaining == null ? "?" : formatNumber(ta.remaining), label: ta.remaining == null ? "TranscriptAPI credits left — set your balance below" : "TranscriptAPI credits left (" + formatNumber(ta.charged_since) + " used since " + String(ta.set_at).slice(0, 10) + ")" }),
+          h(StatCard, { value: ap.configured ? (ap.limit_usd != null ? "$" + (ap.limit_usd - (ap.usage_usd || 0)).toFixed(2) : "?") : "—", label: ap.configured ? (ap.limit_usd != null ? "Apify left this cycle ($" + (ap.usage_usd || 0).toFixed(2) + " of $" + ap.limit_usd + " · ends " + String(ap.cycle_ends || "").slice(0, 10) + ")" : "Apify — " + (ap.error || "limits unavailable")) : "Apify — no token" })),
+        h("div", { className: "yti-rs-inline", style: { marginTop: 6 } },
+          h("input", { className: "yti-rs-mini", placeholder: "TranscriptAPI balance (from transcriptapi.com)", value: bal, style: { width: 300 },
+            onChange: function (e) { setBal(e.target.value); } }),
+          h(Button, { size: "sm", variant: "outline", onClick: saveBalance }, "Set balance"),
+          h("span", { className: "yti-muted yti-small" }, balMsg || "TranscriptAPI does not expose a balance, so enter the number from your account page once; every charged call is subtracted from it after that.")),
+        h("div", { className: "yti-subtle", style: { marginTop: 8, marginBottom: 0 } },
+          "Google's quota is per Pacific day. Apify's figure is the account's monthly spend against its limit, read live from Apify.")),
       h("div", { className: "yti-stats-row" },
         totals.map(function (t) { return h(StatCard, { key: t.provider, value: formatNumber(t.credits), label: t.provider + " credits (all time, " + t.calls + " calls)" }); }),
         (data.today || []).map(function (t) { return h(StatCard, { key: "t" + t.provider, value: formatNumber(t.credits), label: t.provider + " today" }); }),
