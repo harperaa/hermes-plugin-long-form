@@ -644,6 +644,9 @@
 .yti-sd-mo-up { color: #22c55e; }
 .yti-sd-mo-down { color: #ef4444; }
 .yti-sd-mo-flat, .yti-sd-mo-none { color: var(--color-muted-foreground); }
+.yti-rs-serieslegend { margin: 6px 0 10px; flex-wrap: wrap; }
+.yti-rs-key-dash { background: transparent; border-top: 2px dashed #f59e0b; height: 0; border-radius: 0; width: 14px; }
+.yti-rs-serieshelp { flex-basis: 100%; max-width: 90ch; margin-top: 4px; }
 .yti-rs-nactions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .yti-rs-nchip-more { color: var(--color-muted-foreground); border-style: dashed; cursor: help; }
 .yti-rs-nhead { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 14px; }

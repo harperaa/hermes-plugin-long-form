@@ -2871,6 +2871,20 @@
       }),
       h("text", { x: pad, y: 12, className: "yti-rs-chart-label" }, "log10 views by upload (● class colour, dashed = changepoint)"));
   }
+  // Legend + plain-language description under the channel chart
+  function SeriesLegend(props) {
+    const items = [["strong_hit", "strong hit · 5× normal or more"], ["hit", "hit · 3–5×"], ["normal", "normal"],
+      ["under", "underperformer · below 0.4×"], ["immature", "immature · too young or too coarsely dated to score"]];
+    return h("div", { className: "yti-sd-legend yti-rs-serieslegend" },
+      items.map(function (it) { return h("span", { key: it[0] }, h("i", { className: "yti-sd-key", style: { background: CLASS_COLOR[it[0]] } }), it[1]); }),
+      h("span", null, h("i", { className: "yti-sd-key yti-rs-key-dash" }), "changepoint (p < 0.05)"),
+      h("div", { className: "yti-muted yti-small yti-rs-serieshelp" },
+        "One dot per long-form upload, oldest on the left, newest on the right, spaced by upload rather than by date. Height is log₁₀ of views " +
+        "(projected to day 28 while the video is young), so a 10× jump is the same height anywhere. Colour is the video's class against this channel's own normal. " +
+        "The dashed line marks the upload after which the channel's typical views shifted — the largest mean jump across every possible split, " +
+        "permutation-tested so a lucky split does not count. Hover a dot for date, views, class and title." +
+        (props.count ? " " + props.count + " uploads drawn." : "")));
+  }
   function ResearchTeardown(props) {
     const ov = props.overview;
     const [channels, setChannels] = useState(null);
@@ -2925,6 +2939,7 @@
             h(Button, { size: "sm", disabled: busy || running, className: busy ? "yti-busy" : "", onClick: runProfile }, busy ? "Profiling…" : (p ? "Re-run teardown" : "Run teardown"))),
           msg ? h("div", { className: "yti-notice yti-notice-error" }, msg) : null,
           prof ? h(SeriesChart, { series: prof.series, changepoints: p ? [{ index: p.changepoint_index }].filter(function (c) { return c.index != null; }) : [] }) : null,
+          prof && (prof.series || []).filter(function (x) { return x.views > 0; }).length >= 3 ? h(SeriesLegend, { count: (prof.series || []).filter(function (x) { return x.views > 0; }).length }) : null,
           !prof ? h("div", { className: "yti-empty" }, "Loading…") :
           !p ? h("div", { className: "yti-subtle" }, prof.series.length + " dated long-form uploads known. Run the teardown to detect the inflection point and diff the cohorts.") :
           h("div", null,
