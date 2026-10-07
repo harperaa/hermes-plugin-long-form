@@ -373,9 +373,14 @@ class Crawler:
                 self.log(f"search {node.key!r} page {page + 1} failed: {exc}")
                 self.stats["errors"] += 1
                 break
-            results.extend(r for r in (data.get("results") or []) if r.get("type", "video") == "video")
+            got = [r for r in (data.get("results") or []) if r.get("type", "video") == "video"]
+            results.extend(got)
             continuation = data.get("continuation_token")
             if not data.get("has_more") or not continuation:
+                break
+            # a big page (the Data API returns 50; a 100-unit call) already
+            # holds more than two TranscriptAPI pages — do not pay for another
+            if len(got) >= 40:
                 break
         return self._absorb_results(results, node, f"search_term:{node.key}")
 
@@ -392,7 +397,12 @@ class Crawler:
         n_rec = int(self.c.get("recommendations_per_video", 3))
         yield_count = 0
         if n_rec > 0:
-            data = self.tapi.search(video["title"][:120], "video")
+            # the cheapest provider for this: on TranscriptAPI it is 1 credit,
+            # on the Data API 100 units (1% of the day's quota)
+            try:
+                data = self.tapi.search(video["title"][:120], "video", purpose="recommendation")
+            except TypeError:                       # a plain client without the purpose kwarg
+                data = self.tapi.search(video["title"][:120], "video")
             recs = [r for r in (data.get("results") or [])
                     if r.get("type", "video") == "video" and r.get("videoId") != node.key
                     and r.get("channelId") != video["channel_id"]]

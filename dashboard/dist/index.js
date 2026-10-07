@@ -1815,6 +1815,7 @@
     wilsonnote: "Wilson 95% lower bound — a cautious estimate of a format's true hit rate that shrinks when the sample is small.\nExample: 2 hits of 2 → 0.34; 40 hits of 60 → 0.54. 'n' is the number of scored videos using the format.",
     // ---- trends table
     vph: "VPH — views per hour: total views divided by the hours since the video was published. It shows how fast a video is collecting views right now relative to its age.\nExample: 96,000 views 24 hours after publishing = 4,000 VPH.",
+    momentum: "Momentum — how fast a focus video is gaining views right now and whether that pace is building or fading. The pulse re-reads exact views every 6 hours (plus the daily snapshot); the latest interval's views per hour is compared with the interval before: ↗ more than 10% faster (building), ↘ more than 10% slower (fading), → within 10% (steady). On the chart the grey dots and line behind a blue dot are those earlier readings.\nExample: ↗ 1.2K/h means the video gained about 1,200 views an hour over the last reading and is accelerating; ↘ 300/h means it is slowing down.",
     trend: "Trend — the direction of the view curve across the saved snapshots: ↗ accelerating (gaining views faster than before), → flat, ↘ decelerating (slowing down). The small line is the view count over time and 'pts' is how many snapshots it is drawn from.",
     tstatus: "Status — how far the video is through the pipeline: discovered (seen, no transcript), transcribed (transcript saved), analyzing (insight extraction queued or running), analyzed (insights saved).",
     duration: "Duration — video length as minutes:seconds, taken from its transcript. '—' means no transcript yet.",
@@ -2449,6 +2450,15 @@
                 : { focus: "#2a78d6", context: "#8d939c", surface: "var(--background-base, #fcfcfb)" };
   }
 
+  function momentumText(mo) {
+    if (!mo || mo.vph == null) return "No momentum reading yet.";
+    const pace = formatNumber(Math.round(mo.vph)) + " views per hour over the latest interval";
+    if (mo.dir === "up") return "Momentum building: " + pace + ", more than 10% faster than the interval before (" + mo.n + " readings).";
+    if (mo.dir === "down") return "Momentum fading: " + pace + ", more than 10% slower than the interval before (" + mo.n + " readings).";
+    if (mo.dir === "flat") return "Momentum steady: " + pace + ", within 10% of the interval before (" + mo.n + " readings).";
+    return "Latest pace: " + pace + " (" + mo.n + " readings — one more is needed to say whether it is building or fading).";
+  }
+
   function SupplyDemandView(props) {
     const ov = props.overview;
     const useMemo = SDK.hooks.useMemo || function (f) { return f(); };
@@ -2459,6 +2469,7 @@
     const [recent, setRecent] = useState(7);          // default focus: 3× and under one week
     const [threshold, setThreshold] = useState(null);
     const [td, setTd] = useState(null);                // "tear down these" request state
+    const [trails, setTrails] = useState(true);        // trajectory behind each focus dot
     const tearDown = function (n, days, mult) {
       setTd({ busy: true });
       post("/research/run", { job: "teardown", params: { focus_days: days, focus_multiple: mult } })
@@ -2520,6 +2531,14 @@
         else q.oldLow += 1;
         if (d.p.m < SD_Y_MIN) { q.below += 1; return; }
         d.x = X(d.age); d.y = Y(d.p.m);
+        // earlier readings of the same video (pulse + daily snapshots): only
+        // the focus quadrant gets a trail — the rest would be noise
+        d.trail = null;
+        if (d.focus && d.p.h && d.p.h.length) {
+          d.trail = d.p.h.filter(function (pt) { return pt[0] <= xMax; })
+            .map(function (pt) { return { x: X(pt[0]), y: Y(Math.max(pt[1], SD_Y_MIN)), a: pt[0], m: pt[1] }; });
+          if (!d.trail.length) d.trail = null;
+        }
         drawn.push(d);
       });
       q.focus.sort(function (a, b) { return b.adj - a.adj; });
@@ -2530,9 +2549,19 @@
     // the marks layer is memoised: hovering must not rebuild thousands of circles
     const marks = useMemo(function () {
       if (!model) return null;
-      const ctx = [], foc = [];
+      const ctx = [], foc = [], trl = [];
       model.pts.forEach(function (d) {
         const approx = d.p.s > 0;
+        if (d.focus && trails && d.trail) {
+          const pts = d.trail.map(function (t) { return t.x.toFixed(1) + "," + t.y.toFixed(1); });
+          pts.push(d.x.toFixed(1) + "," + d.y.toFixed(1));
+          trl.push(h("g", { key: "t" + d.p.id },
+            h("polyline", { points: pts.join(" "), fill: "none", stroke: pal.context, strokeWidth: 1.2, strokeOpacity: 0.7 }),
+            d.trail.map(function (t, i) {
+              return h("circle", { key: i, cx: t.x.toFixed(1), cy: t.y.toFixed(1), r: 2.4, fill: pal.context, fillOpacity: 0.55,
+                stroke: pal.surface, strokeWidth: 1 });
+            })));
+        }
         if (d.focus) {
           foc.push(h("circle", { key: d.p.id, cx: d.x.toFixed(1), cy: d.y.toFixed(1), r: 4.5,
             fill: approx ? pal.surface : pal.focus, stroke: approx ? pal.focus : pal.surface,
@@ -2543,8 +2572,8 @@
             stroke: approx ? pal.context : "none", strokeOpacity: 0.55, strokeWidth: 1 }));
         }
       });
-      return h("g", null, h("g", null, ctx), h("g", null, foc));
-    }, [model, pal]);
+      return h("g", null, h("g", null, ctx), h("g", null, trl), h("g", null, foc));
+    }, [model, pal, trails]);
 
     if (!data) return h("div", { className: "yti-empty" }, "Loading…");
     if (!(data.points || []).length) {
@@ -2608,13 +2637,16 @@
           SD_RECENTS.map(function (o) { return h("option", { key: o[0], value: o[0] }, "Recent = last " + o[1]); })),
         h("select", { className: "yti-select", value: thr, title: "What counts as high demand",
             onChange: function (e) { setThreshold(Number(e.target.value)); setHover(null); } },
-          SD_THRESHOLDS.map(function (t) { return h("option", { key: t, value: t }, "High demand = " + t + "× normal or more"); }))),
+          SD_THRESHOLDS.map(function (t) { return h("option", { key: t, value: t }, "High demand = " + t + "× normal or more"); })),
+        h("label", { className: "yti-sd-toggle", title: "Draw each focus video's earlier readings as grey dots joined to its current blue dot — the path it took to get here. Readings come from the pulse (every 6 hours) and the daily snapshot." },
+          h("input", { type: "checkbox", checked: trails, onChange: function (e) { setTrails(e.target.checked); } }), " Trend lines")),
 
       h("div", { className: "yti-card yti-sd-card" },
         h("div", { className: "yti-rs-head" },
           h("h3", { className: "yti-rs-h3" }, "Demand against supply"),
           h("div", { className: "yti-sd-legend" },
             h("span", null, h("i", { className: "yti-sd-key", style: { background: pal.focus } }), "Recent + high demand (" + q.focus.length + ")"),
+            trails ? h("span", null, h("i", { className: "yti-sd-key yti-sd-key-trail", style: { borderColor: pal.context } }), "earlier readings (trend line)") : null,
             h("span", null, h("i", { className: "yti-sd-key", style: { background: pal.context } }), "Everything else (" + (m.total - q.focus.length) + ")"),
             h("span", null, h("i", { className: "yti-sd-key yti-sd-key-hollow", style: { borderColor: pal.context } }), "date approximate"))),
         h("div", { className: "yti-subtle", style: { marginBottom: 8 } },
@@ -2673,6 +2705,7 @@
             h("div", { className: "yti-sd-tip-meta" }, hd.p.ch + " · " + hd.p.n),
             h("div", { className: "yti-sd-tip-meta" }, "published " + ageText(hd) + " ago" + (hd.p.s > 0 ? " (date approximate)" : "") + " · " + formatNumber(hd.p.v) + " views" +
               (hd.p.f.length ? " · " + hd.p.f.join(" ") : "")),
+            hd.p.mo ? h("div", { className: "yti-sd-tip-meta" }, momentumText(hd.p.mo)) : null,
             h("div", { className: "yti-sd-tip-meta" }, "click to open")) : null),
         h("div", { className: "yti-subtle", style: { margin: "8px 0 0" } },
           "Approximate dates (“2 months ago”) are placed inside the range they can fall in. ",
@@ -2695,10 +2728,12 @@
             h(Th, { sort: sdSort, k: "fresh", label: "Freshness", tip: "fresh", cls: "yti-right" }),
             h(Th, { sort: sdSort, k: "adj", label: "× time-adjusted", tip: "xadj", cls: "yti-right yti-strong" }),
             h(Th, { sort: sdSort, k: "views", label: "Views", tip: "views", cls: "yti-right" }),
+            h(Th, { sort: sdSort, k: "mo", label: "Momentum", tip: "momentum", cls: "yti-right" }),
             h(Th, { sort: sdSort, k: "flags", label: "Flags", tip: "flags", cls: "yti-rs-flagcol" }))),
           h("tbody", null, sortRows(q.focus, sdSort, {
             title: function (d) { return d.p.t; }, channel: function (d) { return d.p.ch; }, niche: function (d) { return d.p.n; },
             m: function (d) { return d.p.m; }, views: function (d) { return d.p.v; }, subs: function (d) { return d.p.sub; },
+            mo: function (d) { return d.p.mo && d.p.mo.vph != null ? d.p.mo.vph * (d.p.mo.dir === "down" ? 0.5 : d.p.mo.dir === "up" ? 2 : 1) : -1; },
             flags: function (d) { return d.p.f.length + (d.p.s > 0 ? 1 : 0); } }).slice(0, 60).map(function (d) {
             return h("tr", { key: d.p.id },
               h("td", null, h("a", { className: "yti-video-link", href: "https://www.youtube.com/watch?v=" + d.p.id, target: "_blank", rel: "noopener" }, d.p.t)),
@@ -2710,6 +2745,11 @@
               h("td", { className: "yti-right yti-muted" }, Math.round(d.fresh * 100) + "%"),
               h("td", { className: "yti-right yti-strong" }, fmtMult(d.adj)),
               h("td", { className: "yti-right" }, formatNumber(d.p.v)),
+              h("td", { className: "yti-right yti-small", title: d.p.mo ? momentumText(d.p.mo) : "No readings yet — the pulse (every 6 hours) and the daily snapshot build the trajectory" },
+                d.p.mo && d.p.mo.vph != null
+                  ? h("span", null, h("span", { className: "yti-sd-mo yti-sd-mo-" + (d.p.mo.dir || "none") }, d.p.mo.dir === "up" ? "↗" : d.p.mo.dir === "down" ? "↘" : d.p.mo.dir === "flat" ? "→" : "·"),
+                      " " + formatNumber(Math.round(d.p.mo.vph)) + "/h")
+                  : h("span", { className: "yti-muted" }, "—")),
               h("td", { className: "yti-small yti-muted" }, h(FlagChips, { flags: (d.p.s > 0 ? ["date≈"] : []).concat(d.p.f).concat(d.p.sub == null && !d.p.fol ? ["size?"] : []) })));
           }))),
         q.focus.length > 60 ? h("div", { className: "yti-subtle", style: { marginTop: 6 } }, "Showing the first 60 of " + q.focus.length + " in the current sort order.") : null));

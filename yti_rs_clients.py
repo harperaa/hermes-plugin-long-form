@@ -685,8 +685,14 @@ class DataSource:
             data["continuation_token"] = "yt:" + str(tok)
         return data
 
-    def search(self, q: str, type_: str = "video", continuation: Optional[str] = None) -> dict[str, Any]:
+    def search(self, q: str, type_: str = "video", continuation: Optional[str] = None, *,
+               purpose: str = "term") -> dict[str, Any]:
         units = 100 + (2 if type_ == "channel" else 1)
+        # recommendation searches (one per outlier video) are the Data API's
+        # worst value: 100 units for 50 rows we mostly discard. TranscriptAPI
+        # does them for 1 credit, so they go there whenever it is configured.
+        if purpose == "recommendation" and self.tapi is not None and continuation is None:
+            return self.tapi.search(q, type_, continuation)
         if self._use_yt(units, continuation):
             try:
                 return self._tag(self.yt.search(q, type_, continuation[3:] if continuation else None))  # type: ignore[union-attr]

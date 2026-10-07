@@ -67,6 +67,20 @@ SNAPSHOT_PROMPT = (
     "Finish with one line: channels snapshotted, videos, new videos, errors."
 )
 
+# Fourth routine: the pulse. Exact views for recent high-demand videos every
+# six hours, so the Supply / Demand view carries a trajectory per outlier and
+# can say whether its momentum is building or fading. Free (1 Data API unit
+# per 50 videos, or TranscriptAPI's free channel/latest).
+PULSE_NAME = "youtube-research-pulse"
+PULSE_SCHEDULE = "15 */6 * * *"
+PULSE_PROMPT = (
+    "Run the YouTube research pulse: call the yt_research tool with action "
+    "'pulse' exactly once. It re-reads exact view counts for recent videos that "
+    "are running above their channel's normal and rescores them (no credits are "
+    "spent). Do not run any other yt_research action. Finish with one line: "
+    "videos watched, updated, rising, falling."
+)
+
 # Second routine, ported from paperclip's "YouTube Content Pipeline"
 # (0 6,18 * * *). Scope-reduced: gap analysis + concepts + scripts for
 # human review. Only the graphics stage moved out (runs post-approval).
@@ -303,6 +317,7 @@ def handle(args) -> int:
             (args.schedule, CRON_PROMPT, CRON_NAME),
             (PIPELINE_SCHEDULE, PIPELINE_PROMPT, PIPELINE_NAME),
             (SNAPSHOT_SCHEDULE, SNAPSHOT_PROMPT, SNAPSHOT_NAME),
+            (PULSE_SCHEDULE, PULSE_PROMPT, PULSE_NAME),
         ]
         rc = 0
         for schedule, prompt, name in jobs:
@@ -316,7 +331,7 @@ def handle(args) -> int:
                 shown = " ".join(f'"{a}"' if " " in a else a for a in argv)
                 print(f"# {name} ({schedule})\n  {shown}\n")
         if not args.apply:
-            print("Re-run with --apply to create all three jobs now.")
+            print("Re-run with --apply to create all four jobs now.")
         return rc
 
     try:

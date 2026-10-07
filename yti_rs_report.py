@@ -14,6 +14,13 @@ from pathlib import Path
 from typing import Any, Optional
 
 try:
+    from .yti_rs_outliers import project_views
+    from .yti_rs_pulse import momentum
+except ImportError:  # pragma: no cover
+    from yti_rs_outliers import project_views  # type: ignore
+    from yti_rs_pulse import momentum  # type: ignore
+
+try:
     from . import yti_paths, yti_rs_db, yti_rs_formats, yti_rs_profiles
     from .yti_rs_packaging import content_tokens
 except ImportError:  # pragma: no cover
@@ -188,10 +195,31 @@ def supply_demand(conn: sqlite3.Connection, cfg: dict[str, Any], *, niche: Optio
         SELECT v.video_id, v.title, v.niche, v.channel_id, c.handle, c.title AS channel_title, v.published_at,
                v.published_approx, v.published_granularity_days, v.views, v.views_approx, v.raw_json,
                c.subscriber_count, c.is_tracked,
-               s.projected_multiple, s.multiple, s.class, s.raw_only, s.organic_flag
+               s.projected_multiple, s.multiple, s.class, s.raw_only, s.organic_flag, s.baseline_views
         FROM videos v JOIN scores s ON s.video_id = v.video_id
         LEFT JOIN channels c ON c.channel_id = v.channel_id
         WHERE {" AND ".join(where)}""", params).fetchall()
+    # view trajectories (pulse + daily snapshots) for the recent points: each
+    # reading becomes an earlier (age, projected multiple) the chart draws as a
+    # trail behind the current dot, and momentum comes from the same series
+    curve = (yti_rs_db.get_meta_json(conn, "maturity_curve") or {}).get("curve") or None
+    recent_ids = [r["video_id"] for r in rows if _age_days(r["published_at"], now) is not None
+                  and _age_days(r["published_at"], now) <= 92]
+    history: dict[str, list[tuple[datetime, int]]] = defaultdict(list)
+    for i in range(0, len(recent_ids), 500):
+        chunk = recent_ids[i:i + 500]
+        for h in conn.execute(f"SELECT video_id, captured_at, views FROM video_snapshots WHERE video_id IN "
+                              f"({','.join('?' * len(chunk))}) ORDER BY captured_at", chunk):
+            raw = str(h["captured_at"])
+            try:
+                t = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+            except ValueError:
+                continue
+            if len(raw) == 10:                      # the daily snapshot stores a date: call it midday
+                t = t.replace(hour=12)
+            if t.tzinfo is None:
+                t = t.replace(tzinfo=timezone.utc)
+            history[h["video_id"]].append((t, int(h["views"])))
     points = []
     for r in rows:
         try:
@@ -216,10 +244,26 @@ def supply_demand(conn: sqlite3.Connection, cfg: dict[str, Any], *, niche: Optio
             flags.append("paid?")
         if not r["raw_only"] and age < 28:
             flags.append("projected")
-        points.append({"id": r["video_id"], "t": r["title"], "ch": r["handle"] or r["channel_title"] or r["channel_id"],
-                       "n": r["niche"], "a": round(lo, 2), "s": round(span, 2),
-                       "m": round(float(r["projected_multiple"]), 3), "v": r["views"], "c": r["class"], "f": flags,
-                       "sub": r["subscriber_count"], "fol": int(bool(r["is_tracked"]))})
+        point = {"id": r["video_id"], "t": r["title"], "ch": r["handle"] or r["channel_title"] or r["channel_id"],
+                 "n": r["niche"], "a": round(lo, 2), "s": round(span, 2),
+                 "m": round(float(r["projected_multiple"]), 3), "v": r["views"], "c": r["class"], "f": flags,
+                 "sub": r["subscriber_count"], "fol": int(bool(r["is_tracked"]))}
+        series = history.get(r["video_id"]) or []
+        base = float(r["baseline_views"] or 0)
+        if len(series) >= 2 and base > 0 and not r["published_approx"]:
+            trail = []
+            for t, views in series:
+                if views == r["views"] and t == series[-1][0]:
+                    continue                                  # the latest reading IS the current dot
+                a_i = max(0.0, (t - pub).total_seconds() / 86400)
+                if a_i < 0.5:
+                    continue                                  # under 12h the projection floor dominates
+                # same scale as the current dot: projected to day 28 unless the score is raw-only
+                m_i = (views if r["raw_only"] else project_views(views, a_i, curve)) / base
+                trail.append([round(a_i, 3), round(m_i, 3)])
+            point["h"] = trail
+            point["mo"] = momentum(series)
+        points.append(point)
     s_cfg = cfg.get("scoring", {})
     c_cfg = cfg.get("crawl", {})
     return {"points": points, "bucket": bucket,
@@ -227,6 +271,16 @@ def supply_demand(conn: sqlite3.Connection, cfg: dict[str, Any], *, niche: Optio
             "half_life": {n["name"]: float(n.get("signal_half_life_days") or 365) for n in cfg.get("niches") or []},
             "default_half_life": 365.0, "hit_multiple": float(s_cfg.get("hit_multiple", 3.0)),
             "niches": sorted({p["n"] for p in points}), "generated_at": now.isoformat()}
+
+
+def _age_days(published_at: Any, now: datetime) -> Optional[float]:
+    try:
+        pub = datetime.fromisoformat(str(published_at).replace("Z", "+00:00"))
+    except (TypeError, ValueError):
+        return None
+    if pub.tzinfo is None:
+        pub = pub.replace(tzinfo=timezone.utc)
+    return max(0.0, (now - pub).total_seconds() / 86400)
 
 
 def render_d2(d: dict[str, Any]) -> str:

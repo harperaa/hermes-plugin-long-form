@@ -20,12 +20,12 @@ from typing import Any, Callable, Optional
 try:
     from . import (yti_rs_budget, yti_rs_clients, yti_rs_config, yti_rs_crawl, yti_rs_db, yti_rs_enrich,
                    yti_rs_formats, yti_rs_outliers, yti_rs_packaging, yti_rs_profiles, yti_rs_report,
-                   yti_rs_snapshot, yti_store)
+                   yti_rs_pulse, yti_rs_snapshot, yti_store)
     from .yti_rs_logging import get_logger, redact
 except ImportError:  # pragma: no cover
     import yti_rs_budget, yti_rs_clients, yti_rs_config, yti_rs_crawl, yti_rs_db, yti_rs_enrich  # type: ignore
     import yti_rs_formats, yti_rs_outliers, yti_rs_packaging, yti_rs_profiles, yti_rs_report  # type: ignore
-    import yti_rs_snapshot, yti_store  # type: ignore
+    import yti_rs_pulse, yti_rs_snapshot, yti_store  # type: ignore
     from yti_rs_logging import get_logger, redact  # type: ignore
 
 log = get_logger("yti.research.jobs")
@@ -167,6 +167,16 @@ def job_comments(conn, cfg, params, log_fn) -> dict[str, Any]:
                                       focus=yti_rs_enrich.focus_window(cfg, params), log=log_fn)
 
 
+def job_pulse(conn, cfg, params, log_fn) -> dict[str, Any]:
+    """Free re-read of exact views for recent high-demand videos, then a
+    rescore so the Supply / Demand view moves. Meant to run every 6-8 hours."""
+    budget = yti_rs_budget.Budget(conn, run_id="pulse")
+    res = yti_rs_pulse.run_pulse(conn, cfg, _tapi(budget, log_fn), log=log_fn)
+    if res.get("updated"):
+        res["score"] = job_score(conn, cfg, {}, log_fn)
+    return res
+
+
 def job_teardown(conn, cfg, params, log_fn) -> dict[str, Any]:
     """Tier 3 for the focus quadrant in one go: transcripts, comments when
     Apify is configured, then packaging. The Supply / Demand view passes its
@@ -267,7 +277,7 @@ JOBS: dict[str, Callable] = {
     "snapshot": job_snapshot, "crawl": job_crawl, "enrich": job_enrich, "transcripts": job_transcripts,
     "comments": job_comments, "score": job_score, "packaging": job_packaging, "formats": job_formats,
     "profile": job_profile, "report": job_report, "pipeline": job_pipeline, "sizes": job_sizes,
-    "teardown": job_teardown,
+    "teardown": job_teardown, "pulse": job_pulse,
 }
 
 

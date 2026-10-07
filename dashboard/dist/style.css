@@ -638,6 +638,12 @@
 .yti-rs-chat-compose textarea { flex: 1; min-width: 0; box-sizing: border-box; background: transparent; color: inherit; border: 1px solid var(--color-border); border-radius: 8px; padding: 8px 10px; font-size: 14px; font-family: inherit; resize: vertical; }
 .yti-rs-chat-compose textarea:focus-visible { outline: 2px solid var(--color-ring, #3987e5); outline-offset: 1px; }
 .yti-rs-linkish { font-size: 12px; color: var(--color-muted-foreground); cursor: pointer; text-decoration: underline; }
+.yti-sd-toggle { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer; user-select: none; }
+.yti-sd-key-trail { background: transparent; border: 1.5px solid; border-radius: 50%; }
+.yti-sd-mo { font-weight: 700; }
+.yti-sd-mo-up { color: #22c55e; }
+.yti-sd-mo-down { color: #ef4444; }
+.yti-sd-mo-flat, .yti-sd-mo-none { color: var(--color-muted-foreground); }
 .yti-rs-nactions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .yti-rs-nchip-more { color: var(--color-muted-foreground); border-style: dashed; cursor: help; }
 .yti-rs-nhead { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 14px; }
