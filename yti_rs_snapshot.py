@@ -53,7 +53,9 @@ def ingest_latest(rconn: sqlite3.Connection, payload: dict[str, Any], *, niche: 
                   mark_tracked: bool = True, discovered_via: str = "rss",
                   durations: Optional[dict[str, int]] = None) -> dict[str, Any]:
     """Upsert channel + videos from a ``channel/latest`` payload and write one
-    snapshot row per video for ``captured_at`` (default today)."""
+    snapshot row per video stamped ``captured_at`` (default: now, to the
+    second — a reading's time matters for velocity and for projecting a
+    young video's multiple)."""
     ch = payload.get("channel") or {}
     results = payload.get("results") or []
     channel_id = str(ch.get("channelId") or (results[0].get("channelId") if results else "") or "")
@@ -96,7 +98,7 @@ def run_snapshot(rconn: sqlite3.Connection, tapi, followed_handles: list[str], *
                  durations: Optional[dict[str, int]] = None,
                  log: Callable[[str], None] = lambda m: None) -> dict[str, Any]:
     now = now or datetime.now(timezone.utc)
-    captured_at = now.date().isoformat()
+    captured_at = now.isoformat()
     targets = tracked_channels(rconn, followed_handles)
     summary: dict[str, Any] = {"channels": len(targets), "videos": 0, "new_videos": 0,
                                "snapshots": 0, "errors": [], "captured_at": captured_at}

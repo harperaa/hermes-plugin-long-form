@@ -380,7 +380,7 @@ def add_snapshot(conn: sqlite3.Connection, video_id: str, views: int,
     conn.execute(
         "INSERT OR REPLACE INTO video_snapshots(video_id, captured_at, views, likes, comment_count)"
         " VALUES (?,?,?,?,?)",
-        (video_id, captured_at or today(), int(views), likes, comment_count))
+        (video_id, captured_at or now_iso(), int(views), likes, comment_count))
 
 
 def record_usage(conn: sqlite3.Connection, provider: str, endpoint: str,

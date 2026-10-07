@@ -104,11 +104,12 @@ def test_snapshot_ingests_exact_rows(tmp_home):
     yti_rs_db.upsert_video(conn, {"video_id": "a", "views": 90000, "views_approx": 1, "published_at": "x", "published_approx": 1})
     v2 = yti_rs_db.one(conn, "SELECT views, published_at FROM videos WHERE video_id = 'a'")
     assert v2["views"] == 96454 and v2["published_at"].startswith("2026-09-11")
-    # second snapshot same day replaces, next day adds a point
+    # every snapshot is a timestamped reading: a second run the same day is a second point
     S.run_snapshot(conn, T(), ["@dan"])
-    assert conn.execute("SELECT COUNT(*) FROM video_snapshots WHERE video_id='a'").fetchone()[0] == 1
+    rows = yti_rs_db.rows(conn, "SELECT captured_at FROM video_snapshots WHERE video_id='a' ORDER BY captured_at")
+    assert len(rows) == 2 and all(len(r["captured_at"]) > 10 and "T" in r["captured_at"] for r in rows)
     yti_rs_db.add_snapshot(conn, "a", 97000, captured_at="2099-01-01")
-    assert len(yti_rs_db.rows(conn, "SELECT * FROM video_snapshots WHERE video_id='a'")) == 2
+    assert len(yti_rs_db.rows(conn, "SELECT * FROM video_snapshots WHERE video_id='a'")) == 3
     conn.close()
 
 
