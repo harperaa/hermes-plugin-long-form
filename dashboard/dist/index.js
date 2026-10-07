@@ -2853,6 +2853,53 @@
   }
 
   // ---- Teardown (D5) -----------------------------------------------------------------
+  // Cohort-diff cells: a number, a weekday share map, or a word list — never raw JSON
+  function CohortValue(props) {
+    const v = props.v;
+    if (v == null) return h("span", { className: "yti-muted" }, "—");
+    if (Array.isArray(v)) {
+      return h("span", { className: "yti-rs-tags" }, v.slice(0, 12).map(function (t, i) { return h("span", { key: i, className: "yti-rs-tag" }, String(t)); }),
+        v.length > 12 ? h("span", { className: "yti-rs-tag yti-rs-tag-more" }, "+" + (v.length - 12)) : null);
+    }
+    if (typeof v === "object") {
+      const order = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+      const keys = order.filter(function (k) { return k in v; }).concat(Object.keys(v).filter(function (k) { return order.indexOf(k) < 0; }));
+      const max = Math.max.apply(null, keys.map(function (k) { return Number(v[k]) || 0; }).concat([0.0001]));
+      return h("span", { className: "yti-rs-bars", title: keys.map(function (k) { return k + " " + Math.round((Number(v[k]) || 0) * 100) + "%"; }).join(" · ") },
+        keys.map(function (k) {
+          const share = Number(v[k]) || 0;
+          return h("span", { key: k, className: "yti-rs-bar" },
+            h("i", { style: { height: Math.max(2, Math.round(18 * share / max)) + "px" } }), h("em", null, k.slice(0, 2)));
+        }));
+    }
+    if (typeof v === "number") return h("span", null, Number.isInteger(v) ? String(v) : (Math.abs(v) < 10 ? v.toFixed(3) : v.toFixed(1)).replace(/\.?0+$/, ""));
+    return h("span", null, String(v));
+  }
+  // A torn-down video's packaging as readable tags
+  function ProfileTags(props) {
+    const pr = props.profile || {};
+    const filled = Object.keys(pr).some(function (k) { return pr[k] != null; });
+    if (!filled) return h("div", { className: "yti-rs-tags yti-small" }, h("span", { className: "yti-rs-tag yti-rs-tag-dim" }, "not torn down yet — no transcript"));
+    const tags = [];
+    if (pr.structure_class) tags.push([pr.structure_class.replace(/_/g, " "), "feat:structure_class"]);
+    if (pr.point_count != null) tags.push([pr.point_count + " points", "feat:point_count"]);
+    if (pr.awareness_frame) tags.push([pr.awareness_frame.replace(/_/g, " "), "feat:awareness_frame"]);
+    if (pr.delivery_class) tags.push([pr.delivery_class + " delivery", "feat:delivery_class"]);
+    if (pr.has_proof != null) tags.push([pr.has_proof ? "proof in the opening" : "no proof in the opening", "feat:has_proof"]);
+    if (pr.cta_kind) tags.push([pr.cta_kind === "none" ? "no CTA" : pr.cta_kind + " CTA", "feat:cta_kind"]);
+    return h("div", { className: "yti-rs-tags yti-small" }, tags.map(function (t, i) {
+      return h("span", { key: i, className: "yti-rs-tag" }, RS_TIPS[t[1]] ? h(Tip, { k: t[1], plain: true }, t[0]) : t[0]);
+    }));
+  }
+  // "… claude code full …" with its slots filled in: the title as the format saw it
+  function FormatFill(props) {
+    const sl = props.slots || {};
+    return h("span", { className: "yti-rs-fill" },
+      sl.before ? h("span", { className: "yti-rs-slot" }, sl.before) : null,
+      h("b", null, " " + String(props.label || "").replace(/…/g, "").trim() + " "),
+      sl.after ? h("span", { className: "yti-rs-slot" }, sl.after) : null);
+  }
+
   function SeriesChart(props) {
     const pts = (props.series || []).filter(function (p) { return p.views > 0; });
     if (pts.length < 3) return null;
@@ -2961,19 +3008,24 @@
                   before: function (d) { return typeof d.before === "object" ? JSON.stringify(d.before) : d.before; },
                   after: function (d) { return typeof d.after === "object" ? JSON.stringify(d.after) : d.after; },
                   n: function (d) { return (d.n_before || 0) + (d.n_after || 0); } }).slice(0, 30).map(function (d, i) {
-                  const fmt = function (v) { return typeof v === "object" ? JSON.stringify(v) : String(v); };
-                  return h("tr", { key: d.feature + i }, h("td", null, h(Tip, { k: "feat:" + d.feature }, d.feature)), h("td", { className: "yti-small" }, fmt(d.before)), h("td", { className: "yti-small" }, fmt(d.after)),
+                  return h("tr", { key: d.feature + i }, h("td", null, h(Tip, { k: "feat:" + d.feature }, d.feature.replace(/_/g, " "))), h("td", { className: "yti-small yti-rs-cell" }, h(CohortValue, { v: d.before })), h("td", { className: "yti-small yti-rs-cell" }, h(CohortValue, { v: d.after })),
                     h("td", { className: "yti-right yti-muted" }, d.n_before + "/" + d.n_after), h("td", { className: "yti-right yti-strong" }, d.effect));
                 })))) : h("div", { className: "yti-subtle" }, "No significant changepoint — no cohort diff."),
             (p.doubling_down || []).length ? h("div", null, h("h4", { className: "yti-rs-h4" }, "Doubling-down candidates"),
               p.doubling_down.map(function (c) {
                 return h("div", { key: c.video_id, className: "yti-rs-dd" },
                   h("b", null, c.multiple + "× "), h("a", { className: "yti-video-link", href: "https://www.youtube.com/watch?v=" + c.video_id, target: "_blank", rel: "noopener" }, c.title),
-                  h("div", { className: "yti-small yti-muted" }, JSON.stringify(c.profile)),
-                  (c.formats || []).map(function (f) {
-                    return h("div", { key: f.format_id, className: "yti-small" }, "format: " + f.label + " · slots " + JSON.stringify(f.slots),
-                      (f.proven_elsewhere || []).length ? h("ul", { className: "yti-rs-ul" }, f.proven_elsewhere.map(function (o, i) { return h("li", { key: i }, "proven in " + o.niche + " at " + o.multiple + "× with " + JSON.stringify(o.slots)); })) : null);
-                  }),
+                  h(ProfileTags, { profile: c.profile }),
+                  (c.formats || []).length ? h("table", { className: "yti-table yti-rs-table yti-rs-fmttable" },
+                    h("thead", null, h("tr", null, h("th", null, h(Tip, { k: "format", plain: true }, "format")), h("th", null, "as used here"), h("th", null, "proven elsewhere"))),
+                    h("tbody", null, (c.formats || []).map(function (f) {
+                      return h("tr", { key: f.format_id },
+                        h("td", { className: "yti-small" }, h("span", { className: "yti-rs-tag" }, f.label)),
+                        h("td", { className: "yti-small" }, h(FormatFill, { label: f.label, slots: f.slots })),
+                        h("td", { className: "yti-small" }, (f.proven_elsewhere || []).length
+                          ? (f.proven_elsewhere || []).map(function (o, i) { return h("div", { key: i }, h("b", null, fmtMult(o.multiple)), " in " + o.niche + ": ", h(FormatFill, { label: f.label, slots: o.slots })); })
+                          : h("span", { className: "yti-muted" }, "—")));
+                    }))) : null,
                   h("div", { className: "yti-small yti-muted" }, c.framing));
               })) : null,
             p.llm_teardown ? h("div", { className: "yti-md" }, renderMarkdown(p.llm_teardown)) : null))));

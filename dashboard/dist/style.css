@@ -647,6 +647,21 @@
 .yti-rs-serieslegend { margin: 6px 0 10px; flex-wrap: wrap; }
 .yti-rs-key-dash { background: transparent; border-top: 2px dashed #f59e0b; height: 0; border-radius: 0; width: 14px; }
 .yti-rs-serieshelp { flex-basis: 100%; max-width: 90ch; margin-top: 4px; }
+.yti-rs-tags { display: inline-flex; flex-wrap: wrap; gap: 4px 6px; align-items: center; }
+.yti-rs-tag { display: inline-block; border: 1px solid var(--color-border); border-radius: 10px; padding: 1px 8px; font-size: 12px; white-space: nowrap; }
+.yti-rs-tag-dim { color: var(--color-muted-foreground); border-style: dashed; }
+.yti-rs-tag-more { color: var(--color-muted-foreground); }
+.yti-rs-bars { display: inline-flex; gap: 5px; align-items: flex-end; height: 30px; cursor: help; }
+.yti-rs-bar { display: inline-flex; flex-direction: column; align-items: center; gap: 2px; }
+.yti-rs-bar i { display: block; width: 10px; background: color-mix(in srgb, var(--color-ring, #3987e5) 70%, transparent); border-radius: 2px 2px 0 0; }
+.yti-rs-bar em { font-style: normal; font-size: 9px; color: var(--color-muted-foreground); line-height: 1; }
+.yti-rs-cell { max-width: 36ch; overflow-wrap: anywhere; }
+.yti-rs-fill b { font-weight: 600; }
+.yti-rs-slot { color: var(--color-muted-foreground); }
+.yti-rs-fmttable { margin: 6px 0 4px; table-layout: fixed; }
+.yti-rs-fmttable td, .yti-rs-fmttable th { overflow-wrap: anywhere; vertical-align: top; }
+.yti-rs-page .yti-rs-table { table-layout: fixed; width: 100%; }
+.yti-rs-page .yti-rs-table td { overflow-wrap: anywhere; }
 .yti-rs-nactions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .yti-rs-nchip-more { color: var(--color-muted-foreground); border-style: dashed; cursor: help; }
 .yti-rs-nhead { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 14px; }
