@@ -147,7 +147,12 @@ def job_crawl(conn, cfg, params, log_fn) -> dict[str, Any]:
             n = crawler.seed_channels(followed_handles(), depth=1)
             log_fn(f"seeded {n} followed channel(s) as channel nodes")
         log_fn(f"run {crawler.run_id}: {len(crawler.stack)} seed nodes, cap {cap} credits")
-    return crawler.run()
+    res = crawler.run()
+    # the chart and every table read scores, not raw rows: a crawl run on its
+    # own (the daily routine, the Run tab button) scores what it found
+    if res.get("videos_new") and not params.get("skip_score"):
+        res["score"] = job_score(conn, cfg, {}, log_fn)
+    return res
 
 
 def job_enrich(conn, cfg, params, log_fn) -> dict[str, Any]:
@@ -261,6 +266,7 @@ def job_pipeline(conn, cfg, params, log_fn) -> dict[str, Any]:
     when APIFY_API_TOKEN is missing so the free/cheap path still produces D1–D4."""
     out: dict[str, Any] = {}
     have_apify = yti_rs_config.get_secrets().present()["apify"]
+    params = {**params, "skip_score": True}          # the pipeline scores as its own step
     steps: list[tuple[str, Callable]] = [("snapshot", job_snapshot), ("crawl", job_crawl), ("score", job_score),
                                          ("sizes", job_sizes)]
     if have_apify and not params.get("skip_apify"):
