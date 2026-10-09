@@ -635,6 +635,16 @@ def research_supply_demand(niche: str = "") -> dict[str, Any]:
         conn.close()
 
 
+@router.get("/research/video-teardown")
+def research_video_teardown(id: str) -> dict[str, Any]:
+    """One video's Tier 3 read-out for the Supply / Demand expander."""
+    conn = _rconn()
+    try:
+        return yti_rs_report.video_teardown(conn, id)
+    finally:
+        conn.close()
+
+
 @router.get("/research/formats")
 def research_formats(niche: str = "") -> dict[str, Any]:
     conn = _rconn()

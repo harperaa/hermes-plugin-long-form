@@ -662,6 +662,20 @@
 .yti-rs-fmttable td, .yti-rs-fmttable th { overflow-wrap: anywhere; vertical-align: top; }
 .yti-rs-page .yti-rs-table { table-layout: fixed; width: 100%; }
 .yti-rs-page .yti-rs-table td { overflow-wrap: anywhere; }
+.yti-rs-caret { cursor: pointer; color: var(--color-muted-foreground); user-select: none; display: inline-block; width: 12px; }
+.yti-rs-tdcell { cursor: pointer; }
+.yti-rs-tdglyph { font-weight: 700; }
+.yti-rs-tdglyph-on { color: #22c55e; }
+.yti-rs-tdglyph-no { color: var(--color-muted-foreground); }
+.yti-rs-tdglyph-off { color: var(--color-muted-foreground); }
+.yti-rs-rowx-on td { border-bottom: 0; }
+.yti-rs-rowx-detail td { padding: 4px 10px 14px 22px; }
+.yti-rs-vtd { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 10px 24px; border: 1px solid var(--color-border); border-radius: 8px; padding: 10px 14px; }
+.yti-rs-vtd-h { font-size: 12px; font-weight: 700; margin: 6px 0 4px; }
+.yti-rs-quote { margin: 0 0 6px; padding: 6px 10px; border-left: 3px solid var(--color-border); font-size: 13px; line-height: 1.5; color: inherit; max-width: 70ch; }
+.yti-rs-grid { stroke: color-mix(in srgb, currentColor 14%, transparent); stroke-width: 1; }
+.yti-rs-axis { stroke: color-mix(in srgb, currentColor 40%, transparent); stroke-width: 1; }
+.yti-rs-chart-tick { font-size: 10px; fill: var(--color-muted-foreground); }
 .yti-rs-nactions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .yti-rs-nchip-more { color: var(--color-muted-foreground); border-style: dashed; cursor: help; }
 .yti-rs-nhead { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 14px; }
@@ -721,7 +735,7 @@
 .yti-rs-scroll { max-height: 62vh; overflow: auto; margin-top: 6px; }
 .yti-rs-star { width: 16px; color: var(--color-muted-foreground); cursor: pointer; }
 .yti-rs-star.on { color: #f59e0b; }
-.yti-rs-chart { width: 100%; height: 160px; display: block; margin: 8px 0; background: color-mix(in srgb, currentColor 4%, transparent); border-radius: 6px; }
+.yti-rs-chart { width: 100%; height: 190px; display: block; margin: 8px 0; background: color-mix(in srgb, currentColor 4%, transparent); border-radius: 6px; }
 .yti-rs-chart-label { font-size: 10px; fill: var(--color-muted-foreground, #9aa0b4); }
 .yti-rs-dd { border-top: 1px solid var(--color-border); padding: 8px 0; font-size: 13px; }
 .yti-rs-report { margin-top: 10px; border-top: 1px solid var(--color-border); padding-top: 10px; }

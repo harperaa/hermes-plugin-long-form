@@ -220,6 +220,15 @@ def supply_demand(conn: sqlite3.Connection, cfg: dict[str, Any], *, niche: Optio
             if t.tzinfo is None:
                 t = t.replace(tzinfo=timezone.utc)
             history[h["video_id"]].append((t, int(h["views"])))
+    # has Tier 3 read this video? 1 = yes, -1 = no captions, 0 = not yet
+    td_status: dict[str, int] = {}
+    for i in range(0, len(recent_ids), 500):
+        chunk = recent_ids[i:i + 500]
+        marks = ",".join("?" * len(chunk))
+        for h in conn.execute(f"SELECT video_id FROM transcripts WHERE video_id IN ({marks})", chunk):
+            td_status[h["video_id"]] = 1
+        for h in conn.execute(f"SELECT video_id FROM transcript_misses WHERE video_id IN ({marks})", chunk):
+            td_status.setdefault(h["video_id"], -1)
     points = []
     for r in rows:
         try:
@@ -248,6 +257,7 @@ def supply_demand(conn: sqlite3.Connection, cfg: dict[str, Any], *, niche: Optio
                  "n": r["niche"], "a": round(lo, 2), "s": round(span, 2),
                  "m": round(float(r["projected_multiple"]), 3), "v": r["views"], "c": r["class"], "f": flags,
                  "sub": r["subscriber_count"], "fol": int(bool(r["is_tracked"]))}
+        point["td"] = td_status.get(r["video_id"], 0)
         series = history.get(r["video_id"]) or []
         base = float(r["baseline_views"] or 0)
         if len(series) >= 2 and base > 0 and not r["published_approx"]:
@@ -527,3 +537,61 @@ def research_brief(conn: sqlite3.Connection, cfg: dict[str, Any], *, now: Option
                            "near_gaps (formats proven next door, unmade for the target). Package titles with the top formats' "
                            "skeletons. Open scripts the way hooks and packaging show the hits open. Keep the ICP and the "
                            "insight base as supporting evidence; the market still casts the final vote.")}
+
+
+# -- one video's teardown (Supply / Demand expanders) --------------------------------------------
+
+def video_teardown(conn: sqlite3.Connection, video_id: str) -> dict[str, Any]:
+    """Everything Tier 3 read about one video, shaped for a table row's
+    expander: status (read / not yet / no captions), packaging tags, how it
+    opens, viewer response, and the formats its title matched."""
+    try:
+        from .yti_rs_sentiment import positive_share
+    except ImportError:  # pragma: no cover
+        from yti_rs_sentiment import positive_share  # type: ignore
+    v = conn.execute("""SELECT v.video_id, v.title, v.views, v.likes, v.comment_count, v.duration_seconds, v.published_at,
+                               c.handle, c.title AS channel_title, s.projected_multiple, s.multiple, s.class, s.vs_percentile,
+                               s.organic_flag, s.breakout_watch, s.like_rate, s.comment_rate, s.positive_comment_rate
+                        FROM videos v LEFT JOIN channels c ON c.channel_id = v.channel_id
+                        LEFT JOIN scores s ON s.video_id = v.video_id WHERE v.video_id = ?""", (video_id,)).fetchone()
+    if not v:
+        return {"id": video_id, "status": "unknown"}
+    t = conn.execute("SELECT language, is_autogen, length_seconds, text, segments_json FROM transcripts WHERE video_id = ?",
+                     (video_id,)).fetchone()
+    miss = conn.execute("SELECT reason, checked_at FROM transcript_misses WHERE video_id = ?", (video_id,)).fetchone()
+    p = conn.execute("SELECT * FROM packaging WHERE video_id = ?", (video_id,)).fetchone()
+    out: dict[str, Any] = {"id": video_id, "title": v["title"], "channel": v["handle"] or v["channel_title"],
+                           "url": f"https://www.youtube.com/watch?v={video_id}",
+                           "status": "read" if t else ("no_captions" if miss else "not_yet"),
+                           "miss_reason": miss["reason"] if miss else None}
+    if t:
+        opening = ""
+        try:
+            segs = json.loads(t["segments_json"] or "[]")
+            opening = " ".join(str(s.get("text") or "") for s in segs if float(s.get("start") or 0) <= 45)
+        except (ValueError, TypeError):
+            pass
+        opening = " ".join((opening or (t["text"] or "")).split())
+        out["transcript"] = {"language": t["language"], "autogen": bool(t["is_autogen"]), "length_seconds": t["length_seconds"],
+                             "opening": opening[:600]}
+    if p:
+        out["packaging"] = {k: p[k] for k in ("structure_class", "point_count", "awareness_frame", "delivery_class", "has_promise",
+                                               "has_proof", "has_plan", "has_persona", "promise_restated_sec", "proof_sec",
+                                               "cta_kind", "cta_position_pct", "title_lowercase", "filler_rate", "mismatch_risk")}
+    rows = conn.execute("SELECT text, like_count, sentiment, is_early_adopter FROM comments WHERE video_id = ? "
+                        "ORDER BY COALESCE(like_count, 0) DESC", (video_id,)).fetchall()
+    if rows:
+        out["comments"] = {"n": len(rows), "positive_share": positive_share([r["sentiment"] for r in rows]),
+                           "early_adopters": sum(1 for r in rows if r["is_early_adopter"]),
+                           "top": [{"text": " ".join((r["text"] or "").split())[:220], "likes": r["like_count"]} for r in rows[:3]]}
+    out["response"] = {"views": v["views"], "likes": v["likes"], "comment_count": v["comment_count"],
+                       "like_rate": v["like_rate"], "comment_rate": v["comment_rate"], "vs_percentile": v["vs_percentile"],
+                       "organic_flag": v["organic_flag"], "breakout_watch": v["breakout_watch"],
+                       "multiple": v["projected_multiple"], "class": v["class"]}
+    out["formats"] = [{"label": r["label"], "kind": r["kind"], "slots": json.loads(r["slots_json"] or "{}"),
+                       "wilson_lb": r["wilson_lb"], "hits": r["n_hits"], "uses": r["n_total"]}
+                      for r in conn.execute("""SELECT f.label, f.kind, fm.slots_json, s.wilson_lb, s.n_hits, s.n_total
+                               FROM format_matches fm JOIN formats f ON f.format_id = fm.format_id
+                               LEFT JOIN format_stats s ON s.format_id = fm.format_id WHERE fm.video_id = ?
+                               ORDER BY COALESCE(s.wilson_lb, 0) DESC LIMIT 6""", (video_id,))]
+    return out

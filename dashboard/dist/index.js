@@ -1675,7 +1675,7 @@
   // -------------------------------------------------------------------------
   const CLASS_COLOR = { strong_hit: "#22c55e", hit: "#84cc16", normal: "#9ca3af", under: "#ef4444", immature: "#6b7280" };
   const RS_PANELS = [["setup", "Setup"], ["run", "Run"], ["outliers", "Outliers"], ["supply", "Supply / Demand"], ["formats", "Formats"],
-    ["gaps", "Gap Report"], ["teardown", "Teardown"], ["budget", "Budget & Reports"]];
+    ["gaps", "Gap Report"], ["teardown", "Channel Teardown"], ["budget", "Budget & Reports"]];
 
   function fmtMult(x) { return x == null ? "—" : Number(x).toFixed(2) + "×"; }
   function fmtPct(x) { return x == null ? "—" : Math.round(x) + ""; }
@@ -1716,6 +1716,7 @@
     "flag:🚀 breakout": "🚀 breakout — breakout watch. The video is 14 days old or younger and still below its channel's normal (under 1×), but its positive-comment rate is in the top 20% of the niche. Videos like this often take off one to two weeks later.\nExample: a 5-day-old video at 0.6× whose comments are full of 'this is going to blow up'.",
     "flag:fade": "fade — fade watch. The video is 14 days old or younger with views in the top 20% of the niche but a comment rate in the bottom 20%. Lots of views that nobody talks about tend to tail off quickly.",
     "flag:projected": "projected — the video is younger than 28 days, so its multiple uses views projected forward to day 28 rather than today's count.\nExample: 11,000 views on day 7 is treated as 20,000 by day 28.",
+    teardown: "Teardown — what Tier 3 read about this video: its transcript (how it opens, how it is structured, where the proof and the call to action land) and its comments (how many, how positive). Every focus-quadrant video is read automatically after each pulse and crawl; ✓ read, ○ not yet, ✕ no captions. Expand the row to see the read-out.\nExample: ✓ with 'listicle · 6 points · proof in the opening' means the transcript was analysed and the video delivers evidence inside its first 90 seconds.",
     "flag:paid?": "paid? — suspected paid traffic: views in the top 10% of the niche with a comment rate in the bottom 10%.\nExample: 2,000,000 views with 40 comments.",
     // ---- classes
     "class:strong_hit": "strong_hit — the video reached 5× its channel's normal views or more (using × proj).\nExample: 22,000 views on a channel whose median is 4,000 = 5.5×.",
@@ -2454,6 +2455,53 @@
                 : { focus: "#2a78d6", context: "#8d939c", surface: "var(--background-base, #fcfcfb)" };
   }
 
+  // One focus-quadrant video's Tier 3 read-out, under its table row
+  function VideoTeardown(props) {
+    const [d, setD] = useState(null);
+    const [err, setErr] = useState(null);
+    useEffect(function () {
+      api("/research/video-teardown?id=" + encodeURIComponent(props.id)).then(setD).catch(function (e) { setErr(String((e && e.message) || e)); });
+    }, [props.id]);
+    if (err) return h("div", { className: "yti-notice yti-notice-error" }, err);
+    if (!d) return h("div", { className: "yti-muted yti-small" }, "Loading…");
+    if (d.status === "no_captions") return h("div", { className: "yti-rs-vtd" }, h("span", { className: "yti-rs-tag yti-rs-tag-dim" }, "No captions on this video — nothing to read"));
+    if (d.status !== "read") return h("div", { className: "yti-rs-vtd" }, h("span", { className: "yti-rs-tag yti-rs-tag-dim" }, "Not read yet — the next pulse (every 6 hours) tears it down"));
+    const pk = d.packaging || {}, r = d.response || {}, cm = d.comments, tr = d.transcript || {};
+    const pct = function (x) { return x == null ? "—" : Math.round(x * 100) + "%"; };
+    return h("div", { className: "yti-rs-vtd" },
+      h("div", { className: "yti-rs-vtd-col" },
+        h("div", { className: "yti-rs-vtd-h" }, "How it opens", tr.length_seconds ? h("span", { className: "yti-muted" }, " · " + formatDuration(tr.length_seconds) + (tr.autogen ? " · auto captions" : "")) : null),
+        h("blockquote", { className: "yti-rs-quote" }, tr.opening || "—"),
+        h("div", { className: "yti-rs-vtd-h" }, "Packaging"),
+        h(ProfileTags, { profile: { structure_class: pk.structure_class, point_count: pk.point_count, awareness_frame: pk.awareness_frame,
+          delivery_class: pk.delivery_class, has_proof: pk.has_proof, cta_kind: pk.cta_kind } }),
+        h("div", { className: "yti-rs-tags yti-small", style: { marginTop: 4 } },
+          pk.has_promise != null ? h("span", { className: "yti-rs-tag" }, pk.has_promise ? "promise restated" + (pk.promise_restated_sec != null ? " at " + Math.round(pk.promise_restated_sec) + "s" : "") : "promise not restated") : null,
+          pk.has_proof && pk.proof_sec != null ? h("span", { className: "yti-rs-tag" }, "proof at " + Math.round(pk.proof_sec) + "s") : null,
+          pk.has_plan != null ? h("span", { className: "yti-rs-tag" }, pk.has_plan ? "lays out a plan" : "no plan section") : null,
+          pk.has_persona ? h("span", { className: "yti-rs-tag" }, "names who it is for") : null,
+          pk.cta_position_pct != null ? h("span", { className: "yti-rs-tag" }, "CTA at " + Math.round(pk.cta_position_pct) + "% of runtime") : null,
+          pk.mismatch_risk ? h("span", { className: "yti-rs-tag" }, "title/delivery mismatch risk") : null)),
+      h("div", { className: "yti-rs-vtd-col" },
+        h("div", { className: "yti-rs-vtd-h" }, "Viewer response"),
+        h("div", { className: "yti-rs-tags yti-small" },
+          h("span", { className: "yti-rs-tag" }, formatNumber(r.views || 0) + " views"),
+          r.likes != null ? h("span", { className: "yti-rs-tag" }, formatNumber(r.likes) + " likes · " + pct(r.like_rate) + " of views") : null,
+          r.comment_count != null ? h("span", { className: "yti-rs-tag" }, formatNumber(r.comment_count) + " comments") : null,
+          r.vs_percentile != null ? h("span", { className: "yti-rs-tag", title: "Viewer satisfaction: likes, positive comments and replies as a percentile within the niche" }, "satisfaction " + Math.round(r.vs_percentile) + "th pct") : null,
+          r.organic_flag === "suspect_paid" ? h("span", { className: "yti-rs-tag" }, "⚠ paid?") : null,
+          r.breakout_watch ? h("span", { className: "yti-rs-tag" }, "breakout watch") : null),
+        cm ? h("div", null,
+          h("div", { className: "yti-rs-vtd-h" }, "Comments read", h("span", { className: "yti-muted" }, " · " + cm.n + " · " + pct(cm.positive_share) + " positive" + (cm.early_adopters ? " · " + cm.early_adopters + " early adopters" : ""))),
+          h("ul", { className: "yti-rs-ul yti-small" }, (cm.top || []).map(function (c, i) { return h("li", { key: i }, h("span", { className: "yti-muted" }, (c.likes != null ? c.likes + " ♥ " : "")), c.text); })))
+          : h("div", { className: "yti-muted yti-small", style: { marginTop: 6 } }, "No comments pulled (Apify not set, or none yet)."),
+        (d.formats || []).length ? h("div", null,
+          h("div", { className: "yti-rs-vtd-h" }, "Formats its title matches"),
+          h("div", { className: "yti-rs-tags yti-small" }, d.formats.map(function (f, i) {
+            return h("span", { key: i, className: "yti-rs-tag", title: f.wilson_lb != null ? f.hits + "/" + f.uses + " hits · Wilson LB " + Number(f.wilson_lb).toFixed(2) : "" }, f.label);
+          }))) : null));
+  }
+
   function momentumText(mo) {
     if (!mo || mo.vph == null) return "No momentum reading yet.";
     const pace = formatNumber(Math.round(mo.vph)) + " views per hour over the latest interval";
@@ -2473,6 +2521,7 @@
     const [recent, setRecent] = useState(7);          // default focus: 3× and under one week
     const [threshold, setThreshold] = useState(null);
     const [trails, setTrails] = useState(true);        // trajectory behind each focus dot
+    const [open, setOpen] = useState({});              // expanded teardown rows, by video id
     const [hover, setHover] = useState(null);
     const sdSort = useSort("adj", "desc");
     const wrapRef = useRef(null);
@@ -2694,7 +2743,7 @@
             h("div", { className: "yti-sd-tip-sub" }, fmtMult(hd.adj) + " after discounting for " + ageText(hd) + " of supply"),
             h("div", { className: "yti-sd-tip-title" }, hd.p.t),
             h("div", { className: "yti-sd-tip-meta" }, hd.p.ch + " · " + hd.p.n),
-            h("div", { className: "yti-sd-tip-meta" }, "published " + ageText(hd) + " ago" + (hd.p.s > 0 ? " (date approximate)" : "") + " · " + formatNumber(hd.p.v) + " views" +
+            h("div", { className: "yti-sd-tip-meta" }, "published " + (ageText(hd) === "today" ? "today" : ageText(hd) + " ago") + (hd.p.s > 0 ? " (date approximate)" : "") + " · " + formatNumber(hd.p.v) + " views" +
               (hd.p.f.length ? " · " + hd.p.f.join(" ") : "")),
             hd.p.mo ? h("div", { className: "yti-sd-tip-meta" }, momentumText(hd.p.mo)) : null,
             h("div", { className: "yti-sd-tip-meta" }, "click to open")) : null),
@@ -2720,18 +2769,25 @@
             h(Th, { sort: sdSort, k: "adj", label: "× time-adjusted", tip: "xadj", cls: "yti-right yti-strong" }),
             h(Th, { sort: sdSort, k: "views", label: "Views", tip: "views", cls: "yti-right" }),
             h(Th, { sort: sdSort, k: "mo", label: "Momentum", tip: "momentum", cls: "yti-right" }),
+            h(Th, { sort: sdSort, k: "td", label: "Teardown", tip: "teardown", cls: "yti-center" }),
             h(Th, { sort: sdSort, k: "flags", label: "Flags", tip: "flags", cls: "yti-rs-flagcol" }))),
           h("tbody", null, sortRows(q.focus, sdSort, {
             title: function (d) { return d.p.t; }, channel: function (d) { return d.p.ch; }, niche: function (d) { return d.p.n; },
             m: function (d) { return d.p.m; }, views: function (d) { return d.p.v; }, subs: function (d) { return d.p.sub; },
             mo: function (d) { return d.p.mo && d.p.mo.vph != null ? d.p.mo.vph * (d.p.mo.dir === "down" ? 0.5 : d.p.mo.dir === "up" ? 2 : 1) : -1; },
+            td: function (d) { return d.p.td || 0; },
             flags: function (d) { return d.p.f.length + (d.p.s > 0 ? 1 : 0); } }).slice(0, 60).map(function (d) {
-            return h("tr", { key: d.p.id },
-              h("td", null, h("a", { className: "yti-video-link", href: "https://www.youtube.com/watch?v=" + d.p.id, target: "_blank", rel: "noopener" }, d.p.t)),
+            const isOpen = !!open[d.p.id];
+            const toggle = function () { setOpen(Object.assign({}, open, (function (o) { o[d.p.id] = !isOpen; return o; })({}))); };
+            const tdGlyph = d.p.td === 1 ? "✓" : d.p.td === -1 ? "✕" : "○";
+            const tdTitle = d.p.td === 1 ? "Read — expand for the teardown" : d.p.td === -1 ? "No captions on this video" : "Not read yet — the next pulse tears it down";
+            return [h("tr", { key: d.p.id, className: "yti-rs-rowx" + (isOpen ? " yti-rs-rowx-on" : "") },
+              h("td", null, h("span", { className: "yti-rs-caret", onClick: toggle, title: isOpen ? "Hide teardown" : "Show teardown" }, isOpen ? "▾" : "▸"), " ",
+                h("a", { className: "yti-video-link", href: "https://www.youtube.com/watch?v=" + d.p.id, target: "_blank", rel: "noopener" }, d.p.t)),
               h("td", { className: "yti-muted yti-small" }, d.p.ch),
               h("td", { className: "yti-right yti-muted yti-small" }, d.p.sub == null ? "?" : formatNumber(d.p.sub)),
               h("td", { className: "yti-muted yti-small" }, d.p.n),
-              h("td", { className: "yti-right yti-muted" }, ageText(d) + " ago"),
+              h("td", { className: "yti-right yti-muted" }, (ageText(d) === "today" ? "today" : ageText(d) + " ago")),
               h("td", { className: "yti-right" }, fmtMult(d.p.m)),
               h("td", { className: "yti-right yti-muted" }, Math.round(d.fresh * 100) + "%"),
               h("td", { className: "yti-right yti-strong" }, fmtMult(d.adj)),
@@ -2741,7 +2797,9 @@
                   ? h("span", null, h("span", { className: "yti-sd-mo yti-sd-mo-" + (d.p.mo.dir || "none") }, d.p.mo.dir === "up" ? "↗" : d.p.mo.dir === "down" ? "↘" : d.p.mo.dir === "flat" ? "→" : "·"),
                       " " + formatNumber(Math.round(d.p.mo.vph)) + "/h")
                   : h("span", { className: "yti-muted" }, "—")),
-              h("td", { className: "yti-small yti-muted" }, h(FlagChips, { flags: (d.p.s > 0 ? ["date≈"] : []).concat(d.p.f).concat(d.p.sub == null && !d.p.fol ? ["size?"] : []) })));
+              h("td", { className: "yti-center yti-rs-tdcell", title: tdTitle, onClick: toggle }, h("span", { className: "yti-rs-tdglyph yti-rs-tdglyph-" + (d.p.td === 1 ? "on" : d.p.td === -1 ? "no" : "off") }, tdGlyph)),
+              h("td", { className: "yti-small yti-muted" }, h(FlagChips, { flags: (d.p.s > 0 ? ["date≈"] : []).concat(d.p.f).concat(d.p.sub == null && !d.p.fol ? ["size?"] : []) }))),
+              isOpen ? h("tr", { key: d.p.id + ":td", className: "yti-rs-rowx-detail" }, h("td", { colSpan: 12 }, h(VideoTeardown, { id: d.p.id }))) : null];
           }))),
         q.focus.length > 60 ? h("div", { className: "yti-subtle", style: { marginTop: 6 } }, "Showing the first 60 of " + q.focus.length + " in the current sort order.") : null));
   }
@@ -2893,20 +2951,44 @@
   function SeriesChart(props) {
     const pts = (props.series || []).filter(function (p) { return p.views > 0; });
     if (pts.length < 3) return null;
-    const W = 720, H = 160, pad = 24;
+    const W = 720, H = 190, padL = 52, padR = 14, padT = 22, padB = 30;
     const ys = pts.map(function (p) { return Math.log10(p.views); });
-    const min = Math.min.apply(null, ys), max = Math.max.apply(null, ys), rng = (max - min) || 1;
-    const x = function (i) { return pad + (i / (pts.length - 1)) * (W - 2 * pad); };
-    const y = function (v) { return H - pad - ((v - min) / rng) * (H - 2 * pad); };
+    // axis bounds on whole decades so the grid lines are 1K / 10K / 100K …
+    const lo = Math.floor(Math.min.apply(null, ys)), hi = Math.ceil(Math.max.apply(null, ys));
+    const min = lo, max = hi > lo ? hi : lo + 1, rng = max - min;
+    const x = function (i) { return padL + (i / (pts.length - 1)) * (W - padL - padR); };
+    const y = function (v) { return H - padB - ((v - min) / rng) * (H - padT - padB); };
     const cps = props.changepoints || [];
+    const ticks = [];
+    for (let d = min; d <= max; d++) { ticks.push(d); if (d < max && rng <= 3) ticks.push(d + Math.log10(3)); }   // 1, 3, 10, 30 … when the range is small
+    const label = function (v) { const n = Math.pow(10, v); return n >= 1e6 ? (n / 1e6).toFixed(n % 1e6 ? 1 : 0) + "M" : n >= 1e3 ? Math.round(n / 1e3) + "K" : String(Math.round(n)); };
+    // x ticks: up to 6 evenly spaced uploads, labelled with their publish month
+    const nx = Math.min(6, pts.length);
+    const xt = [];
+    for (let k = 0; k < nx; k++) { const i = Math.round((k / (nx - 1)) * (pts.length - 1)); if (!xt.length || xt[xt.length - 1] !== i) xt.push(i); }
+    const mon = function (iso) { return iso ? String(iso).slice(0, 7) : ""; };
     return h("svg", { className: "yti-rs-chart", viewBox: "0 0 " + W + " " + H, preserveAspectRatio: "none" },
-      cps.map(function (c, i) { return h("line", { key: i, x1: x(c.index), x2: x(c.index), y1: pad / 2, y2: H - pad / 2, stroke: "#f59e0b", strokeDasharray: "4 3" }); }),
+      ticks.map(function (t, i) {
+        const whole = Number.isInteger(t);
+        return h("g", { key: "y" + i },
+          h("line", { x1: padL, x2: W - padR, y1: y(t), y2: y(t), className: "yti-rs-grid", strokeDasharray: whole ? "" : "2 4" }),
+          whole ? h("text", { x: padL - 6, y: y(t) + 4, textAnchor: "end", className: "yti-rs-chart-tick" }, label(t)) : null);
+      }),
+      xt.map(function (i, k) {
+        return h("g", { key: "x" + k },
+          h("line", { x1: x(i), x2: x(i), y1: padT, y2: H - padB, className: "yti-rs-grid" }),
+          h("text", { x: x(i), y: H - padB + 14, textAnchor: k === 0 ? "start" : k === xt.length - 1 ? "end" : "middle", className: "yti-rs-chart-tick" }, mon(pts[i].published_at)));
+      }),
+      h("line", { x1: padL, x2: W - padR, y1: H - padB, y2: H - padB, className: "yti-rs-axis" }),
+      h("line", { x1: padL, x2: padL, y1: padT, y2: H - padB, className: "yti-rs-axis" }),
+      cps.map(function (c, i) { return h("line", { key: "c" + i, x1: x(c.index), x2: x(c.index), y1: padT, y2: H - padB, stroke: "#f59e0b", strokeDasharray: "4 3" }); }),
       pts.map(function (p, i) {
         const col = CLASS_COLOR[p["class"]] || "#9ca3af";
         return h("circle", { key: p.video_id, cx: x(i), cy: y(ys[i]), r: 3, fill: col },
           h("title", null, fmtDate(p.published_at) + " · " + formatNumber(p.views) + " · " + (p["class"] || "") + " · " + p.title));
       }),
-      h("text", { x: pad, y: 12, className: "yti-rs-chart-label" }, "log10 views by upload (● class colour, dashed = changepoint)"));
+      h("text", { x: padL, y: 13, className: "yti-rs-chart-label" }, "views per upload (log scale) · oldest → newest · ● class colour · dashed = changepoint"),
+      h("text", { x: W - padR, y: H - 4, textAnchor: "end", className: "yti-rs-chart-tick" }, "publish month"));
   }
   // Legend + plain-language description under the channel chart
   function SeriesLegend(props) {
