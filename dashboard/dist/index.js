@@ -2183,6 +2183,9 @@
     const [plan, setPlan] = useState(null);
     const [msg, setMsg] = useState(null);
     const running = !!(live ? live.running : job.running);
+    // a job may have been started elsewhere (Supply / Demand's "Tear down
+    // these", the cron): read the live state on mount, not the overview's copy
+    useEffect(function () { api("/research/job").then(setLive).catch(function () {}); }, []);
     useEffect(function () {
       if (!running) return undefined;
       const id = window.setInterval(function () {
