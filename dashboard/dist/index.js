@@ -1,5 +1,5 @@
 /**
- * youtube-insights — Hermes Dashboard Plugin
+ * long-form — Hermes Dashboard Plugin
  *
  * Research + Trends + Insights + Artifacts pages. Trends/Insights are ported
  * from the original paperclip plugin with the same layout, panels, and
@@ -27,7 +27,7 @@
     // Delegate to the host SDK's fetchJSON so auth is handled correctly in
     // BOTH dashboard modes (loopback token header / gated cookie). Never
     // hand-roll fetch or read window.__HERMES_SESSION_TOKEN__.
-    return SDK.fetchJSON("/api/plugins/youtube-insights" + path, options);
+    return SDK.fetchJSON("/api/plugins/long-form" + path, options);
   }
 
   // -------------------------------------------------------------------------
@@ -887,7 +887,7 @@
     useEffect(function () {
       if (!styleCat.selected) return undefined;
       var revoke = null;
-      SDK.authedFetch("/api/plugins/youtube-insights/styles/preview?id=" +
+      SDK.authedFetch("/api/plugins/long-form/styles/preview?id=" +
           encodeURIComponent(styleCat.selected))
         .then(function (r) { return r.ok ? r.blob() : null; })
         .then(function (b) {
@@ -966,7 +966,7 @@
       if (pdfUrl) { URL.revokeObjectURL(pdfUrl); setPdfUrl(null); }
       if (!sel) return;
       if (sel.ext === ".pdf") {
-        SDK.authedFetch("/api/plugins/youtube-insights/workspace/file?path=" +
+        SDK.authedFetch("/api/plugins/long-form/workspace/file?path=" +
                         encodeURIComponent(sel.relPath))
           .then(function (r) { return r.json(); })
           .then(function (d) {
@@ -3339,6 +3339,6 @@
   // -------------------------------------------------------------------------
 
   if (window.__HERMES_PLUGINS__ && typeof window.__HERMES_PLUGINS__.register === "function") {
-    window.__HERMES_PLUGINS__.register("youtube-insights", YouTubeInsightsPage);
+    window.__HERMES_PLUGINS__.register("long-form", YouTubeInsightsPage);
   }
 })();

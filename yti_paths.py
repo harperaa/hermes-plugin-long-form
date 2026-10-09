@@ -1,6 +1,6 @@
-"""Path resolution for the youtube-insights plugin.
+"""Path resolution for the long-form plugin.
 
-All plugin state lives under ``<HERMES_HOME>/plugins-data/youtube-insights/``:
+All plugin state lives under ``<HERMES_HOME>/plugins-data/long-form/``:
 
     data.db                     SQLite (videos, snapshots, insights, queue)
     workspace/youtube/...       per-video artifacts (transcript.json/.txt,
@@ -25,8 +25,24 @@ except ImportError:  # Standalone (tests, dashboard api fallback)
         return Path(val).expanduser() if val else Path.home() / ".hermes"
 
 
+LEGACY_DATA_DIR_NAME = "youtube-insights"   # the plugin's id until 2026-10-09
+
+
 def data_dir() -> Path:
-    d = get_hermes_home() / "plugins-data" / "youtube-insights"
+    """``<HERMES_HOME>/plugins-data/long-form``. The plugin was called
+    youtube-insights until 2026-10-09; an existing data folder under the old
+    name is moved here once, and a symlink is left behind so anything still
+    reading the old path keeps working."""
+    base = get_hermes_home() / "plugins-data"
+    d = base / "long-form"
+    legacy = base / LEGACY_DATA_DIR_NAME
+    if not d.exists() and legacy.is_dir() and not legacy.is_symlink():
+        base.mkdir(parents=True, exist_ok=True)
+        legacy.rename(d)
+        try:
+            legacy.symlink_to("long-form")
+        except OSError:
+            pass
     d.mkdir(parents=True, exist_ok=True)
     return d
 

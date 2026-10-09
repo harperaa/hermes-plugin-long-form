@@ -31,7 +31,7 @@ except ImportError:  # pragma: no cover - dashboard api / tests
     import yti_rs_db  # type: ignore
     import yti_store  # type: ignore
 
-PLUGIN_ID = "youtube-insights"
+PLUGIN_ID = "long-form"
 STATE_KEY = "niche_interview"
 SUMMARY_KEY = "niche_summary"
 UNDO_KEY = "niches_before_interview"

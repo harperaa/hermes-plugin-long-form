@@ -87,7 +87,7 @@ def test_trigger_routes_items_to_kanban(conn, tmp_home, fake_kanban):
     assert result["kanbanRouted"] == 2
     titles = [t["title"] for t in fake_kanban.created]
     assert titles == ["Analyze: Video vid1", "Analyze: Video vid2"]
-    assert all(t["skills"] == ["youtube-insights:youtube-video-analyst"]
+    assert all(t["skills"] == ["long-form:youtube-video-analyst"]
                for t in fake_kanban.created)
     assert "yt_add_insight" in fake_kanban.created[0]["body"]
     row = conn.execute(

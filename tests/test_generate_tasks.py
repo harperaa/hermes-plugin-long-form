@@ -296,7 +296,7 @@ def test_create_present_task_creates_assigned_task(tmp_home, gen_kanban):
     assert rec["title"] == "Presentation: Vibe Audit Trends"
     assert rec["assignee"] == "default"
     assert rec["skills"] == list(yti_generate.PRESENT_SKILLS)
-    assert "youtube-insights:outline-to-presentation" in rec["skills"]
+    assert "long-form:outline-to-presentation" in rec["skills"]
     # the outline rides in the brief VERBATIM, and images are forbidden
     assert "1. Problem" in rec["body"] and "    1. Auth" in rec["body"]
     assert "Do NOT generate images" in rec["body"]

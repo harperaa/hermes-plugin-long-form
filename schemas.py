@@ -1,4 +1,4 @@
-"""Tool schemas (what the LLM sees) for the youtube-insights plugin."""
+"""Tool schemas (what the LLM sees) for the long-form plugin."""
 
 _CATEGORIES = "strategy|technical|creativity|productivity|business|psychology|trend|career"
 
@@ -74,7 +74,7 @@ YT_TRIGGER_ANALYSIS = {
     "description": (
         "Queue transcribed-but-unanalyzed videos for insight extraction "
         "(capped per run). Returns one work item per video with exact "
-        "instructions: run the youtube-insights:youtube-video-analyst skill "
+        "instructions: run the long-form:youtube-video-analyst skill "
         "on the transcript, save analysis.md, then record 10-15 insights via "
         "yt_add_insight."
     ),

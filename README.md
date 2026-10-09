@@ -1,4 +1,4 @@
-# youtube-insights — hermes plugin
+# long-form — hermes plugin
 
 > Aligned with the mentoring of **Dr. Allen Harper, AI Cyber Value Creator** — join the community at [AI Cyber Value Creators on Skool](https://www.skool.com/ai-cyber-value-creators).
 
@@ -52,11 +52,11 @@ dashboard under **Settings → Environment**.
 
 **Slash commands:** `/yt` (summary), `/yt-analyze` (queue analysis).
 
-**Skills** (load with `skill_view("youtube-insights:<name>")`):
+**Skills** (load with `skill_view("long-form:<name>")`):
 `youtube-video-analyst`, `youtube-gap-finder`, `ideal-mechanics`,
 `youtube-planner` (+ standalone dashboard scripts), `digest-url-liveness-gate`.
 
-**Cron:** `hermes youtube-insights setup-cron --apply` installs the daily
+**Cron:** `hermes long-form setup-cron --apply` installs the daily
 03:00 intelligence refresh (fetch → trigger analysis → analyst skill →
 insights), the 06:00/18:00 content pipeline, and the **free 03:30 research
 snapshot** (`yt_research snapshot`) that builds the exact daily view history
@@ -114,7 +114,7 @@ external embedding service required.
 
 ## Data layout
 
-Everything lives in `~/.hermes/plugins-data/youtube-insights/`:
+Everything lives in `~/.hermes/plugins-data/long-form/`:
 
 ```
 data.db                        # SQLite: videos, snapshots, insights (FTS5), queue
@@ -133,8 +133,8 @@ workspace/research/reports/{date}/D1..D5-*.md   # research deliverables
 
 ```bash
 git clone https://github.com/harperaa/hermes-plugin-long-form
-ln -s "$PWD/youtube-insights" ~/.hermes/plugins/youtube-insights
-hermes plugins enable youtube-insights
+ln -s "$PWD/long-form" ~/.hermes/plugins/long-form
+hermes plugins enable long-form
 python -m pytest            # 160+ unit tests, no network needed
 ```
 

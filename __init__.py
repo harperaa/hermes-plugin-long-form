@@ -1,4 +1,4 @@
-"""youtube-insights — hermes plugin entry point.
+"""long-form — hermes plugin entry point.
 
 YouTube competitive intelligence: channel tracking, transcript fetch,
 VPH/trend analytics, and a deduplicated insight knowledge base. Content
@@ -184,15 +184,15 @@ def register(ctx) -> None:
     ctx.register_command("yt-analyze", handler=_cmd_yt_analyze,
                          description="Queue transcribed videos for insight extraction")
 
-    # CLI subcommand: hermes youtube-insights {setup-cron,status,reindex}
+    # CLI subcommand: hermes long-form {setup-cron,status,reindex}
     ctx.register_cli_command(
-        "youtube-insights",
+        "long-form",
         help="YouTube intelligence utilities (setup-cron, status, reindex)",
         setup_fn=cli.setup,
         handler_fn=cli.handle,
     )
 
-    # Bundled skills → youtube-insights:<name>
+    # Bundled skills → long-form:<name>
     skills_dir = Path(__file__).parent / "skills"
     if skills_dir.is_dir():
         for child in sorted(skills_dir.iterdir()):

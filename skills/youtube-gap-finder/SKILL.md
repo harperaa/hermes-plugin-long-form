@@ -92,7 +92,7 @@ In this mode:
 
 **Mode A (single source):**
 
-1. **Read the source video's `analysis.md`** from the video workspace directory provided by the caller. The task's Step 0 covers this: if `analysis.md` is missing, run the `youtube-insights:youtube-video-analyst` skill yourself against the video's transcript first (it is attached to the task for exactly this case). If no transcript exists on disk either, block the task (`kanban_block` with kind `needs_input`) explaining the transcript is missing — do NOT substitute a different video.
+1. **Read the source video's `analysis.md`** from the video workspace directory provided by the caller. The task's Step 0 covers this: if `analysis.md` is missing, run the `long-form:youtube-video-analyst` skill yourself against the video's transcript first (it is attached to the task for exactly this case). If no transcript exists on disk either, block the task (`kanban_block` with kind `needs_input`) explaining the transcript is missing — do NOT substitute a different video.
 2. Read ONLY the **Video Summary** and **Top 20 Insights** sections (≈ first 80 lines). Skip the viral-mechanics sections.
 3. Optionally (for corroborating context only): call the `yt_trending` tool (top 10 by VPH) and skim the **Video Summaries** of any videos in the same theme cluster as the source. Use them to verify that a candidate "gap" is truly a gap vs. already covered elsewhere. Do NOT treat these corroborating videos as co-equal sources — the source of record is the one named video.
 4. **Report what you found** to the user, e.g.:

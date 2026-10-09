@@ -32,7 +32,7 @@ DEFAULT_ANALYSIS_ORDER_BY = "vph"
 MIN_INSIGHTS = 10
 MAX_RETRIES = 2
 
-ANALYST_SKILLS = ["youtube-insights:youtube-video-analyst"]
+ANALYST_SKILLS = ["long-form:youtube-video-analyst"]
 _OPEN_KANBAN_STATUSES = {"triage", "todo", "scheduled", "ready", "claimed",
                          "in_progress", "in-progress", "review", "blocked",
                          "running", "in_review"}
@@ -143,7 +143,7 @@ def create_analysis_kanban_task(conn, item: dict[str, Any]) -> Optional[str]:
                 title=analysis_task_title(item["title"]),
                 body=item["instructions"],
                 assignee=resolve_kanban_assignee(),
-                created_by="youtube-insights",
+                created_by="long-form",
                 workspace_kind="scratch",
                 skills=list(ANALYST_SKILLS),
             )
@@ -173,7 +173,7 @@ def work_item_instructions(video: dict[str, Any], transcript_abs: Path,
         f"**Analysis output:** {analysis_abs}",
         "",
         "## Phase 1: Analyze",
-        "Load the `youtube-insights:youtube-video-analyst` skill and run it on "
+        "Load the `long-form:youtube-video-analyst` skill and run it on "
         "the transcript.",
         f"Save the output to: {analysis_abs}",
         f'Verify it exists: `test -f "{analysis_abs}" && echo VERIFIED`',

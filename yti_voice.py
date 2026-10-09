@@ -23,7 +23,7 @@ from pathlib import Path
 from typing import Any, Optional
 import logging
 
-logger = logging.getLogger("youtube-insights.voice")
+logger = logging.getLogger("long-form.voice")
 
 try:
     from . import yti_paths, yti_store

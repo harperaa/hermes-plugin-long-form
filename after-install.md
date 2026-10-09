@@ -1,10 +1,10 @@
-# youtube-insights installed
+# long-form installed
 
 Next steps:
 
 1. **Enable the plugin** (if you didn't pass `--enable`):
 
-       hermes plugins enable youtube-insights
+       hermes plugins enable long-form
 
 2. **Set your transcript API key** — you should have been prompted during
    install; otherwise add `TRANSCRIPT_API_KEY=...` to `~/.hermes/.env`
@@ -17,7 +17,7 @@ Next steps:
 4. **Fetch + analyze** — click **Refresh** then **Analyze** on the Trends
    page, or run `/yt-analyze` in a chat. Install the daily 03:00 refresh job:
 
-       hermes youtube-insights setup-cron --apply
+       hermes long-form setup-cron --apply
 
 5. **Search your insight base** — `/yt` for a summary, the `yt_search_insights`
    tool in any conversation, or the Insights page in the dashboard.

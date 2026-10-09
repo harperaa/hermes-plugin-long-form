@@ -83,7 +83,7 @@ illegible labels, and auto-regenerates with a corrective prompt (up to
 
 Auth: the script resolves its own credential — `XAI_API_KEY` env var if set, otherwise the hermes `xai-oauth` login (`hermes auth add xai-oauth`, read from the hermes auth store automatically), otherwise `GEMINI_API_KEY` (env or `$HERMES_HOME/.env`; set on the dashboard Keys page). No extra key is needed when Grok is already the session model; mentees on a non-xAI provider set GEMINI_API_KEY once and everything below works identically (same flags, same QA gate — the script picks the Gemini image model by itself; `--model` only applies to xAI).
 
-If `generate-image.py` is not found in the skill directory, tell the user: "The generate-image.py script wasn't found in the generate-image skill directory — the plugin install looks incomplete. Please reinstall the youtube-insights plugin." Do not attempt to write a replacement script or call APIs directly.
+If `generate-image.py` is not found in the skill directory, tell the user: "The generate-image.py script wasn't found in the generate-image skill directory — the plugin install looks incomplete. Please reinstall the long-form plugin." Do not attempt to write a replacement script or call APIs directly.
 
 ## Image Editing
 

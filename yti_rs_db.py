@@ -4,7 +4,7 @@ Separate SQLite file from ``data.db`` (the followed-channel / VPH store) so
 the research schema can follow the spec verbatim without colliding with the
 existing ``channels`` / ``videos`` tables. WAL mode, one file:
 
-    <HERMES_HOME>/plugins-data/youtube-insights/research.db
+    <HERMES_HOME>/plugins-data/long-form/research.db
 
 Raw provider payloads are retained in ``raw_json`` columns so every derived
 score is recomputable without re-purchasing data (P6).

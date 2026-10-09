@@ -1,4 +1,4 @@
-"""Tool handlers for the youtube-insights plugin.
+"""Tool handlers for the long-form plugin.
 
 Contract (hermes): ``handler(args: dict, **kwargs) -> str`` — always return a
 JSON string, never raise. Network access only in yt_fetch_videos (gated on

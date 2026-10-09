@@ -165,7 +165,7 @@ The SAME beat rewritten to pass — one thread of talk, ~200 words for 80 second
 Every produced script is checked mechanically against this contract by the `yt_lint_script` tool (word budgets vs timestamps, fragment lines, fragment hooks) — run it on every script you write and fix every finding before calling the script done.
 
 **The operator's voice (MANDATORY check before writing any spoken line).**
-Look for `$HERMES_HOME/plugins-data/youtube-insights/voice-profile.md`
+Look for `$HERMES_HOME/plugins-data/long-form/voice-profile.md`
 (default HERMES_HOME ~/.hermes; /opt/data in the container). When it exists,
 it holds VERBATIM samples of the operator's own recorded speech — write every
 spoken line the way THIS person actually talks: their rhythm, sentence
@@ -571,7 +571,7 @@ If any MediaBox is not `0 0 960 540`, the deck is portrait or bordered — regen
 
 ## Phase 7: Final Deliverables Check (MANDATORY, NOT OPTIONAL)
 
-All deliverables live in the youtube-insights plugin workspace under
+All deliverables live in the long-form plugin workspace under
 `youtube/{date}/recommended/{topic-slug}/` — this is the directory the
 dashboard, the Files page, and the review summary all point at. This phase is
 a hard completion gate: do NOT report the task complete until every

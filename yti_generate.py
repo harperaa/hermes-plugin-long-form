@@ -40,9 +40,9 @@ except ImportError:  # standalone import (dashboard plugin_api path)
 GENERATION_META_KEY = "generation_tasks"
 STALE_MINUTES = 30
 GENERATION_SKILLS = (
-    "youtube-insights:youtube-gap-finder",
-    "youtube-insights:youtube-content-creator",
-    "youtube-insights:youtube-video-analyst",
+    "long-form:youtube-gap-finder",
+    "long-form:youtube-content-creator",
+    "long-form:youtube-video-analyst",
 )
 
 
@@ -98,7 +98,7 @@ def _build_brief(video: dict[str, Any], workspace: Path) -> str:
         step0 = [
             "### Step 0 — Prerequisite: generate analysis.md (run this FIRST, yourself)",
             f"`analysis.md` is not yet present. The transcript IS present at",
-            f"{transcript_abs}. Run the `youtube-insights:youtube-video-analyst`",
+            f"{transcript_abs}. Run the `long-form:youtube-video-analyst`",
             f"skill on it and save the output to exactly {analysis_abs}. Verify",
             f'with `test -f "{analysis_abs}" && echo VERIFIED`, then continue.',
             "Do NOT stop after Step 0 because analysis.md now exists — that is",
@@ -146,7 +146,7 @@ def _build_brief(video: dict[str, Any], workspace: Path) -> str:
         "the file is missing, note it in SUMMARY.md and proceed.",
         "",
         "### Step 1 — Concepts (gap-finder Mode A)",
-        "Run the `youtube-insights:youtube-gap-finder` skill in **Mode A",
+        "Run the `long-form:youtube-gap-finder` skill in **Mode A",
         "(Single-Source Video)** — its dedicated branch. Do NOT run the",
         "workspace sweep. Pass explicitly:",
         f"  - Source video URL: {url}",
@@ -160,7 +160,7 @@ def _build_brief(video: dict[str, Any], workspace: Path) -> str:
         f"  - {out_dir}/concepts-contrarian.md",
         "",
         "### Step 2 — Scripts (content-creator on ALL 3 concepts)",
-        "Run the `youtube-insights:youtube-content-creator` skill on each",
+        "Run the `long-form:youtube-content-creator` skill on each",
         "concept file to produce matching script-outline files in the same",
         "folder (script-outline.md, script-outline-hot-take.md,",
         "script-outline-contrarian.md — all formats the skill prescribes,",
@@ -233,7 +233,7 @@ def create_generation_task(video_id: str) -> dict[str, Any]:
                 title=generation_task_title(video.get("title") or video_id),
                 body=_with_voice(_build_brief(video, yti_paths.workspace_dir())),
                 assignee=resolve_kanban_assignee(),
-                created_by="youtube-insights",
+                created_by="long-form",
                 workspace_kind="scratch",
                 skills=list(GENERATION_SKILLS),
                 priority=10,  # user-initiated: jump the queue
@@ -487,8 +487,8 @@ def _with_voice(brief: str) -> str:
 
 PRODUCE_META_KEY = "produce_tasks"
 PRODUCE_SKILLS = (
-    "youtube-insights:youtube-content-creator",
-    "youtube-insights:generate-image",
+    "long-form:youtube-content-creator",
+    "long-form:generate-image",
 )
 
 
@@ -547,7 +547,7 @@ def _build_produce_brief(script_abs: Path, version: int = 1) -> str:
         "deployment and is OVERRIDDEN here: there is no other agent, YOU run",
         "Phase 6 and Phase 6b directly.",
         "",
-        "1. Load `youtube-insights:youtube-content-creator` and run **Mode B**",
+        "1. Load `long-form:youtube-content-creator` and run **Mode B**",
         "   (images-and-pdf) against the script above.",
         "2. **Phase 6 — images:** one image per beat (from each beat's Visual",
         "   field) plus ONE THUMBNAIL PER OPTION listed in the script's",
@@ -571,7 +571,7 @@ def _build_produce_brief(script_abs: Path, version: int = 1) -> str:
         "   option's concept — the verifier FAILS images that don't",
         "   describe or fit that script text.",
         "   Generate ALL images via the",
-        "   `youtube-insights:generate-image` skill (grok imagine + its",
+        "   `long-form:generate-image` skill (grok imagine + its",
         "   mandatory verify_image QA and baseline-reference check). Beat",
         "   images MUST pass the operator's SELECTED style baseline as the",
         "   source image:",
@@ -647,7 +647,7 @@ def create_produce_task(rel_path: str) -> dict[str, Any]:
                       + (f" (set {version})" if version > 1 else ""),
                 body=_build_produce_brief(script_abs, version),
                 assignee=resolve_kanban_assignee(),
-                created_by="youtube-insights",
+                created_by="long-form",
                 workspace_kind="scratch",
                 skills=list(PRODUCE_SKILLS),
                 priority=10,
@@ -716,8 +716,8 @@ _ASSET_IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".webp"}
 
 REGEN_META_KEY = "regen_tasks"
 REGEN_SKILLS = (
-    "youtube-insights:youtube-content-creator",
-    "youtube-insights:generate-image",
+    "long-form:youtube-content-creator",
+    "long-form:generate-image",
 )
 
 _PDF_REBUILD_CONTRACT = [
@@ -759,7 +759,7 @@ def _build_regen_brief(image_abs: Path, feedback: str) -> str:
         "### Steps",
         "1. Read the script's Visual/Thumbnail spec for THIS image and the",
         "   old image itself; understand exactly what the feedback calls out.",
-        "2. Regenerate ONE image via the `youtube-insights:generate-image`",
+        "2. Regenerate ONE image via the `long-form:generate-image`",
         "   skill with the same conventions Produce used: beat images pass",
         "   the operator's SELECTED style baseline as `--input`",
         f"   (`{selected_baseline_path()}`) and match its visual style —",
@@ -854,7 +854,7 @@ def create_regen_task(rel_path: str, feedback: str = "") -> dict[str, Any]:
                 body=(_build_pdf_rebuild_brief(target) if is_pdf
                       else _build_regen_brief(target, feedback)),
                 assignee=resolve_kanban_assignee(),
-                created_by="youtube-insights",
+                created_by="long-form",
                 workspace_kind="scratch",
                 skills=list(REGEN_SKILLS),
                 priority=10,
@@ -945,7 +945,7 @@ def produce_states() -> dict[str, dict[str, Any]]:
 
 ITERATE_META_KEY = "iterate_tasks"
 ITERATE_SKILLS = (
-    "youtube-insights:youtube-content-creator",
+    "long-form:youtube-content-creator",
 )
 
 
@@ -977,7 +977,7 @@ def _build_iterate_brief(script_abs: Path, steering: str) -> str:
         "   $HERMES_HOME/plugins-data/ai-cyber-value-creator/company-context.md",
         "   for the ICP if present (default HERMES_HOME ~/.hermes; /opt/data",
         "   in the container).",
-        "2. Load `youtube-insights:youtube-content-creator` and rewrite the",
+        "2. Load `long-form:youtube-content-creator` and rewrite the",
         "   script from the concept doc, treating the current draft as the",
         "   prior attempt: keep what the steering praises or doesn't mention,",
         "   fix what it criticizes, and follow the skill's format contract",
@@ -1033,7 +1033,7 @@ def create_iterate_task(rel_path: str, steering: str = "") -> dict[str, Any]:
                 title=f"Iterate: {script_abs.stem} ({script_abs.parent.name})",
                 body=_with_voice(_build_iterate_brief(script_abs, steering)),
                 assignee=resolve_kanban_assignee(),
-                created_by="youtube-insights",
+                created_by="long-form",
                 workspace_kind="scratch",
                 skills=list(ITERATE_SKILLS),
                 priority=10,
@@ -1061,8 +1061,8 @@ def iterate_states() -> dict[str, dict[str, Any]]:
 
 TOPIC_META_KEY = "topic_tasks"
 TOPIC_SKILLS = (
-    "youtube-insights:youtube-gap-finder",
-    "youtube-insights:youtube-content-creator",
+    "long-form:youtube-gap-finder",
+    "long-form:youtube-content-creator",
 )
 
 
@@ -1095,7 +1095,7 @@ def _build_topic_brief(topic: str, context: str, out_dir: Path) -> str:
         "in SUMMARY.md and proceed.",
         "",
         "### Step 1 — Concepts (gap-finder Mode D, topic-only)",
-        "Run the `youtube-insights:youtube-gap-finder` skill in **Mode D",
+        "Run the `long-form:youtube-gap-finder` skill in **Mode D",
         "(Topic-Only, Insights-Grounded)**. Pass explicitly:",
         f"  - Topic: {topic}",
         "  - Context/guidance: the user's block above",
@@ -1109,7 +1109,7 @@ def _build_topic_brief(topic: str, context: str, out_dir: Path) -> str:
         f"  - {out_dir}/concepts-contrarian.md",
         "",
         "### Step 2 — Scripts (content-creator on ALL 3 concepts)",
-        "Run the `youtube-insights:youtube-content-creator` skill on each",
+        "Run the `long-form:youtube-content-creator` skill on each",
         "concept file to produce matching script-outline files in the same",
         "folder (script-outline.md, script-outline-hot-take.md,",
         "script-outline-contrarian.md). Follow the skill's format contract",
@@ -1177,7 +1177,7 @@ def create_topic_task(topic: str, context: str = "") -> dict[str, Any]:
                 title=f"Topic Scripts: {topic}",
                 body=_with_voice(_build_topic_brief(topic, context, out_dir)),
                 assignee=resolve_kanban_assignee(),
-                created_by="youtube-insights",
+                created_by="long-form",
                 workspace_kind="scratch",
                 skills=list(TOPIC_SKILLS),
                 priority=10,
@@ -1207,7 +1207,7 @@ def topic_states() -> dict[str, dict[str, Any]]:
 # ---------------------------------------------------------------------------
 
 PRESENT_META_KEY = "present_tasks"
-PRESENT_SKILLS = ("youtube-insights:outline-to-presentation",)
+PRESENT_SKILLS = ("long-form:outline-to-presentation",)
 PRESENT_MAX_RETRIES = 2
 
 _OUTLINE_ITEM_RE = re.compile(r"^(\s*)(\d+)[.)]\s+(.+)$")
@@ -1263,7 +1263,7 @@ def _build_present_brief(topic: str, outline: str, out_dir: Path) -> str:
         "delegation. Work autonomously.",
         "",
         "### Step 1 — Expand (outline-to-presentation skill)",
-        "Load `youtube-insights:outline-to-presentation` and follow it",
+        "Load `long-form:outline-to-presentation` and follow it",
         "COMPLETELY. Write exactly two files — AND NOTHING ELSE:",
         f"  - {out_dir}/concepts.md   (PRESENTATION MODE header, topic,",
         "    outline verbatim, slide map, visual language)",
@@ -1340,7 +1340,7 @@ def create_present_task(topic: str, outline: str) -> dict[str, Any]:
                 title=f"Presentation: {topic}",
                 body=_with_voice(_build_present_brief(topic, outline, out_dir)),
                 assignee=resolve_kanban_assignee(),
-                created_by="youtube-insights",
+                created_by="long-form",
                 workspace_kind="scratch",
                 skills=list(PRESENT_SKILLS),
                 priority=10,
@@ -1408,7 +1408,7 @@ def _build_present_fix_brief(entry: dict[str, Any], problems: list[str]) -> str:
         entry.get("outline") or "(see concepts.md)",
         "```",
         "",
-        "Load `youtube-insights:outline-to-presentation` and rewrite",
+        "Load `long-form:outline-to-presentation` and rewrite",
         f"{out_dir}/script-outline.md IN PLACE so the Hook plus one",
         "`## Beat N:` section per slide covers the ENTIRE outline (dividers",
         "for top-level items, one slide per second-level item, deeper items",
@@ -1473,7 +1473,7 @@ def handle_present_completion(conn, kanban_task_id: str) -> Optional[dict[str, A
                     title=f"Fix presentation: {key.rsplit('/', 1)[-1]}",
                     body=_with_voice(_build_present_fix_brief(entry, problems)),
                     assignee=resolve_kanban_assignee(),
-                    created_by="youtube-insights",
+                    created_by="long-form",
                     workspace_kind="scratch",
                     skills=list(PRESENT_SKILLS),
                     priority=10,
@@ -1499,7 +1499,7 @@ def handle_present_completion(conn, kanban_task_id: str) -> Optional[dict[str, A
 # ---------------------------------------------------------------------------
 
 LINT_MAX_RETRIES = 2
-FIX_SKILLS = ("youtube-insights:youtube-content-creator",)
+FIX_SKILLS = ("long-form:youtube-content-creator",)
 
 
 def _lint_targets_for_entry(meta_key: str, key: str,
@@ -1606,7 +1606,7 @@ def handle_script_completion(conn, kanban_task_id: str) -> Optional[dict[str, An
                     title=f"Fix script format: {key.rsplit('/', 1)[-1]}",
                     body=_with_voice(_build_fix_brief(findings)),
                     assignee=resolve_kanban_assignee(),
-                    created_by="youtube-insights",
+                    created_by="long-form",
                     workspace_kind="scratch",
                     skills=list(FIX_SKILLS),
                     priority=10,

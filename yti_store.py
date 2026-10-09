@@ -1,4 +1,4 @@
-"""SQLite store for the youtube-insights plugin.
+"""SQLite store for the long-form plugin.
 
 Single-file database with WAL mode. Tables:
 

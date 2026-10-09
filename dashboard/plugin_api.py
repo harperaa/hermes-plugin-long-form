@@ -1,6 +1,6 @@
-"""youtube-insights dashboard backend.
+"""long-form dashboard backend.
 
-Mounted at /api/plugins/youtube-insights/ by the hermes dashboard. Thin
+Mounted at /api/plugins/long-form/ by the hermes dashboard. Thin
 wrappers over the plugin's yti_* modules — the same code paths the agent
 tools use, so the dashboard and tools can't drift.
 """
@@ -86,7 +86,10 @@ def _migrate_cron_prompt() -> None:
              mod.PIPELINE_PROMPT),
         ):
             job = cron_jobs.resolve_job_ref(name)
-            if job and (job.get("prompt") or "") in old_prompts:
+            # prompts installed before the 2026-10-09 rename carry the old
+            # plugin id in their skill names; compare on the renamed text
+            stored = (job.get("prompt") or "").replace("youtube-insights", "long-form") if job else ""
+            if job and stored in old_prompts + (new_prompt,) and (job.get("prompt") or "") != new_prompt:
                 cron_jobs.update_job(job["id"], {"prompt": new_prompt})
     except Exception:
         pass

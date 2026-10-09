@@ -68,7 +68,7 @@ def test_instructions_mention_tool_and_skill(conn, tmp_home):
     _mk_video(conn, ws, "v1")
     res = yti_analysis.trigger_analysis(conn, workspace=ws)
     instr = res["items"][0]["instructions"]
-    assert "youtube-insights:youtube-video-analyst" in instr
+    assert "long-form:youtube-video-analyst" in instr
     assert "yt_add_insight" in instr
     assert "curl" not in instr
     assert "PAPERCLIP" not in instr
