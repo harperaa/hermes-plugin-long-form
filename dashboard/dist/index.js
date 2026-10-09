@@ -2472,6 +2472,7 @@
     const [size, setSize] = useState("band");
     const [recent, setRecent] = useState(7);          // default focus: 3× and under one week
     const [threshold, setThreshold] = useState(null);
+    const [trails, setTrails] = useState(true);        // trajectory behind each focus dot
     const [hover, setHover] = useState(null);
     const sdSort = useSort("adj", "desc");
     const wrapRef = useRef(null);
