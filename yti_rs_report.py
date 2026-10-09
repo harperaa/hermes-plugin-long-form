@@ -423,3 +423,107 @@ def write_reports(conn: sqlite3.Connection, cfg: dict[str, Any], only: Optional[
     yti_rs_db.set_meta(conn, "last_report_run", yti_rs_db.now_iso())
     yti_rs_db.set_meta(conn, "last_report_dir", str(d))
     return {"written": written, "dir": str(d), "relDir": str(d.relative_to(yti_paths.workspace_dir()))}
+
+
+# -- research brief for the content pipeline ---------------------------------------------------
+
+BRIEF_MIN_SCORED = 100
+BRIEF_MIN_HITS = 5
+
+
+def research_brief(conn: sqlite3.Connection, cfg: dict[str, Any], *, now: Optional[datetime] = None,
+                   focus_days: Optional[float] = None, focus_multiple: Optional[float] = None,
+                   max_focus: int = 15, max_formats: int = 12, max_hooks: int = 8) -> dict[str, Any]:
+    """What the content pipeline should aim at, when the Research tab holds
+    enough to aim with. ``ready`` is False (with the reason) until the target
+    niche has at least BRIEF_MIN_SCORED scored long-form videos and
+    BRIEF_MIN_HITS hits; the pipeline then falls back to the insight base.
+
+    When ready: the focus quadrant (recent, high demand, comparable
+    channels), the formats with the strongest evidence, the gap and
+    near-gap formats, how the torn-down hits open (packaging shares and the
+    first lines of their transcripts), and the niche vocabulary.
+    """
+    try:
+        from . import yti_rs_formats
+    except ImportError:  # pragma: no cover
+        import yti_rs_formats  # type: ignore
+    now = now or datetime.now(timezone.utc)
+    niches = cfg.get("niches") or []
+    target = next((n for n in niches if n.get("is_target")), None)
+    if not target:
+        return {"ready": False, "reason": "no target niche is set up on the Research tab"}
+    scored = conn.execute("""SELECT COUNT(*) FROM scores s JOIN videos v ON v.video_id = s.video_id
+                             WHERE v.is_short = 0 AND s.in_niche = 1 AND v.niche = ?""", (target["name"],)).fetchone()[0]
+    hits = conn.execute("""SELECT COUNT(*) FROM scores s JOIN videos v ON v.video_id = s.video_id
+                           WHERE v.is_short = 0 AND s.in_niche = 1 AND v.niche = ? AND s.class IN ('hit','strong_hit')""",
+                        (target["name"],)).fetchone()[0]
+    if scored < BRIEF_MIN_SCORED or hits < BRIEF_MIN_HITS:
+        return {"ready": False, "reason": f"target niche {target['name']} has {scored} scored long-form videos and {hits} hits; "
+                                          f"needs {BRIEF_MIN_SCORED} and {BRIEF_MIN_HITS} — run Crawl then Score on the Run panel",
+                "target_niche": target["name"], "scored": scored, "hits": hits}
+    t_cfg = cfg.get("teardown", {}) or {}
+    c_cfg = cfg.get("crawl", {}) or {}
+    days = float(focus_days or t_cfg.get("focus_days", 7) or 7)
+    mult = float(focus_multiple or t_cfg.get("focus_multiple") or 0) or float(cfg.get("scoring", {}).get("hit_multiple", 3.0))
+    lo, hi = int(c_cfg.get("min_subscribers", 0) or 0), int(c_cfg.get("max_subscribers", 0) or 0)
+    sd = supply_demand(conn, cfg, now=now)
+    focus = []
+    for p in sd["points"]:
+        if p["a"] > days or p["m"] < mult:
+            continue
+        if p["sub"] is not None and not p["fol"] and ((hi and p["sub"] > hi) or p["sub"] < lo):
+            continue
+        half = sd["half_life"].get(p["n"], sd["default_half_life"])
+        mo = p.get("mo") or {}
+        focus.append({"title": p["t"], "channel": p["ch"], "niche": p["n"], "multiple": p["m"], "age_days": p["a"],
+                      "views": p["v"], "time_adjusted": round(p["m"] * (0.5 ** (p["a"] / half)), 2),
+                      "momentum": mo.get("dir"), "views_per_hour": mo.get("vph"), "flags": p["f"],
+                      "url": f"https://www.youtube.com/watch?v={p['id']}"})
+    focus.sort(key=lambda x: -x["time_adjusted"])
+    lib = [f for f in yti_rs_formats.library(conn, None) if (f.get("n_total") or 0) >= 4 and (f.get("distinct_channels") or 0) >= 2]
+    lib.sort(key=lambda f: -(f.get("wilson_lb") or 0))
+    formats = [{"label": f["label"], "skeleton": f.get("skeleton"), "hits": f["n_hits"], "uses": f["n_total"], "under": f["n_under"],
+                "wilson_lb": round(f["wilson_lb"] or 0, 3), "median_multiple": round(f["median_multiple"] or 0, 2),
+                "channels": f["distinct_channels"], "niches": f.get("niches"), "target_uses": f.get("target_niche_uses"),
+                "examples": [{"title": e["title"], "multiple": e["multiple"]} for e in (f.get("examples") or [])[:2]]}
+               for f in lib[:max_formats]]
+    g = yti_rs_formats.gap_report(conn, cfg, None)
+    slim = lambda r: {"label": r["label"], "skeleton": r.get("skeleton"), "hits": r["n_hits"], "uses": r["n_total"],  # noqa: E731
+                      "wilson_lb": round(r["wilson_lb"] or 0, 3), "median_multiple": round(r["median_multiple"] or 0, 2),
+                      "proven_in": r.get("niches"), "target_uses": r.get("target_niche_uses"),
+                      "examples": [{"title": e["title"], "multiple": e["multiple"]} for e in (r.get("examples") or [])[:2]]}
+    gaps = [slim(r) for r in g.get("gaps", [])[:8]]
+    near = [slim(r) for r in g.get("near_gaps", [])[:8]]
+    pk = conn.execute("""SELECT COUNT(*) n, AVG(has_promise) promise, AVG(has_proof) proof, AVG(has_plan) plan,
+                                AVG(point_count) points, AVG(promise_restated_sec) promise_sec, AVG(proof_sec) proof_sec
+                         FROM packaging p JOIN scores s ON s.video_id = p.video_id
+                         WHERE s.class IN ('hit','strong_hit') AND s.in_niche = 1""").fetchone()
+    structures = [dict(r) for r in conn.execute("""SELECT structure_class, delivery_class, cta_kind, COUNT(*) n
+                         FROM packaging p JOIN scores s ON s.video_id = p.video_id
+                         WHERE s.class IN ('hit','strong_hit') AND s.in_niche = 1 AND structure_class IS NOT NULL
+                         GROUP BY 1,2,3 ORDER BY n DESC LIMIT 5""")]
+    packaging = None
+    if pk and pk["n"]:
+        packaging = {"torn_down_hits": pk["n"], "promise_in_opening_share": round(pk["promise"] or 0, 2),
+                     "proof_in_opening_share": round(pk["proof"] or 0, 2), "plan_share": round(pk["plan"] or 0, 2),
+                     "avg_points": round(pk["points"] or 0, 1), "promise_restated_sec": round(pk["promise_sec"] or 0),
+                     "proof_sec": round(pk["proof_sec"] or 0), "common_shapes": structures}
+    hooks = [{"title": r["title"], "multiple": round(r["projected_multiple"] or 0, 1),
+              "opening": " ".join((r["text"] or "").split())[:280]}
+             for r in conn.execute("""SELECT v.title, s.projected_multiple, t.text FROM transcripts t
+                     JOIN scores s ON s.video_id = t.video_id JOIN videos v ON v.video_id = t.video_id
+                     WHERE s.class IN ('hit','strong_hit') AND s.in_niche = 1 AND v.is_short = 0
+                     ORDER BY s.projected_multiple DESC LIMIT ?""", (max_hooks,))]
+    return {"ready": True, "generated_at": now.isoformat(), "target_niche": target["name"],
+            "niches": [{"name": n["name"], "is_target": bool(n.get("is_target")), "seed_terms": n.get("seed_terms"),
+                        "outcome_terms": n.get("outcome_terms"), "mechanism_terms": n.get("mechanism_terms"),
+                        "signal_half_life_days": n.get("signal_half_life_days")} for n in niches],
+            "scored": scored, "hits": hits,
+            "focus_window": {"days": days, "multiple": mult, "subscriber_band": [lo, hi]},
+            "focus_quadrant": focus[:max_focus], "formats": formats, "gaps": gaps, "near_gaps": near,
+            "packaging": packaging, "hooks": hooks,
+            "how_to_use": ("Aim concepts at focus_quadrant subjects (recent, high demand, supply still thin) and at gaps / "
+                           "near_gaps (formats proven next door, unmade for the target). Package titles with the top formats' "
+                           "skeletons. Open scripts the way hooks and packaging show the hits open. Keep the ICP and the "
+                           "insight base as supporting evidence; the market still casts the final vote.")}

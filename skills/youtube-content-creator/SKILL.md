@@ -202,6 +202,23 @@ Produce the script following this structure:
 - **Target length**: [minutes]
 - **Primary gap exploited**: [which gap type + 1 sentence]
 - **Insight sources**: [which source videos/materials' insights are synthesized]
+
+## Based on outlier
+[ONLY when the concept was aimed at a video from the Research tab's focus quadrant
+(the `yt_research` brief's `focus_quadrant`). Copy the numbers from the brief; never
+estimate them. Omit this whole section when the script is not based on one.]
+- **Source video**: [title] — [channel] — [url]
+- **Demand**: [multiple]× its channel's normal · [views] views · [age_days] days old · momentum [up/steady/fading/—]
+- **Format it used**: [format label from the brief, or "none matched"]
+- **What this script takes from it**: [the demand signal and/or the format — 1 sentence]
+- **What this script does differently**: [the ICP angle that is not in the source — 1 sentence]
+
+## Based on gap
+[ONLY when the concept was aimed at a format from the brief's `gaps` / `near_gaps`. Omit otherwise.]
+- **Format**: [label] (skeleton: [skeleton])
+- **Evidence**: proven in [proven_in] · [hits]/[uses] hits · Wilson LB [wilson_lb] · median [median_multiple]×
+- **Example titles**: [two examples from the brief with their multiples]
+- **Why it is open for this ICP**: [target_uses uses in the target — 1 sentence]
 - **Why this wins**: [net information gain — what the viewer learns that they can't learn anywhere else]
 - **Mechanics applied**: [which patterns from ideal-mechanics.md are used, with source video refs]
 

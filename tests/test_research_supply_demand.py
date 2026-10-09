@@ -40,3 +40,17 @@ def test_points_carry_an_age_range_not_false_precision(tmp_home):
     assert d["half_life"] == {"n1": 180.0} and d["hit_multiple"] == 3.0 and d["bucket"] == "long"
     assert R.supply_demand(conn, cfg, niche="other", now=NOW)["points"] == []
     conn.close()
+
+
+def test_research_brief_gates_on_populated_research(tmp_home):
+    """The content pipeline asks for a brief; with nothing scored it must say
+    ready:false (and the pipeline falls back), never a half-empty brief."""
+    import yti_rs_db, yti_rs_report
+    from yti_rs_config import DEFAULT_CONFIG
+    conn = yti_rs_db.connect()
+    cfg = dict(DEFAULT_CONFIG)
+    assert yti_rs_report.research_brief(conn, cfg)["ready"] is False            # no target niche
+    cfg["niches"] = [{"name": "n1", "is_target": True, "seed_terms": ["a"], "signal_half_life_days": 365}]
+    out = yti_rs_report.research_brief(conn, cfg)
+    assert out["ready"] is False and "needs 100" in out["reason"] and out["target_niche"] == "n1"
+    conn.close()

@@ -162,10 +162,12 @@ YT_RESEARCH = {
     "properties": {
         "action": {
             "type": "string",
-            "enum": ["status", "snapshot", "pulse", "crawl", "enrich", "transcripts", "comments", "score",
+            "enum": ["status", "brief", "snapshot", "pulse", "crawl", "enrich", "transcripts", "comments", "score",
                      "packaging", "formats", "profile", "report", "pipeline", "doctor", "gaps", "teardown"],
-            "description": "Research engine action. 'snapshot' is the free daily RSS history job "
-                           "(run it every day); 'pulse' re-reads exact views for recent high-demand "
+            "description": "Research engine action. 'brief' returns what the content pipeline should "
+                           "aim at (focus-quadrant videos, strongest formats, gaps, how hits open) with "
+                           "ready:false when the Research tab is not populated yet; 'snapshot' is the "
+                           "free daily history job; 'pulse' re-reads exact views for recent high-demand "
                            "videos (free; every 6-8 hours); 'pipeline' runs the whole batch; 'gaps' "
                            "returns the D4 cross-niche format gap report.",
         },

@@ -47,6 +47,28 @@ The legacy default: analyze the top-performing tracked videos across the workspa
 - `/youtube-gap-finder` is run with no arguments
 - The goal is to discover new directions across the whole tracked set, not respond to one video
 
+### Mode B, research-steered (when the Research tab is populated)
+
+Before Phase 1 in Mode B, call `yt_research` with action `brief`. If it returns `ready:false`,
+run Mode B exactly as below. If `ready:true`, the brief outranks the VPH ranking as the source
+of topics:
+
+- Topics come from `focus_quadrant` (recent videos far above their own channel's normal — demand
+  that supply has not caught up with; prefer momentum `up` and the highest `time_adjusted`) and
+  from `gaps` / `near_gaps` (formats proven in neighbouring niches with zero or few uses in the
+  target). At most one of the 3 topics may come from the VPH sweep or the insight base alone.
+- Working titles use one of the brief's `formats` (its `skeleton`), and the concept cites that
+  format's `hits`/`uses` and `wilson_lb`.
+- Every concept file based on a focus-quadrant video opens, directly under its title, with a
+  **Based on outlier** block (source title, channel, url, multiple, views, age_days, momentum,
+  format) copied from the brief, then states what it takes from that video and what it does
+  differently for the ICP. A concept based on a gap format opens with a **Based on gap** block
+  (label, proven_in, hits/uses, wilson_lb, example titles). The content-creator skill carries the
+  same blocks into the script outlines.
+- Phases 1.5 to 3 still run: the insight base and the ICP supply the voice, the supporting
+  evidence and the "what is not being said" angle; they do not override a topic the brief
+  points at.
+
 ### Mode C — Topic + URLs (ad-hoc)
 
 User provides a topic and/or specific video URLs not yet in the workspace. Transcripts must come through the plugin's own pipeline: track the channel (`yt_add_channel`) and run `yt_fetch_videos` to pull its recent videos + transcripts, then run the same Phase 2-5 workflow. If a URL's video is outside the fetch lookback window or its channel shouldn't be tracked, say so and ask the user how to proceed — there is no ad-hoc transcript fetcher; do not invent one.

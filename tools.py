@@ -189,9 +189,9 @@ def yt_research(args: dict, **kwargs) -> str:
     Runs the job inline and returns its summary; the dashboard's YouTube
     Research tab shows the same data."""
     try:
-        from . import yti_rs_jobs, yti_rs_db, yti_rs_config, yti_rs_formats
+        from . import yti_rs_jobs, yti_rs_db, yti_rs_config, yti_rs_formats, yti_rs_report
     except ImportError:  # pragma: no cover
-        import yti_rs_jobs, yti_rs_db, yti_rs_config, yti_rs_formats  # type: ignore
+        import yti_rs_jobs, yti_rs_db, yti_rs_config, yti_rs_formats, yti_rs_report  # type: ignore
     action = str(args.get("action") or "status").strip()
     params = args.get("params") or {}
     try:
@@ -206,6 +206,14 @@ def yt_research(args: dict, **kwargs) -> str:
                 conn.close()
         if action == "doctor":
             return json.dumps(yti_rs_jobs.doctor(run_sample=bool(params.get("runSample"))))
+        if action == "brief":
+            conn = yti_rs_db.connect()
+            try:
+                cfg = yti_rs_config.load_config(conn)
+                return json.dumps(yti_rs_report.research_brief(
+                    conn, cfg, focus_days=params.get("focus_days"), focus_multiple=params.get("focus_multiple")), default=str)
+            finally:
+                conn.close()
         if action == "gaps":
             conn = yti_rs_db.connect()
             try:

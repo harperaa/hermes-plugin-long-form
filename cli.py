@@ -293,7 +293,7 @@ PIPELINE_PROMPT_V5 = PIPELINE_PROMPT_V4 + (
 # with an acronym (1 of 13 topics on 2026-08-02, 6 of 6 daily from 09-23):
 # each run read the earlier folders to avoid repeats and framed the new
 # topic as a sibling of those "named OSes". Nothing asked for it.
-PIPELINE_PROMPT = PIPELINE_PROMPT_V5 + (
+PIPELINE_PROMPT_V6 = PIPELINE_PROMPT_V5 + (
     " NAMING: name every topic, working title and folder slug after the "
     "viewer's problem or the outcome they want, in plain words they would "
     "search for. Do NOT brand topics as a coined system: no 'OS', "
@@ -306,6 +306,40 @@ PIPELINE_PROMPT = PIPELINE_PROMPT_V5 + (
     "name is allowed only when the video truly teaches one reusable "
     "multi-step system — at most one topic per run, and even then the "
     "folder slug describes the problem."
+)
+
+# The Research tab (niche crawl, outliers scored against their own channel,
+# formats with failure rates, cross-niche gaps, teardowns) is better evidence
+# than the insight base alone. When it holds enough to aim with, it steers
+# the run; when it does not, the run is exactly what it was before.
+PIPELINE_PROMPT = PIPELINE_PROMPT_V6 + (
+    " RESEARCH STEER (do this right after Step 0, before Step 1): call the "
+    "yt_research tool with action 'brief' exactly once. If the result has "
+    "ready:false, say so in the summary and run every step below exactly as "
+    "written — the insight base alone. If ready:true, the brief steers the "
+    "run: (a) pick the 3 topics from the brief's focus_quadrant (recent "
+    "videos running far above their channel's normal — demand that supply "
+    "has not caught up with) and from its gaps / near_gaps (formats proven "
+    "in neighbouring niches that nobody has made for the target); prefer "
+    "subjects whose momentum is 'up' and whose time_adjusted multiple is "
+    "highest; at most one topic may come from elsewhere; (b) package each "
+    "working title with one of the brief's formats (use its skeleton, cite "
+    "its hits/uses and wilson_lb); (c) open each script the way the brief's "
+    "hooks and packaging show the hits open — promise in the first "
+    "sentence, proof by about 30 seconds, the common structure shape; (d) "
+    "still run Steps 1-2 for the insight landscape and the ICP, as "
+    "supporting evidence and voice, never as the reason for a topic the "
+    "brief contradicts. A concept or script based on a specific "
+    "focus_quadrant video MUST say so: its concept files and every "
+    "script-outline file carry, directly under the title, a 'Based on "
+    "outlier' block with the source video's title, channel, url, multiple "
+    "(× its channel's normal), views, age in days, momentum and the format "
+    "it used, copied from the brief — and the concept explains what it "
+    "takes from that video (the demand signal, the format) and what it "
+    "does differently for the ICP. Scripts based on a gap format carry a "
+    "'Based on gap' block the same way (format label, proven_in, hits/uses, "
+    "wilson_lb, example titles). The SUMMARY lists, per topic, which brief "
+    "evidence it rests on."
 )
 
 
