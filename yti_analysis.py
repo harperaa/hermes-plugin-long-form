@@ -39,12 +39,39 @@ _OPEN_KANBAN_STATUSES = {"triage", "todo", "scheduled", "ready", "claimed",
 
 
 def _kanban():
-    """Return hermes_cli.kanban_db, or None when running outside hermes."""
+    """Return hermes_cli.kanban_db, or None when running outside hermes.
+
+    Upstream split kanban_db into modules (Sep–Oct 2026): ``connect_closing``
+    moved to ``kanban_db_connect`` and ``dispatch_once`` to
+    ``kanban_db_dispatch`` and are no longer re-exported. The facade below
+    resolves each name from wherever the installed Hermes keeps it, so the
+    Artifacts tab's generation task works on either shape."""
     try:
         from hermes_cli import kanban_db
-        return kanban_db
     except ImportError:  # pragma: no cover - exercised via monkeypatch in tests
         return None
+    needed = ("connect_closing", "create_task", "get_task", "dispatch_once")
+    if all(hasattr(kanban_db, n) for n in needed):
+        return kanban_db
+
+    class _Facade:
+        pass
+    kb = _Facade()
+    for name in needed:
+        fn = getattr(kanban_db, name, None)
+        if fn is None:
+            for mod in ("kanban_db_connect", "kanban_db_dispatch", "kanban_db_workspace", "kanban_db_notify"):
+                try:
+                    m = __import__(f"hermes_cli.{mod}", fromlist=[name])
+                except ImportError:
+                    continue
+                fn = getattr(m, name, None)
+                if fn is not None:
+                    break
+        if fn is None:
+            return None
+        setattr(kb, name, fn)
+    return kb
 
 
 def _kanban_task_open(kb, conn_kb, task_id: str) -> bool:
