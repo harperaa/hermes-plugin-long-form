@@ -538,6 +538,7 @@ def research_overview() -> dict[str, Any]:
             "job": yti_rs_jobs.state(), "history": yti_rs_jobs.load_history(),
             "niches": niches, "maturityCurve": yti_rs_db.get_meta_json(conn, "maturity_curve"),
             "fullPassDone": yti_rs_jobs.full_pass_done(conn, cfg) if cfg.get("niches") else False,
+            "lastSnapshotError": yti_rs_db.get_meta(conn, "last_snapshot_error"),
             "lastReportDir": yti_rs_db.get_meta(conn, "last_report_dir"),
         }
     finally:

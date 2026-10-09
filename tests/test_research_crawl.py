@@ -212,11 +212,12 @@ def test_known_channels_refresh_free_and_fresh_nodes_are_skipped(tmp_home):
     assert second["skipped_fresh"] == 1 and not [c for c in tapi2.calls if c[0] in ("search", "channel_videos")]
     assert yti_rs_db.one(conn, "SELECT status FROM crawl_nodes WHERE run_id='r_same_day' AND node_type='search_term'")["status"] == "skipped"
 
-    # a month later: the search runs again (paid), but the channel we already
-    # paged is refreshed from the free channel/latest call only — and a new
-    # upload that beats the baseline still becomes an outlier node
+    # the next day: the seed search runs again (new videos can only arrive
+    # through searches), but the channel we already paged is refreshed from
+    # the free channel/latest call only — and a new upload that beats the
+    # baseline still becomes an outlier node
     from datetime import datetime, timedelta, timezone
-    later = datetime.now(timezone.utc) + timedelta(days=40)
+    later = datetime.now(timezone.utc) + timedelta(days=1, hours=2)
     latest = {"@UCgood": {"results": [{"videoId": "g_new", "title": "alpha: the new hit", "viewCount": "120000",
                                        "published": later.isoformat(), "link": "https://youtube.com/watch?v=g_new"}]}}
     tapi3 = FakeTAPI(searches, channels, latest)

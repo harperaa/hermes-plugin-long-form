@@ -64,7 +64,26 @@ SNAPSHOT_PROMPT = (
     "with action 'snapshot' exactly once. It records exact view counts for the "
     "latest uploads of every followed and tracked channel into the research "
     "history (no credits are spent). Do not run any other yt_research action. "
-    "Finish with one line: channels snapshotted, videos, new videos, errors."
+    "Finish with one line: channels snapshotted, videos, new videos, errors. "
+    "If the tool result contains an error, that line must start with ERROR and "
+    "quote it — never report a failed snapshot as fine."
+)
+
+# Fifth routine: the daily incremental crawl. Seed searches are the only way
+# new videos on channels we do not follow reach the Supply / Demand chart, so
+# they re-run every morning once Google's quota has reset (midnight Pacific).
+# Known channels refresh through the free call; new channels are catalogued
+# once. About 5,000 free Data API units; TranscriptAPI only as the fallback.
+CRAWL_NAME = "youtube-research-crawl"
+CRAWL_SCHEDULE = "0 4 * * *"
+CRAWL_PROMPT = (
+    "Run the daily incremental YouTube research crawl: call the yt_research "
+    "tool with action 'crawl' exactly once with no params. It re-runs the "
+    "niche's seed searches, catalogues channels it has not seen, refreshes "
+    "known ones for free and rescores, so new videos reach the research tab. "
+    "Do not run any other yt_research action. Finish with one line: nodes, new "
+    "videos, new outliers, credits, stop reason. If the tool result contains "
+    "an error, that line must start with ERROR and quote it."
 )
 
 # Fourth routine: the pulse. Exact views for recent high-demand videos every
@@ -78,7 +97,8 @@ PULSE_PROMPT = (
     "'pulse' exactly once. It re-reads exact view counts for recent videos that "
     "are running above their channel's normal and rescores them (no credits are "
     "spent). Do not run any other yt_research action. Finish with one line: "
-    "videos watched, updated, rising, falling."
+    "videos watched, updated, rising, falling. If the tool result contains an "
+    "error, that line must start with ERROR and quote it."
 )
 
 # Second routine, ported from paperclip's "YouTube Content Pipeline"
@@ -318,6 +338,7 @@ def handle(args) -> int:
             (PIPELINE_SCHEDULE, PIPELINE_PROMPT, PIPELINE_NAME),
             (SNAPSHOT_SCHEDULE, SNAPSHOT_PROMPT, SNAPSHOT_NAME),
             (PULSE_SCHEDULE, PULSE_PROMPT, PULSE_NAME),
+            (CRAWL_SCHEDULE, CRAWL_PROMPT, CRAWL_NAME),
         ]
         rc = 0
         for schedule, prompt, name in jobs:
@@ -331,7 +352,7 @@ def handle(args) -> int:
                 shown = " ".join(f'"{a}"' if " " in a else a for a in argv)
                 print(f"# {name} ({schedule})\n  {shown}\n")
         if not args.apply:
-            print("Re-run with --apply to create all four jobs now.")
+            print("Re-run with --apply to create all five jobs now.")
         return rc
 
     try:

@@ -134,8 +134,16 @@ class Crawler:
         """When this node was already expanded recently in an earlier run,
         the date it was done — paid work is not repeated inside the refresh
         window. Seed terms are free and never skipped."""
-        days = float(self.c.get("refresh_after_days", 14) or 0)
+        if node.type == "search_term":
+            days = float(self.c.get("search_refresh_days", 1) or 0)
+        else:
+            days = float(self.c.get("channel_refresh_days", self.c.get("refresh_after_days", 14)) or 0)
         if node.type == "seed_term" or days <= 0:
+            return None
+        # a channel whose catalogue is already in the DB costs nothing to
+        # revisit (free channel/latest only), so it is never skipped: that is
+        # how its new uploads reach the chart between paid passes
+        if node.type == "channel" and self._has_catalogue(node.key) and not self.c.get("repage_known_channels", False):
             return None
         row = self.conn.execute(
             "SELECT MAX(created_at) AS at FROM crawl_nodes WHERE node_type=? AND node_key=? AND run_id != ?"
@@ -262,8 +270,9 @@ class Crawler:
                 if fresh:
                     self._set_status(node.id, "skipped")
                     self.stats["skipped_fresh"] += 1
+                    window = self.c.get("search_refresh_days", 1) if node.type == "search_term" else self.c.get("channel_refresh_days", 14)
                     self.log(f"[{node.depth}] {node.type} {node.key!r} skipped — expanded {fresh[:10]}, "
-                             f"inside the {self.c.get('refresh_after_days', 14)}-day refresh window")
+                             f"inside the {window}-day refresh window")
                     continue
                 before_new = self.stats["videos_new"]
                 self._last_hash = None

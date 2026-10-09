@@ -101,9 +101,19 @@ def _apify(budget: yti_rs_budget.Budget, cfg: dict[str, Any]) -> yti_rs_clients.
 def job_snapshot(conn, cfg, params, log_fn) -> dict[str, Any]:
     budget = yti_rs_budget.Budget(conn, run_id="snapshot")
     tgt = yti_rs_config.target_niche(cfg)
-    return yti_rs_snapshot.run_snapshot(conn, _tapi(budget), followed_handles(),
-                                        default_niche=(tgt or {}).get("name") or "followed",
-                                        durations=known_durations(), log=log_fn)
+    try:
+        res = yti_rs_snapshot.run_snapshot(conn, _tapi(budget), followed_handles(),
+                                           default_niche=(tgt or {}).get("name") or "followed",
+                                           durations=known_durations(), log=log_fn)
+    except Exception as exc:
+        # the scheduled run must not look fine when it is not: the Run tab
+        # shows this until the next snapshot succeeds
+        yti_rs_db.set_meta(conn, "last_snapshot_error", f"{yti_rs_db.now_iso()[:16]} — {exc}")
+        log_fn(f"ERROR: snapshot failed — {exc}")
+        raise
+    conn.execute("DELETE FROM meta WHERE key = 'last_snapshot_error'")
+    conn.commit()
+    return res
 
 
 def job_crawl(conn, cfg, params, log_fn) -> dict[str, Any]:

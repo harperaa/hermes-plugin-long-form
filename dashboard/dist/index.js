@@ -2161,7 +2161,7 @@
           (advanced ? "▼" : "▶") + " Advanced: crawl / scoring / formats / budget"),
         advanced ? h("div", { className: "yti-rs-grid yti-rs-grid-4" },
           [["crawl", "max_depth"], ["crawl", "search_pages_per_term"], ["crawl", "channel_pages_per_channel"], ["crawl", "outliers_to_expand_per_node"],
-           ["crawl", "prune_after_barren_nodes"], ["crawl", "recommendations_per_video"], ["crawl", "min_subscribers"], ["crawl", "max_subscribers"], ["crawl", "channel_relevance_min"], ["crawl", "refresh_after_days"],
+           ["crawl", "prune_after_barren_nodes"], ["crawl", "recommendations_per_video"], ["crawl", "min_subscribers"], ["crawl", "max_subscribers"], ["crawl", "channel_relevance_min"], ["crawl", "search_refresh_days"], ["crawl", "channel_refresh_days"],
            ["scoring", "baseline_window"], ["scoring", "min_baseline_videos"], ["scoring", "hit_multiple"], ["scoring", "strong_multiple"],
            ["scoring", "underperformer_multiple"], ["scoring", "breakout_watch_max_age_days"], ["scoring", "breakout_watch_comment_pct"],
            ["formats", "min_support"], ["formats", "min_distinct_channels"], ["formats", "min_distinct_niches"], ["formats", "gap_min_wilson_lb"],
@@ -2216,12 +2216,13 @@
         h("h3", { className: "yti-rs-h3" }, "Pipeline"),
         h("div", { className: "yti-rs-steps" },
           h("div", { className: "yti-rs-step" }, h("b", null, h(Tip, { k: "tier0" }, "Tier 0 · History (free)")),
-            h("div", { className: "yti-muted yti-small" }, "Exact daily views for every followed + tracked channel. Cron this daily; it is the moat."),
+            h("div", { className: "yti-muted yti-small" }, "Exact daily views for every followed + tracked channel. Runs daily at 03:30; it is the moat."),
+            (ov && ov.lastSnapshotError) ? h("div", { className: "yti-notice yti-notice-error", style: { marginTop: 6 } }, "Last scheduled snapshot failed: " + ov.lastSnapshotError) : null,
             btn("Snapshot", "snapshot", {}, "Free RSS snapshot of the latest ~15 uploads per tracked channel")),
           h("div", { className: "yti-rs-step" }, h("b", null, h(Tip, { k: "tier1" }, "Tier 1 · Discovery")),
             h("div", { className: "yti-muted yti-small" },
               (ov && ov.fullPassDone)
-                ? "Full pass done for this niche set. A crawl now only touches what the database has not paid for: searches run again (page 1), new channels are catalogued once, known channels refresh through the free call. It stops on its own, usually well under the cap."
+                ? "Full pass done for this niche set. A crawl now only touches what the database has not paid for: seed searches run again once a day (page 1), new channels are catalogued once, known channels refresh through the free call. It stops on its own, usually well under the cap. Scheduled daily at 04:00 so new videos reach the Supply / Demand chart every morning."
                 : "No full pass yet for this niche set: the next crawl runs the depth-first search to exhaustion (bounded by the monthly budget, not the per-run cap). After that, crawls are incremental and cheap.",
               (sec.youtube ? " Discovery is on the YouTube Data API's free quota." : " Add a YouTube API key on Setup to make discovery free.")),
             h("div", { className: "yti-rs-inline" },

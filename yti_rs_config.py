@@ -41,10 +41,13 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "term_variants": ["{term}", "how to {term}", "{term} mistakes"],
         "recommendations_per_video": 3,
         "include_followed_channels": True,
-        # pay for a node once: a search or channel expanded within this many
-        # days (any run) is skipped; a channel whose catalogue is already in
+        # pay for a node once. Searches are the only way new videos on
+        # channels we do not follow can appear, so they re-run daily (page 1
+        # only after the first time); a channel or related-title search is
+        # skipped for two weeks, and a channel whose catalogue is already in
         # the DB is only refreshed through the free channel/latest call
-        "refresh_after_days": 14,
+        "search_refresh_days": 1,
+        "channel_refresh_days": 14,
         "repage_known_channels": False,
     },
     "scoring": {
