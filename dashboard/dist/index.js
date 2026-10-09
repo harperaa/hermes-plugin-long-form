@@ -2242,7 +2242,7 @@
               btn("Channel sizes", "sizes", {}, "Look up subscriber counts for channels that have none (1 TranscriptAPI credit per channel, most useful first)"))),
           h("div", { className: "yti-rs-step" }, h("b", null, h(Tip, { k: "tier3" }, "Tier 3 · Depth")),
             h("div", { className: "yti-muted yti-small" },
-              "Transcripts (packaging + structure) and comments (satisfaction + sentiment) — spent only on the focus quadrant: ",
+              "Transcripts (packaging + structure) and comments (satisfaction + sentiment) — run automatically after every pulse and crawl for the focus quadrant: ",
               (ov && ov.config && ov.config.teardown && ov.config.teardown.focus_only === false)
                 ? "off (every hit is torn down; Advanced → teardown.focus_only)"
                 : "videos under " + String((ov && ov.config && ov.config.teardown && ov.config.teardown.focus_days) || 7) + " days old running at " +
@@ -2472,17 +2472,6 @@
     const [size, setSize] = useState("band");
     const [recent, setRecent] = useState(7);          // default focus: 3× and under one week
     const [threshold, setThreshold] = useState(null);
-    const [td, setTd] = useState(null);                // "tear down these" request state
-    const [trails, setTrails] = useState(true);        // trajectory behind each focus dot
-    const tearDown = function (n, days, mult) {
-      setTd({ busy: true });
-      post("/research/run", { job: "teardown", params: { focus_days: days, focus_multiple: mult } })
-        .then(function (r) {
-          if (r && r.alreadyRunning) { setTd({ text: "A job is already running (" + r.job + ")." }); return; }
-          setTd({ text: "Tearing down " + n + " video" + (n === 1 ? "" : "s") + ": transcripts, comments and packaging — progress is on the Run tab, results on Teardown." });
-        })
-        .catch(function (e) { setTd({ text: String((e && e.message) || e) }); });
-    };
     const [hover, setHover] = useState(null);
     const sdSort = useSort("adj", "desc");
     const wrapRef = useRef(null);
@@ -2657,11 +2646,7 @@
         h("div", { className: "yti-subtle", style: { marginBottom: 8 } },
           q.focus.length + " of " + m.recentTotal + " videos from the last " + (SD_RECENTS.filter(function (o) { return o[0] === recent; })[0] || [0, Math.round(recent) + " days"])[1] + " (" + pct + "%) are running at " + thr + "× their channel's normal views or more. ",
           "Each dot is one long-form, in-niche video from the last 3 months; time since publish stands in for supply. ",
-          q.focus.length ? h(Button, { size: "sm", variant: "outline", disabled: !!(td && td.busy), style: { marginLeft: 6 },
-              title: "Pull transcripts and comments for exactly these videos (one TranscriptAPI credit per transcript), then compute their packaging. Nothing outside this quadrant is paid for.",
-              onClick: function () { tearDown(q.focus.length, recent, thr); } },
-              (td && td.busy) ? "Starting…" : "Tear down these " + q.focus.length) : null,
-          (td && td.text) ? h("span", { className: "yti-muted", style: { marginLeft: 8 } }, td.text) : null),
+          h("span", { className: "yti-muted" }, "Every video in the focus quadrant is torn down automatically (transcript, comments, packaging) after each pulse and crawl.")),
         h("div", { className: "yti-sd-wrap", ref: wrapRef },
           h("svg", { className: "yti-sd-svg", viewBox: "0 0 " + SD_W + " " + SD_H, role: "img",
               "aria-label": "Scatter of long-form videos: multiple of normal views against time since publish. " +

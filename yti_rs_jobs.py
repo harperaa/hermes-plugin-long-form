@@ -152,6 +152,7 @@ def job_crawl(conn, cfg, params, log_fn) -> dict[str, Any]:
     # own (the daily routine, the Run tab button) scores what it found
     if res.get("videos_new") and not params.get("skip_score"):
         res["score"] = job_score(conn, cfg, {}, log_fn)
+        res["teardown"] = _auto_teardown(conn, cfg, log_fn)
     return res
 
 
@@ -189,7 +190,24 @@ def job_pulse(conn, cfg, params, log_fn) -> dict[str, Any]:
     res = yti_rs_pulse.run_pulse(conn, cfg, _tapi(budget, log_fn), log=log_fn)
     if res.get("updated"):
         res["score"] = job_score(conn, cfg, {}, log_fn)
+        res["teardown"] = _auto_teardown(conn, cfg, log_fn)
     return res
+
+
+def _auto_teardown(conn, cfg, log_fn) -> dict[str, Any]:
+    """Every video in the focus quadrant is torn down without being asked:
+    only the ones not yet read cost anything (transcripts and misses are
+    remembered), so this is cheap after the first pass."""
+    if not (cfg.get("teardown", {}) or {}).get("focus_only", True):
+        return {"skipped": "teardown.focus_only is off"}
+    try:
+        return job_teardown(conn, cfg, {}, log_fn)
+    except yti_rs_clients.CreditsExhausted as exc:
+        log_fn(f"teardown skipped: {exc}")
+        return {"error": str(exc)}
+    except Exception as exc:  # noqa: BLE001 — never fail the parent job over the teardown
+        log_fn(f"teardown failed: {exc}")
+        return {"error": str(exc)}
 
 
 def job_teardown(conn, cfg, params, log_fn) -> dict[str, Any]:
