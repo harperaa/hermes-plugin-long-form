@@ -757,7 +757,9 @@
   function TreeEntry(props) {
     var node = props.node;
     var depth = props.depth || 0;
-    var openState = useState(depth < 2 || !!props.forceOpen);
+    var deep = (function () { try { return new URLSearchParams(window.location.search).get("path") || ""; } catch (e) { return ""; } })();
+    var onDeepPath = !!(deep && node.relPath && (deep === node.relPath || deep.indexOf(node.relPath + "/") === 0));
+    var openState = useState(depth < 2 || !!props.forceOpen || onDeepPath);
     var open = openState[0], setOpen = openState[1];
     if (node.kind === "dir") {
       // Produce status ripples up the ancestor chain (back to the date
@@ -907,9 +909,23 @@
       if (pipeline.running && kickedAt) setKickedAt(0);
     }, [pipeline.running]);
 
+    var wantPath = (function () { try { return new URLSearchParams(window.location.search).get("path") || ""; } catch (e) { return ""; } })();
     var loadTree = useCallback(function () {
-      api("/workspace/tree").then(function (d) { setTree(d.tree || []); })
-        .catch(function () { setTree([]); });
+      api("/workspace/tree").then(function (d) {
+        var t = d.tree || [];
+        setTree(t);
+        if (wantPath) {           // deep link: select the first file inside the requested folder
+          var found = [];
+          var walk = function (nodes) { (nodes || []).forEach(function (n) {
+            if (n.relPath && n.relPath.indexOf(wantPath + "/") === 0 && n.kind === "file") found.push(n);
+            if (n.children) walk(n.children); }); };
+          walk(t);
+          // the most useful file first: analysis, then a script, then the transcript
+          var rank = function (n) { return /analysis\.md$/.test(n.relPath) ? 0 : /script-outline/.test(n.relPath) ? 1 : /concepts/.test(n.relPath) ? 2 : /transcript\.txt$/.test(n.relPath) ? 3 : 9; };
+          found.sort(function (a, b) { return rank(a) - rank(b); });
+          if (found.length) setSel(found[0]);
+        }
+      }).catch(function () { setTree([]); });
       api("/produce-states").then(function (d) { setProduce((d && d.states) || {}); })
         .catch(function () {});
       api("/iterate-states").then(function (d) { setIterate((d && d.states) || {}); })
@@ -2502,6 +2518,55 @@
           }))) : null));
   }
 
+  // The bar under each focus row: the Teardown toggle on the left, then the
+  // artifact workflows (transcript + metadata → analysis → scripts) on the right
+  function FocusRowBar(props) {
+    const [st, setSt] = useState(null);
+    const [busy, setBusy] = useState(null);
+    const [msg, setMsg] = useState(null);
+    const load = function () { api("/research/artifacts-state?id=" + encodeURIComponent(props.id)).then(setSt).catch(function () { setSt({}); }); };
+    useEffect(load, [props.id]);  // eslint-disable-line
+    const run = function (action) {
+      setBusy(action); setMsg(null);
+      post("/research/artifacts", { video_id: props.id, action: action })
+        .then(function (r) {
+          setSt(r.state || st);
+          setMsg(action === "transcript" ? "Transcript and metadata saved to " + (r.dir || "the artifacts folder") + "."
+            : action === "analysis" ? ((r.queued || []).length ? "Analysis task queued — analysis.md lands in the artifacts folder when the worker finishes." : "Nothing queued (already analysed or analysing).")
+            : (r.already ? "Scripts task already open (" + r.taskId + ")." : "Scripts task created (" + r.taskId + ") — concepts and scripts land in the artifacts folder."));
+        })
+        .catch(function (e) { setMsg(String((e && e.message) || e)); })
+        .finally(function () { setBusy(null); });
+    };
+    const s2 = st || {};
+    const gen = s2.scripts || {};
+    const b = function (label, action, done, title, disabled) {
+      return h(Button, { size: "sm", variant: done ? "outline" : undefined, disabled: !!busy || !!disabled, title: title,
+        onClick: function () { run(action); } }, busy === action ? label + "…" : (done ? "✓ " : "") + label);
+    };
+    return h("div", { className: "yti-rs-rowbar" },
+      h("button", { type: "button", className: "yti-rs-tdbtn" + (props.open ? " yti-rs-tdbtn-on" : ""), onClick: props.onToggle,
+          title: props.open ? "Hide the teardown" : "Show what Tier 3 read about this video" },
+        h("span", { className: "yti-rs-chev" }, props.open ? "▾" : "▸"), " Teardown",
+        h("span", { className: "yti-rs-tdglyph yti-rs-tdglyph-" + (props.td === 1 ? "on" : props.td === -1 ? "no" : "off"), style: { marginLeft: 6 } },
+          props.td === 1 ? "✓" : props.td === -1 ? "✕" : "○")),
+      h("div", { className: "yti-rs-rowbar-actions" },
+        st == null ? h("span", { className: "yti-muted yti-small" }, "…") : [
+          b("Transcript + metadata", "transcript", s2.transcript,
+            s2.transcript ? "transcript.json, transcript.txt and a metadata snapshot are in " + s2.dir : (s2.no_captions ? "This video has no captions" : "Write the transcript (already read by Tier 3 when available, otherwise 1 credit), transcript.txt and a metadata snapshot into the artifacts folder"),
+            s2.no_captions),
+          b("Analysis", "analysis", s2.analysis,
+            s2.analysis ? "analysis.md exists in " + s2.dir : (s2.analysis_queued ? "Analysis task is queued" : "Queue the analysis task: Video Summary + Top 20 Insights → analysis.md (needs the transcript; written first if missing)"),
+            s2.no_captions || s2.analysis_queued),
+          b("Scripts", "scripts", gen.state === "done",
+            gen.state === "done" ? "Concepts and scripts exist in " + s2.dir : (gen.state === "open" ? "Scripts task is open (" + (gen.taskId || "") + ")" : "Create the ✨ task: gap-finder Mode A concepts (straight, hot take, contrarian) + script outlines into the artifacts folder"),
+            s2.no_captions || gen.state === "open"),
+          s2.dir ? h("a", { className: "yti-rs-btnlink", href: "/longform?tab=artifacts&path=" + encodeURIComponent(s2.dir), title: "Open this video's folder on the Artifacts tab" }, "Artifacts folder →") : null,
+          gen.taskId ? h("a", { className: "yti-rs-btnlink", href: "/kanban?task=" + encodeURIComponent(gen.taskId), title: "Open the scripts task on the Kanban" }, "Task →") : null
+        ]),
+      msg ? h("div", { className: "yti-muted yti-small yti-rs-rowbar-msg" }, msg) : null);
+  }
+
   function momentumText(mo) {
     if (!mo || mo.vph == null) return "No momentum reading yet.";
     const pace = formatNumber(Math.round(mo.vph)) + " views per hour over the latest interval";
@@ -2781,9 +2846,8 @@
             const toggle = function () { setOpen(Object.assign({}, open, (function (o) { o[d.p.id] = !isOpen; return o; })({}))); };
             const tdGlyph = d.p.td === 1 ? "✓" : d.p.td === -1 ? "✕" : "○";
             const tdTitle = d.p.td === 1 ? "Read — expand for the teardown" : d.p.td === -1 ? "No captions on this video" : "Not read yet — the next pulse tears it down";
-            return [h("tr", { key: d.p.id, className: "yti-rs-rowx" + (isOpen ? " yti-rs-rowx-on" : "") },
-              h("td", null, h("span", { className: "yti-rs-caret", onClick: toggle, title: isOpen ? "Hide teardown" : "Show teardown" }, isOpen ? "▾" : "▸"), " ",
-                h("a", { className: "yti-video-link", href: "https://www.youtube.com/watch?v=" + d.p.id, target: "_blank", rel: "noopener" }, d.p.t)),
+            return [h("tr", { key: d.p.id, className: "yti-rs-rowx" },
+              h("td", null, h("a", { className: "yti-video-link", href: "https://www.youtube.com/watch?v=" + d.p.id, target: "_blank", rel: "noopener" }, d.p.t)),
               h("td", { className: "yti-muted yti-small" }, d.p.ch),
               h("td", { className: "yti-right yti-muted yti-small" }, d.p.sub == null ? "?" : formatNumber(d.p.sub)),
               h("td", { className: "yti-muted yti-small" }, d.p.n),
@@ -2797,8 +2861,9 @@
                   ? h("span", null, h("span", { className: "yti-sd-mo yti-sd-mo-" + (d.p.mo.dir || "none") }, d.p.mo.dir === "up" ? "↗" : d.p.mo.dir === "down" ? "↘" : d.p.mo.dir === "flat" ? "→" : "·"),
                       " " + formatNumber(Math.round(d.p.mo.vph)) + "/h")
                   : h("span", { className: "yti-muted" }, "—")),
-              h("td", { className: "yti-center yti-rs-tdcell", title: tdTitle, onClick: toggle }, h("span", { className: "yti-rs-tdglyph yti-rs-tdglyph-" + (d.p.td === 1 ? "on" : d.p.td === -1 ? "no" : "off") }, tdGlyph)),
+              h("td", { className: "yti-center", title: tdTitle }, h("span", { className: "yti-rs-tdglyph yti-rs-tdglyph-" + (d.p.td === 1 ? "on" : d.p.td === -1 ? "no" : "off") }, tdGlyph)),
               h("td", { className: "yti-small yti-muted" }, h(FlagChips, { flags: (d.p.s > 0 ? ["date≈"] : []).concat(d.p.f).concat(d.p.sub == null && !d.p.fol ? ["size?"] : []) }))),
+              h("tr", { key: d.p.id + ":bar", className: "yti-rs-rowx-bar" + (isOpen ? " yti-rs-rowx-bar-on" : "") }, h("td", { colSpan: 12 }, h(FocusRowBar, { id: d.p.id, td: d.p.td, open: isOpen, onToggle: toggle }))),
               isOpen ? h("tr", { key: d.p.id + ":td", className: "yti-rs-rowx-detail" }, h("td", { colSpan: 12 }, h(VideoTeardown, { id: d.p.id }))) : null];
           }))),
         q.focus.length > 60 ? h("div", { className: "yti-subtle", style: { marginTop: 6 } }, "Showing the first 60 of " + q.focus.length + " in the current sort order.") : null));
@@ -3230,7 +3295,9 @@
   // -------------------------------------------------------------------------
 
   function YouTubeInsightsPage() {
-    const [view, setView] = useState("research");
+    // ?tab=artifacts (from a Supply / Demand row's "Artifacts folder →") opens that sub-tab
+    const initialTab = (function () { try { const t = new URLSearchParams(window.location.search).get("tab"); return ["research", "trends", "insights", "artifacts"].indexOf(t) >= 0 ? t : "research"; } catch (e) { return "research"; } })();
+    const [view, setView] = useState(initialTab);
     return h("div", { className: "yti-root" },
       // same gutters as the page content (24px) and the Short Form top
       // margin (28px)

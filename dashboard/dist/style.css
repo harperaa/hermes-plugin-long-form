@@ -676,6 +676,16 @@
 .yti-rs-grid { stroke: color-mix(in srgb, currentColor 14%, transparent); stroke-width: 1; }
 .yti-rs-axis { stroke: color-mix(in srgb, currentColor 40%, transparent); stroke-width: 1; }
 .yti-rs-chart-tick { font-size: 10px; fill: var(--color-muted-foreground); }
+.yti-rs-rowx td { border-bottom: 0; }
+.yti-rs-rowx-bar td { padding: 0 10px 10px; }
+.yti-rs-rowx-bar-on td { border-bottom: 0; }
+.yti-rs-rowbar { display: flex; align-items: center; justify-content: space-between; gap: 8px 14px; flex-wrap: wrap; }
+.yti-rs-rowbar-actions { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.yti-rs-rowbar-msg { flex-basis: 100%; }
+.yti-rs-tdbtn { background: transparent; border: 1px solid var(--color-border); border-radius: 6px; color: inherit; font: inherit; font-size: 12.5px; padding: 3px 10px 3px 8px; cursor: pointer; display: inline-flex; align-items: center; }
+.yti-rs-tdbtn:hover, .yti-rs-tdbtn-on { border-color: var(--color-ring); }
+.yti-rs-chev { display: inline-block; width: 12px; color: var(--color-muted-foreground); }
+.yti-rs-rowx-detail td { padding: 0 10px 14px 10px; }
 .yti-rs-nactions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .yti-rs-nchip-more { color: var(--color-muted-foreground); border-style: dashed; cursor: help; }
 .yti-rs-nhead { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 14px; }

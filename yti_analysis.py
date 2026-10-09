@@ -206,6 +206,7 @@ def trigger_analysis(
     limit: Optional[int] = None,
     order_by: str = DEFAULT_ANALYSIS_ORDER_BY,
     workspace: Optional[Path] = None,
+    video_ids: Optional[list[str]] = None,
 ) -> dict[str, Any]:
     limit = int(limit) if isinstance(limit, (int, float)) and limit and limit > 0 \
         else DEFAULT_ANALYSIS_LIMIT
@@ -214,6 +215,10 @@ def trigger_analysis(
     workspace = workspace or yti_paths.workspace_dir()
 
     videos = yti_fetcher.trends_from_db(conn)
+    if video_ids:                                   # one or more specific videos, any order
+        wanted = set(video_ids)
+        videos = [v for v in videos if v.get("videoId") in wanted]
+        limit = max(limit, len(videos))
     if order_by == "oldest":
         videos.sort(key=lambda v: v.get("published") or "")
 

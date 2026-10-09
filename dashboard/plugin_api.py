@@ -502,8 +502,10 @@ import yti_rs_db  # noqa: E402
 import yti_rs_config  # noqa: E402
 import yti_rs_jobs  # noqa: E402
 import yti_rs_budget  # noqa: E402
+import yti_rs_clients  # noqa: E402
 import yti_rs_formats  # noqa: E402
 import yti_rs_report  # noqa: E402
+import yti_rs_bridge  # noqa: E402
 import yti_rs_profiles  # noqa: E402
 import yti_rs_crawl  # noqa: E402
 
@@ -633,6 +635,43 @@ def research_supply_demand(niche: str = "") -> dict[str, Any]:
         return yti_rs_report.supply_demand(conn, yti_rs_config.load_config(conn), niche=niche or None)
     finally:
         conn.close()
+
+
+class ArtifactBody(BaseModel):
+    video_id: str
+    action: str          # transcript | analysis | scripts
+
+
+@router.get("/research/artifacts-state")
+def research_artifacts_state(id: str) -> dict[str, Any]:
+    rconn = _rconn(); sconn = yti_store.connect()
+    try:
+        return yti_rs_bridge.state(rconn, sconn, id)
+    finally:
+        rconn.close(); sconn.close()
+
+
+@router.post("/research/artifacts")
+def research_artifacts(body: ArtifactBody) -> dict[str, Any]:
+    """Run one of the artifact workflows on a research video: transcript +
+    metadata into the workspace, the analysis task, or the ✨ scripts task."""
+    rconn = _rconn(); sconn = yti_store.connect()
+    try:
+        tapi = None
+        secrets = yti_rs_config.get_secrets()
+        if secrets.transcriptapi_key:
+            tapi = yti_rs_clients.TranscriptAPI(secrets.transcriptapi_key, conn=rconn)
+        fn = {"transcript": yti_rs_bridge.ensure_transcript, "analysis": yti_rs_bridge.run_analysis,
+              "scripts": yti_rs_bridge.run_scripts}.get(body.action)
+        if fn is None:
+            raise HTTPException(status_code=400, detail=f"unknown action {body.action}")
+        res = fn(rconn, sconn, body.video_id, tapi)
+        if res.get("error"):
+            raise HTTPException(status_code=400, detail=res["error"])
+        res["state"] = yti_rs_bridge.state(rconn, sconn, body.video_id)
+        return res
+    finally:
+        rconn.close(); sconn.close()
 
 
 @router.get("/research/video-teardown")
