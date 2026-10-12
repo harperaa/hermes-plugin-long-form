@@ -26,6 +26,22 @@ except ImportError:  # pragma: no cover
     from yti_rs_clients import ClientError, QuotaExhausted  # type: ignore
 
 MAX_VIDEOS = 300
+BASELINE_PER_CHANNEL = 10
+
+
+def baseline_ids(conn: sqlite3.Connection, todo: list[dict[str, Any]], *, per_channel: int = BASELINE_PER_CHANNEL) -> list[str]:
+    """For each watched channel, its newest long-form videos that still lack a
+    comment count: one exact read gives the channel's normal engagement, which
+    the paid-traffic test compares each hit against. Data API only (1 unit per
+    50); nothing is snapshotted for these."""
+    watched = {r["video_id"] for r in todo}
+    out: list[str] = []
+    for cid in sorted({r["channel_id"] for r in todo if r.get("channel_id")}):
+        rows = yti_rs_db.rows(conn, """
+            SELECT video_id FROM videos WHERE channel_id = ? AND comment_count IS NULL
+              AND (is_short IS NULL OR is_short = 0) ORDER BY published_at DESC LIMIT ?""", [cid, per_channel + len(watched)])
+        out.extend([r["video_id"] for r in rows if r["video_id"] not in watched][:per_channel])
+    return out
 
 
 def watchlist(conn: sqlite3.Connection, cfg: dict[str, Any], *, now: Optional[datetime] = None,
@@ -106,12 +122,20 @@ def run_pulse(conn: sqlite3.Connection, cfg: dict[str, Any], source, *, now: Opt
         log("pulse: nothing recent above half the hit multiple — nothing to watch")
         return summary
     ids = [r["video_id"] for r in todo]
+    base = baseline_ids(conn, todo)
+    summary["baseline_read"] = 0
     exact = {}
     try:
-        exact = _exact_from_data_api(source, ids)
+        exact = _exact_from_data_api(source, ids + base)
         summary["via"] = "youtube" if exact else None
     except QuotaExhausted as exc:
         log(f"pulse: {exc}")
+    for vid in base:
+        e = exact.get(vid)
+        if e and e["comments"] is not None:
+            yti_rs_db.upsert_video(conn, {"video_id": vid, "views": e["views"], "views_approx": 0, "precision_tier": 2,
+                                          "comment_count": e["comments"], **({"likes": e["likes"]} if e["likes"] is not None else {})})
+            summary["baseline_read"] += 1
     if not exact:
         exact = _exact_from_latest(source, todo, log)
         summary["via"] = "transcriptapi" if exact else None
@@ -131,7 +155,8 @@ def run_pulse(conn: sqlite3.Connection, cfg: dict[str, Any], source, *, now: Opt
             summary["rising" if e["views"] > prev else "falling"] += int(e["views"] != prev)
     conn.commit()
     yti_rs_db.set_meta(conn, "last_pulse", stamp)
-    log(f"pulse: {summary['updated']} of {len(todo)} watched videos re-read via {summary['via']}")
+    log(f"pulse: {summary['updated']} of {len(todo)} watched videos re-read via {summary['via']}; "
+        f"{summary['baseline_read']} channel-baseline videos given a comment count")
     return summary
 
 

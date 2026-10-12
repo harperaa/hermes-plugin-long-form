@@ -52,10 +52,16 @@ def test_pulse_watches_only_recent_high_demand_and_writes_timestamped_snapshots(
     now = datetime(2026, 10, 7, 12, tzinfo=timezone.utc)
     _seed(conn, now)
     assert [r["video_id"] for r in P.watchlist(conn, _cfg(), now=now)] == ["v1", "v2"]
-    yt = FakeYT({"v1": 5400, "v2": 1700})
+    yt = FakeYT({"v1": 5400, "v2": 1700, "v3": 1000, "v4": 1000})
     out = P.run_pulse(conn, _cfg(), FakeSource(yt), now=now)
     assert out["watched"] == 2 and out["updated"] == 2 and out["via"] == "youtube" and out["rising"] == 2
-    assert yt.calls == [["v1", "v2"]]                                                        # one videos.list, 1 unit
+    # one videos.list, 1 unit: the two watched videos plus the channel's other
+    # long-form videos that lack a comment count (the engagement baseline)
+    assert yt.calls == [["v1", "v2", "v3", "v4"]] and out["baseline_read"] == 2
+    for vid in ("v3", "v4"):
+        row = yti_rs_db.one(conn, "SELECT comment_count, views FROM videos WHERE video_id=?", (vid,))
+        assert row["comment_count"] == 2 and row["views"] == 1000                       # v3/v4 views unchanged (FakeYT has none)
+    assert yti_rs_db.rows(conn, "SELECT * FROM video_snapshots WHERE video_id IN ('v3','v4')") == []   # no trail for baseline reads
     snap = yti_rs_db.rows(conn, "SELECT * FROM video_snapshots WHERE video_id='v1'")
     assert len(snap) == 1 and snap[0]["captured_at"] == now.isoformat() and snap[0]["views"] == 5400 and snap[0]["likes"] == 10
     v1 = yti_rs_db.one(conn, "SELECT views, views_approx, precision_tier FROM videos WHERE video_id='v1'")
@@ -87,4 +93,33 @@ def test_supply_demand_carries_trail_and_momentum(tmp_home):
     assert len(p["h"]) == 2 and p["h"][0][0] < p["h"][1][0] < 2.0          # earlier ages, oldest first
     assert p["h"][0][1] == 3.0 and p["h"][1][1] == 4.2                      # raw_only score → plain multiples
     assert p["mo"]["dir"] == "up" and p["mo"]["vph"] == 300.0 and p["mo"]["n"] == 3
+    conn.close()
+
+
+def test_paid_flag_against_the_channels_own_engagement(tmp_home):
+    """A hit whose comment rate is far below its own channel's normal is
+    flagged paid? even when its raw views are nowhere near the niche's top."""
+    import yti_rs_outliers as O
+    assert O.channel_engagement_suspect(0.0001, 4.0, [0.003, 0.004, 0.0035], hit=3.0, ratio=0.25, min_n=3) is True
+    assert O.channel_engagement_suspect(0.002, 4.0, [0.003, 0.004, 0.0035], hit=3.0, ratio=0.25, min_n=3) is False   # engagement normal
+    assert O.channel_engagement_suspect(0.0001, 1.2, [0.003, 0.004, 0.0035], hit=3.0, ratio=0.25, min_n=3) is False  # not a hit
+    assert O.channel_engagement_suspect(0.0001, 4.0, [0.003, 0.004], hit=3.0, ratio=0.25, min_n=3) is False          # too few samples
+    assert O.channel_engagement_suspect(None, 4.0, [0.003, 0.004, 0.0035], hit=3.0, ratio=0.25, min_n=3) is False    # no comment count
+    conn = yti_rs_db.connect()
+    now = datetime(2026, 10, 7, 12, tzinfo=timezone.utc)
+    cfg = _cfg(); cfg["niches"] = [{"name": "n1", "is_target": True, "seed_terms": ["x"], "signal_half_life_days": 365}]
+    yti_rs_db.upsert_channel(conn, {"channel_id": "UC1", "handle": "@c1", "niche": "n1", "subscriber_count": 30000})
+    yti_rs_db.upsert_channel(conn, {"channel_id": "UCbig", "handle": "@big", "niche": "n1", "subscriber_count": 900000})
+    for i in range(8):            # the channel's normal: ~1,000 views, 1 comment per 100 views
+        yti_rs_db.upsert_video(conn, {"video_id": f"n{i}", "channel_id": "UC1", "title": f"n{i}", "niche": "n1", "duration_seconds": 600,
+                                      "published_at": (now - timedelta(days=60 + i)).isoformat(), "views": 1000, "comment_count": 10, "is_short": 0})
+    yti_rs_db.upsert_video(conn, {"video_id": "hit", "channel_id": "UC1", "title": "hit", "niche": "n1", "duration_seconds": 600,
+                                  "published_at": (now - timedelta(days=40)).isoformat(), "views": 40000, "comment_count": 6, "is_short": 0})
+    for i in range(8):            # big channel: millions of views keep "hit" far from the niche's top 10% by raw views
+        yti_rs_db.upsert_video(conn, {"video_id": f"b{i}", "channel_id": "UCbig", "title": f"b{i}", "niche": "n1", "duration_seconds": 600,
+                                      "published_at": (now - timedelta(days=60 + i)).isoformat(), "views": 2_000_000, "comment_count": 4000, "is_short": 0})
+    O.score_all(conn, cfg, now=now)
+    row = yti_rs_db.one(conn, "SELECT class, organic_flag FROM scores WHERE video_id='hit'")
+    assert row["class"] in ("hit", "strong_hit") and row["organic_flag"] == "suspect_paid"
+    assert yti_rs_db.one(conn, "SELECT organic_flag FROM scores WHERE video_id='n0'")["organic_flag"] != "suspect_paid"
     conn.close()

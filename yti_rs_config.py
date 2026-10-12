@@ -59,6 +59,13 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "underperformer_multiple": 0.4,
         "breakout_watch_max_age_days": 14,
         "breakout_watch_comment_pct": 80,
+        # paid-traffic test against the channel's OWN engagement: a hit whose
+        # comment rate is below this share of the channel's median comment
+        # rate (over at least paid_min_channel_samples other long-form videos
+        # with a comment count) is flagged "paid?" — views that rose while
+        # comments stayed at the channel's usual count
+        "paid_engagement_ratio": 0.25,
+        "paid_min_channel_samples": 3,
         "exclude_suspect_paid_from_formats": True,
     },
     # Tier 3 (transcripts, comments) is spent on the focus quadrant of the

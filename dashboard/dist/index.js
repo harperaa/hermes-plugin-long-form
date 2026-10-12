@@ -1728,12 +1728,12 @@
     "flag:date≈": "date≈ — the publish date is approximate. It came from relative text such as '2 months ago' (meaning two to three months), or was estimated from how often the channel uploads.\nExample: seen as '2 months ago' on Oct 6 → published some time between early July and early August.",
     "flag:raw": "raw — the publish date is too vague (coarser than a week) to project views by age, so this video is judged on its raw multiple only.\nExample: a video dated only '1 year ago' is scored on × raw.",
     "flag:exact": "exact — views, likes, comments, duration and publish time are exact figures fetched from Apify (precision tier 2), not rounded search-result text.",
-    "flag:⚠ paid?": "⚠ paid? — suspected paid traffic. Views are in the top 10% of the niche while the comment rate is in the bottom 10%, the usual signature of ad-driven views.\nExample: 2,000,000 views with 40 comments.\nSuch videos are left out of format statistics, because an ad budget says nothing about the title or format.",
+    "flag:⚠ paid?": "⚠ paid? — suspected paid traffic. Either the video is a hit (at or above the hit multiple) while its comment rate is below a quarter of its own channel's median comment rate (Setup → Advanced: scoring.paid_engagement_ratio, over at least paid_min_channel_samples other videos) — views went up, comments stayed where the channel's audience normally puts them — or its views are in the top 10% of the niche while its comment rate is in the bottom 10%. The pulse reads comment counts for each watched channel's recent videos so the comparison is possible.\nExample: 40,000 views with 6 comments on a channel whose videos usually draw 1 comment per 300 views.\nSuch videos are left out of format statistics, because an ad budget says nothing about the title or format.",
     "flag:🚀 breakout": "🚀 breakout — breakout watch. The video is 14 days old or younger and still below its channel's normal (under 1×), but its positive-comment rate is in the top 20% of the niche. Videos like this often take off one to two weeks later.\nExample: a 5-day-old video at 0.6× whose comments are full of 'this is going to blow up'.",
     "flag:fade": "fade — fade watch. The video is 14 days old or younger with views in the top 20% of the niche but a comment rate in the bottom 20%. Lots of views that nobody talks about tend to tail off quickly.",
     "flag:projected": "projected — the video is younger than 28 days, so its multiple uses views projected forward to day 28 rather than today's count.\nExample: 11,000 views on day 7 is treated as 20,000 by day 28.",
     teardown: "Teardown — what Tier 3 read about this video: its transcript (how it opens, how it is structured, where the proof and the call to action land) and its comments (how many, how positive). Every focus-quadrant video is read automatically after each pulse and crawl; ✓ read, ○ not yet, ✕ no captions. Expand the row to see the read-out.\nExample: ✓ with 'listicle · 6 points · proof in the opening' means the transcript was analysed and the video delivers evidence inside its first 90 seconds.",
-    "flag:paid?": "paid? — suspected paid traffic: views in the top 10% of the niche with a comment rate in the bottom 10%.\nExample: 2,000,000 views with 40 comments.",
+    "flag:paid?": "paid? — suspected paid traffic: a hit whose comment rate is below a quarter of its own channel's normal, or views in the top 10% of the niche with a comment rate in the bottom 10%. On the Supply / Demand chart such a focus dot is drawn yellow.\nExample: 40,000 views with 6 comments on a channel that usually draws 1 comment per 300 views.",
     // ---- classes
     "class:strong_hit": "strong_hit — the video reached 5× its channel's normal views or more (using × proj).\nExample: 22,000 views on a channel whose median is 4,000 = 5.5×.",
     "class:hit": "hit — the video reached at least 3× but less than 5× its channel's normal views.\nExample: 14,000 views on a channel whose median is 4,000 = 3.5×.",
@@ -2180,7 +2180,7 @@
           [["crawl", "max_depth"], ["crawl", "search_pages_per_term"], ["crawl", "channel_pages_per_channel"], ["crawl", "outliers_to_expand_per_node"],
            ["crawl", "prune_after_barren_nodes"], ["crawl", "recommendations_per_video"], ["crawl", "min_subscribers"], ["crawl", "max_subscribers"], ["crawl", "channel_relevance_min"], ["crawl", "search_refresh_days"], ["crawl", "channel_refresh_days"],
            ["scoring", "baseline_window"], ["scoring", "min_baseline_videos"], ["scoring", "hit_multiple"], ["scoring", "strong_multiple"],
-           ["scoring", "underperformer_multiple"], ["scoring", "breakout_watch_max_age_days"], ["scoring", "breakout_watch_comment_pct"],
+           ["scoring", "underperformer_multiple"], ["scoring", "breakout_watch_max_age_days"], ["scoring", "breakout_watch_comment_pct"], ["scoring", "paid_engagement_ratio"], ["scoring", "paid_min_channel_samples"],
            ["formats", "min_support"], ["formats", "min_distinct_channels"], ["formats", "min_distinct_niches"], ["formats", "gap_min_wilson_lb"],
            ["formats", "min_actionable_n"], ["teardown", "focus_days"], ["teardown", "focus_multiple"], ["budget", "transcriptapi_credits"], ["budget", "crawl_default_credits"], ["budget", "apify_max_results"],
            ["apify", "max_comments_per_video"]].map(function (pair) {
@@ -2468,8 +2468,8 @@
         dark = lum < 0.5;
       }
     } catch (e) { /* keep dark */ }
-    return dark ? { focus: "#3987e5", context: "#6f7782", surface: "var(--background-base, #0b0f14)" }
-                : { focus: "#2a78d6", context: "#8d939c", surface: "var(--background-base, #fcfcfb)" };
+    return dark ? { focus: "#3987e5", paid: "#e8b923", context: "#6f7782", surface: "var(--background-base, #0b0f14)" }
+                : { focus: "#2a78d6", paid: "#b8860b", context: "#8d939c", surface: "var(--background-base, #fcfcfb)" };
   }
 
   // One focus-quadrant video's Tier 3 read-out, under its table row
@@ -2673,8 +2673,10 @@
             })));
         }
         if (d.focus) {
+          // a focus video flagged paid? is drawn yellow: it is in the quadrant, but its views are suspect
+          const col = (d.p.f || []).indexOf("paid?") >= 0 ? pal.paid : pal.focus;
           foc.push(h("circle", { key: d.p.id, cx: d.x.toFixed(1), cy: d.y.toFixed(1), r: 4.5,
-            fill: approx ? pal.surface : pal.focus, stroke: approx ? pal.focus : pal.surface,
+            fill: approx ? pal.surface : col, stroke: approx ? col : pal.surface,
             strokeWidth: approx ? 2 : 1.5 }));
         } else {
           ctx.push(h("circle", { key: d.p.id, cx: d.x.toFixed(1), cy: d.y.toFixed(1), r: 2.6,
@@ -2758,6 +2760,8 @@
           h("h3", { className: "yti-rs-h3" }, "Demand against supply"),
           h("div", { className: "yti-sd-legend" },
             h("span", null, h("i", { className: "yti-sd-key", style: { background: pal.focus } }), "Recent + high demand (" + q.focus.length + ")"),
+            h("span", { title: "In the quadrant, but flagged paid?: a hit whose comment rate is far below its own channel's normal, or top-10% views in the niche with bottom-10% comments" },
+              h("i", { className: "yti-sd-key", style: { background: pal.paid } }), "flagged paid? (" + q.focus.filter(function (d) { return (d.p.f || []).indexOf("paid?") >= 0; }).length + ")"),
             trails ? h("span", null, h("i", { className: "yti-sd-key yti-sd-key-trail", style: { borderColor: pal.context } }), "earlier readings (trend line)") : null,
             h("span", null, h("i", { className: "yti-sd-key", style: { background: pal.context } }), "Everything else (" + (m.total - q.focus.length) + ")"),
             h("span", null, h("i", { className: "yti-sd-key yti-sd-key-hollow", style: { borderColor: pal.context } }), "date approximate"))),

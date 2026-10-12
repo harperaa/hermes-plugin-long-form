@@ -187,6 +187,20 @@ def organic_flag(comment_pct: Optional[float], views_pct: Optional[float]) -> st
     return "unknown"
 
 
+def channel_engagement_suspect(comment_rate: Optional[float], pmult: Optional[float], others: list[float], *,
+                               hit: float, ratio: float, min_n: int) -> bool:
+    """Paid-looking views measured against the channel itself: the video is a
+    hit (projected multiple at or above ``hit``) while its comment rate is
+    below ``ratio`` of the channel's median comment rate across its other
+    videos. Needs ``min_n`` other videos with a comment count — bought views
+    raise the view count and leave the comment count where the channel's
+    audience normally puts it."""
+    if comment_rate is None or pmult is None or pmult < hit or ratio <= 0 or len(others) < min_n:
+        return False
+    med = statistics.median(others)
+    return med > 0 and comment_rate < ratio * med
+
+
 def trajectory_suspect(snapshots: list[tuple[str, int]]) -> Optional[bool]:
     """Spike-and-cliff test where history exists: True when >70% of the
     accrued views over the window landed in the first interval and the last
@@ -363,6 +377,14 @@ def score_all(conn: sqlite3.Connection, cfg: dict[str, Any], *, now: Optional[da
             cohorts.setdefault((c["video"]["niche"], c["bucket"]), []).append(c)
     bw_age = float(s.get("breakout_watch_max_age_days", 14))
     bw_pct = float(s.get("breakout_watch_comment_pct", 80))
+    paid_ratio = float(s.get("paid_engagement_ratio", 0.25) or 0)
+    paid_min_n = int(s.get("paid_min_channel_samples", 3) or 3)
+    hit_mult = float(s.get("hit_multiple", 3))
+    # the channel's own comment rates per bucket, for the engagement test
+    by_channel: dict[tuple[str, str], list[tuple[str, float]]] = {}
+    for c in computed:
+        if c.get("comment_rate") is not None:
+            by_channel.setdefault((c["video"]["channel_id"], c["bucket"]), []).append((c["video"]["video_id"], c["comment_rate"]))
     for (niche, _bucket), group in cohorts.items():
         def dist(key: str) -> list[float]:
             return [g[key] for g in group if g.get(key) is not None]
@@ -378,6 +400,11 @@ def score_all(conn: sqlite3.Connection, cfg: dict[str, Any], *, now: Optional[da
             wsum = sum(w for w, p in parts if p is not None)
             c["vs_pct"] = (sum(w * p for w, p in parts if p is not None) / wsum) if wsum else None
             flag = organic_flag(p_comment, p_views)
+            if flag != "suspect_paid" and channel_engagement_suspect(
+                    c.get("comment_rate"), c.get("pmult"),
+                    [cr for vid, cr in by_channel.get((c["video"]["channel_id"], c["bucket"]), []) if vid != c["video"]["video_id"]],
+                    hit=hit_mult, ratio=paid_ratio, min_n=paid_min_n):
+                flag = "suspect_paid"
             if flag != "suspect_paid":
                 snaps = yti_rs_db.rows(conn, "SELECT captured_at, views FROM video_snapshots WHERE video_id = ? ORDER BY captured_at",
                                        (c["video"]["video_id"],))
