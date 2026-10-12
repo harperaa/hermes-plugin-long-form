@@ -607,15 +607,17 @@ def research_job() -> dict[str, Any]:
     return yti_rs_jobs.state()
 
 
-def _size_band(conn, size: str) -> tuple[Optional[int], Optional[int]]:
-    """'band' = the subscriber band from Setup (default up to 100k); 'any' = no size filter;
-    a number = that many subscribers at most."""
+def _size_band(conn, size: str) -> tuple[Optional[int], Optional[int], bool]:
+    """'band' = the subscriber band from Setup (default up to 100k); 'band_followed' = the
+    same band but channels you follow always pass; 'any' = no size filter; a number = that
+    many subscribers at most. Returns (min, max, include_followed)."""
     crawl = yti_rs_config.load_config(conn).get("crawl", {})
     if size == "any":
-        return None, None
+        return None, None, True
     if size.isdigit():
-        return None, int(size)
-    return int(crawl.get("min_subscribers", 0) or 0) or None, int(crawl.get("max_subscribers", 0) or 0) or None
+        return None, int(size), False
+    return (int(crawl.get("min_subscribers", 0) or 0) or None, int(crawl.get("max_subscribers", 0) or 0) or None,
+            size == "band_followed")
 
 
 @router.get("/research/outliers")
@@ -625,10 +627,10 @@ def research_outliers(niche: str = "", classes: str = "strong_hit,hit", limit: i
     conn = _rconn()
     try:
         cls = [c for c in classes.split(",") if c] or None
-        lo, hi = _size_band(conn, size)
+        lo, hi, fol = _size_band(conn, size)
         return yti_rs_report.outlier_register(conn, niche=niche or None, classes=cls,
                                               limit=max(1, min(limit, 500)), offset=max(0, offset), sort=sort,
-                                              order=order, min_subs=lo, max_subs=hi)
+                                              order=order, min_subs=lo, max_subs=hi, include_followed=fol)
     finally:
         conn.close()
 

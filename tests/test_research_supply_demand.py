@@ -54,3 +54,27 @@ def test_research_brief_gates_on_populated_research(tmp_home):
     out = yti_rs_report.research_brief(conn, cfg)
     assert out["ready"] is False and "needs 100" in out["reason"] and out["target_niche"] == "n1"
     conn.close()
+
+
+def test_brief_focus_quadrant_applies_the_band_to_followed_channels(tmp_home):
+    """A 1M-subscriber channel you follow is not a comparable: its outliers
+    stay out of the brief's focus quadrant even though the channel is tracked."""
+    conn = yti_rs_db.connect()
+    cfg = dict(DEFAULT_CONFIG); cfg["niches"] = [{"name": "n1", "is_target": True, "seed_terms": ["a"], "signal_half_life_days": 365}]
+    yti_rs_db.upsert_channel(conn, {"channel_id": "UC1", "handle": "@small", "niche": "n1", "subscriber_count": 20000})
+    yti_rs_db.upsert_channel(conn, {"channel_id": "UCbig", "handle": "@big", "niche": "n1", "subscriber_count": 1_050_000})
+    conn.execute("UPDATE channels SET is_tracked = 1 WHERE channel_id = 'UCbig'")
+    for i in range(100):
+        _add(conn, f"v{i}", published="2026-09-01T00:00:00+00:00", multiple=1.0, cls="normal")
+    for i in range(5):
+        _add(conn, f"h{i}", published="2026-10-04T00:00:00+00:00", multiple=5.0)
+    yti_rs_db.upsert_video(conn, {"video_id": "bigv", "channel_id": "UCbig", "title": "big hit", "niche": "n1",
+                                  "published_at": "2026-10-04T00:00:00+00:00", "views": 900000, "is_short": 0, "raw_json": {}})
+    conn.execute("INSERT INTO scores(video_id, computed_at, format_bucket, projected_multiple, raw_only, organic_flag, class)"
+                 " VALUES ('bigv','x','long',9.0,0,'ok','strong_hit')")
+    conn.commit()
+    out = R.research_brief(conn, cfg, now=NOW)
+    assert out["ready"] is True
+    titles = {f["title"] for f in out["focus_quadrant"]}
+    assert "big hit" not in titles and "title h0" in titles
+    conn.close()

@@ -119,19 +119,21 @@ def outlier_register(conn: sqlite3.Connection, *, niche: Optional[str] = None,
                      classes: Optional[list[str]] = None, limit: int = 200, offset: int = 0,
                      sort: str = "projected_multiple", bucket: str = "long",
                      order: str = "desc", min_subs: Optional[int] = None,
-                     max_subs: Optional[int] = None) -> dict[str, Any]:
+                     max_subs: Optional[int] = None, include_followed: bool = False) -> dict[str, Any]:
     """Scored videos in ONE format bucket (default long-form). Shorts are
     scored against their own baselines and kept in the DB, but never mixed
     into a long-form register."""
-    # in-niche only; channel size is a filter (followed/tracked channels and
-    # channels whose size is not known yet are never filtered out by it)
+    # in-niche only; channel size is a filter. A channel whose size is not
+    # known yet is never filtered out by it; followed/tracked channels pass
+    # only when include_followed is set (the dashboard's "+ followed" choice)
     where, params = ["s.format_bucket = ?", "s.in_niche = 1"], [bucket]
     if niche:
         where.append("v.niche = ?"); params.append(niche)
+    fol = "c.is_tracked = 1 OR " if include_followed else ""
     if max_subs is not None:
-        where.append("(c.subscriber_count IS NULL OR c.is_tracked = 1 OR c.subscriber_count <= ?)"); params.append(int(max_subs))
+        where.append(f"(c.subscriber_count IS NULL OR {fol}c.subscriber_count <= ?)"); params.append(int(max_subs))
     if min_subs is not None:
-        where.append("(c.subscriber_count IS NULL OR c.is_tracked = 1 OR c.subscriber_count >= ?)"); params.append(int(min_subs))
+        where.append(f"(c.subscriber_count IS NULL OR {fol}c.subscriber_count >= ?)"); params.append(int(min_subs))
     base_where, base_params = list(where), list(params)
     if classes:
         where.append("s.class IN (" + ",".join("?" for _ in classes) + ")"); params.extend(classes)
@@ -482,7 +484,9 @@ def research_brief(conn: sqlite3.Connection, cfg: dict[str, Any], *, now: Option
     for p in sd["points"]:
         if p["a"] > days or p["m"] < mult:
             continue
-        if p["sub"] is not None and not p["fol"] and ((hi and p["sub"] > hi) or p["sub"] < lo):
+        # the band applies to followed channels as well: a 1M-subscriber
+        # channel you follow is not a comparable the pipeline should copy
+        if p["sub"] is not None and ((hi and p["sub"] > hi) or p["sub"] < lo):
             continue
         half = sd["half_life"].get(p["n"], sd["default_half_life"])
         mo = p.get("mo") or {}

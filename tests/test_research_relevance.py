@@ -93,7 +93,8 @@ def test_channel_size_is_a_filter_that_never_hides_unknown_or_followed(tmp_home)
     assert hits() == ["UCbig8", "UCunk8", "s8"]                                   # no size filter
     assert hits(max_subs=100000, min_subs=1000) == ["UCunk8", "s8"]               # big channel filtered, unknown kept
     conn.execute("UPDATE channels SET is_tracked = 1 WHERE channel_id = 'UCbig'"); conn.commit()
-    assert hits(max_subs=100000) == ["UCbig8", "UCunk8", "s8"]                    # followed/tracked always shown
+    assert hits(max_subs=100000) == ["UCunk8", "s8"]                              # the band applies to followed channels too
+    assert hits(max_subs=100000, include_followed=True) == ["UCbig8", "UCunk8", "s8"]   # unless the "+ followed" choice asks for them
     conn.close()
 
 

@@ -1719,7 +1719,7 @@
     vs: "VS % — viewer-satisfaction percentile, from 0 to 100, compared with other long-form videos in the same niche. It blends three signals, each turned into a percentile rank: like rate (25%), positive-comment rate (55%) and replies per comment (20%).\nExample: 84 means this video's engagement is more positive than 84% of long-form videos in its niche.\n'—' means likes and comments have not been collected yet — run Enrich and Comments on the Run panel.",
     flags: "Flags — short notes about how trustworthy each number is and what to watch. Hover any flag in a row for its exact meaning.",
     subs: "Subs — the channel's subscriber count. A leading '~' means it is rounded (read from text such as '712K subscribers'); no mark means the exact figure from Apify. '?' means it has not been looked up yet — run Channel sizes on the Run panel.\nExample: ~61.2K = about 61,200 subscribers.\nThe default view only shows channels inside the size band from Setup (1,000 to 100,000 by default) so the lessons come from channels comparable to yours.",
-    sizefilter: "Channel size — which channels' videos to show, by subscriber count. 'Comparable' uses the band from Setup → Advanced (crawl.min_subscribers to crawl.max_subscribers, 1,000 to 100,000 by default). Channels you follow are always shown, and so are channels whose size is not known yet.\nExample: choose 'Any size' to bring back a 2.6M-subscriber security channel such as Computerphile.",
+    sizefilter: "Channel size — which channels' videos to show, by subscriber count. 'Comparable' uses the band from Setup → Advanced (crawl.min_subscribers to crawl.max_subscribers, 1,000 to 100,000 by default) and applies to every channel, followed or not. '+ followed' keeps the band but always shows the channels you follow on the Trends tab, whatever their size. Channels whose size is not known yet are always shown.\nExample: a 1M-subscriber channel you follow is hidden under 'Comparable' and shown under '+ followed' or 'Any size'.",
     scope: "In-niche — a video counts as part of a niche when its own title mentions one of the niche's terms, or its channel is on-topic (at least 20% of the channel's long-form titles mention those terms), or you follow the channel. Videos on a channel judged off-topic are tagged 'out of niche' and hidden here; they are never deleted.\nExample: a news network that published one video about AI agents keeps that one video in 'ai-security'; its 80 other news clips are tagged out.",
     topicterms: "Topic terms — extra subject words used only to decide what belongs to the niche. Add the vocabulary your niche's channels actually use in titles.\nExample: for a security niche: hacking, exploit, malware, vulnerability. A general security channel then stays in the niche even though it rarely uses your exact seed phrases.",
     // ---- flags
@@ -2357,6 +2357,7 @@
           ((ov && ov.niches) || []).concat(["followed"]).map(function (n) { return h("option", { key: n, value: n }, n); })),
         h(Tip, { k: "sizefilter", plain: true }, h("select", { className: "yti-select", value: size, onChange: function (e) { setSize(e.target.value); } },
           h("option", { value: "band" }, "Comparable channels (" + ((ov && ov.config && ov.config.crawl) ? formatNumber(ov.config.crawl.min_subscribers) + "–" + formatNumber(ov.config.crawl.max_subscribers) : "Setup band") + " subs)"),
+          h("option", { value: "band_followed" }, "Comparable + followed channels"),
           h("option", { value: "1000000" }, "Up to 1M subs"),
           h("option", { value: "any" }, "Any size"))),
         ["strong_hit", "hit", "normal", "under", "immature"].map(function (c) {
@@ -2607,10 +2608,11 @@
       let maxAge = 0;
       (data.points || []).forEach(function (p) {
         if (niche && p.n !== niche) return;
-        // channel size: followed channels and channels of unknown size always pass
-        if (size !== "any" && p.sub != null && !p.fol) {
-          const hi = size === "band" ? (data.max_subs || 0) : Number(size);
-          const lo = size === "band" ? (data.min_subs || 0) : 0;
+        // channel size: channels of unknown size always pass; followed channels only under "+ followed"
+        if (size !== "any" && p.sub != null && !(size === "band_followed" && p.fol)) {
+          const band = size === "band" || size === "band_followed";
+          const hi = band ? (data.max_subs || 0) : Number(size);
+          const lo = band ? (data.min_subs || 0) : 0;
           if ((hi && p.sub > hi) || p.sub < lo) return;
         }
         const age = p.a + (p.s ? sdHash01(p.id) * p.s : 0);     // somewhere inside its known range
@@ -2739,6 +2741,7 @@
           (data.niches || []).map(function (n) { return h("option", { key: n, value: n }, n); })),
         h(Tip, { k: "sizefilter", plain: true }, h("select", { className: "yti-select", value: size, onChange: function (e) { setSize(e.target.value); setHover(null); } },
           h("option", { value: "band" }, "Comparable channels (" + formatNumber(data.min_subs || 0) + "–" + formatNumber(data.max_subs || 0) + " subs)"),
+          h("option", { value: "band_followed" }, "Comparable + followed channels"),
           h("option", { value: "1000000" }, "Up to 1M subs"),
           h("option", { value: "any" }, "Any size"))),
         h("select", { className: "yti-select", value: recent, title: "What counts as recent (low supply)",
