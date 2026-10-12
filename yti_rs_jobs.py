@@ -185,7 +185,7 @@ def job_comments(conn, cfg, params, log_fn) -> dict[str, Any]:
 
 def job_pulse(conn, cfg, params, log_fn) -> dict[str, Any]:
     """Free re-read of exact views for recent high-demand videos, then a
-    rescore so the Supply / Demand view moves. Meant to run every 6-8 hours."""
+    rescore so the Supply / Demand view moves. Meant to run twice a day."""
     budget = yti_rs_budget.Budget(conn, run_id="pulse")
     res = yti_rs_pulse.run_pulse(conn, cfg, _tapi(budget, log_fn), log=log_fn)
     if res.get("updated"):

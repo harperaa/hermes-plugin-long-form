@@ -1832,7 +1832,7 @@
     wilsonnote: "Wilson 95% lower bound — a cautious estimate of a format's true hit rate that shrinks when the sample is small.\nExample: 2 hits of 2 → 0.34; 40 hits of 60 → 0.54. 'n' is the number of scored videos using the format.",
     // ---- trends table
     vph: "VPH — views per hour: total views divided by the hours since the video was published. It shows how fast a video is collecting views right now relative to its age.\nExample: 96,000 views 24 hours after publishing = 4,000 VPH.",
-    momentum: "Momentum — how fast a focus video is gaining views right now and whether that pace is building or fading. The pulse re-reads exact views every 6 hours (plus the daily snapshot); the latest interval's views per hour is compared with the interval before: ↗ more than 10% faster (building), ↘ more than 10% slower (fading), → within 10% (steady). On the chart the grey dots and line behind a blue dot are those earlier readings.\nExample: ↗ 1.2K/h means the video gained about 1,200 views an hour over the last reading and is accelerating; ↘ 300/h means it is slowing down.",
+    momentum: "Momentum — how fast a focus video is gaining views right now and whether that pace is building or fading. The pulse re-reads exact views every 12 hours (plus the daily snapshot); the latest interval's views per hour is compared with the interval before: ↗ more than 10% faster (building), ↘ more than 10% slower (fading), → within 10% (steady). On the chart the grey dots and line behind a blue dot are those earlier readings.\nExample: ↗ 1.2K/h means the video gained about 1,200 views an hour over the last reading and is accelerating; ↘ 300/h means it is slowing down.",
     trend: "Trend — the direction of the view curve across the saved snapshots: ↗ accelerating (gaining views faster than before), → flat, ↘ decelerating (slowing down). The small line is the view count over time and 'pts' is how many snapshots it is drawn from.",
     tstatus: "Status — how far the video is through the pipeline: discovered (seen, no transcript), transcribed (transcript saved), analyzing (insight extraction queued or running), analyzed (insights saved).",
     duration: "Duration — video length as minutes:seconds, taken from its transcript. '—' means no transcript yet.",
@@ -2481,7 +2481,7 @@
     if (err) return h("div", { className: "yti-notice yti-notice-error" }, err);
     if (!d) return h("div", { className: "yti-muted yti-small" }, "Loading…");
     if (d.status === "no_captions") return h("div", { className: "yti-rs-vtd" }, h("span", { className: "yti-rs-tag yti-rs-tag-dim" }, "No captions on this video — nothing to read"));
-    if (d.status !== "read") return h("div", { className: "yti-rs-vtd" }, h("span", { className: "yti-rs-tag yti-rs-tag-dim" }, "Not read yet — the next pulse (every 6 hours) tears it down"));
+    if (d.status !== "read") return h("div", { className: "yti-rs-vtd" }, h("span", { className: "yti-rs-tag yti-rs-tag-dim" }, "Not read yet — the next pulse (every 12 hours) tears it down"));
     const pk = d.packaging || {}, r = d.response || {}, cm = d.comments, tr = d.transcript || {};
     const pct = function (x) { return x == null ? "—" : Math.round(x * 100) + "%"; };
     return h("div", { className: "yti-rs-vtd" },
@@ -2747,7 +2747,7 @@
         h("select", { className: "yti-select", value: thr, title: "What counts as high demand",
             onChange: function (e) { setThreshold(Number(e.target.value)); setHover(null); } },
           SD_THRESHOLDS.map(function (t) { return h("option", { key: t, value: t }, "High demand = " + t + "× normal or more"); })),
-        h("label", { className: "yti-sd-toggle", title: "Draw each focus video's earlier readings as grey dots joined to its current blue dot — the path it took to get here. Readings come from the pulse (every 6 hours) and the daily snapshot." },
+        h("label", { className: "yti-sd-toggle", title: "Draw each focus video's earlier readings as grey dots joined to its current blue dot — the path it took to get here. Readings come from the pulse (every 12 hours) and the daily snapshot." },
           h("input", { type: "checkbox", checked: trails, onChange: function (e) { setTrails(e.target.checked); } }), " Trend lines")),
 
       h("div", { className: "yti-card yti-sd-card" },
@@ -2856,7 +2856,7 @@
               h("td", { className: "yti-right yti-muted" }, Math.round(d.fresh * 100) + "%"),
               h("td", { className: "yti-right yti-strong" }, fmtMult(d.adj)),
               h("td", { className: "yti-right" }, formatNumber(d.p.v)),
-              h("td", { className: "yti-right yti-small", title: d.p.mo ? momentumText(d.p.mo) : "No readings yet — the pulse (every 6 hours) and the daily snapshot build the trajectory" },
+              h("td", { className: "yti-right yti-small", title: d.p.mo ? momentumText(d.p.mo) : "No readings yet — the pulse (every 12 hours) and the daily snapshot build the trajectory" },
                 d.p.mo && d.p.mo.vph != null
                   ? h("span", null, h("span", { className: "yti-sd-mo yti-sd-mo-" + (d.p.mo.dir || "none") }, d.p.mo.dir === "up" ? "↗" : d.p.mo.dir === "down" ? "↘" : d.p.mo.dir === "flat" ? "→" : "·"),
                       " " + formatNumber(Math.round(d.p.mo.vph)) + "/h")

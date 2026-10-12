@@ -168,7 +168,7 @@ YT_RESEARCH = {
                            "aim at (focus-quadrant videos, strongest formats, gaps, how hits open) with "
                            "ready:false when the Research tab is not populated yet; 'snapshot' is the "
                            "free daily history job; 'pulse' re-reads exact views for recent high-demand "
-                           "videos (free; every 6-8 hours); 'pipeline' runs the whole batch; 'gaps' "
+                           "videos (free; twice a day); 'pipeline' runs the whole batch; 'gaps' "
                            "returns the D4 cross-niche format gap report.",
         },
         "params": {

@@ -86,12 +86,13 @@ CRAWL_PROMPT = (
     "an error, that line must start with ERROR and quote it."
 )
 
-# Fourth routine: the pulse. Exact views for recent high-demand videos every
-# six hours, so the Supply / Demand view carries a trajectory per outlier and
+# Fourth routine: the pulse. Exact views for recent high-demand videos twice a
+# day, so the Supply / Demand view carries a trajectory per outlier and
 # can say whether its momentum is building or fading. Free (1 Data API unit
 # per 50 videos, or TranscriptAPI's free channel/latest).
 PULSE_NAME = "youtube-research-pulse"
-PULSE_SCHEDULE = "15 */6 * * *"
+PULSE_SCHEDULE_V1 = "15 */6 * * *"   # until 2026-10-12: six-hourly
+PULSE_SCHEDULE = "15 */12 * * *"
 PULSE_PROMPT = (
     "Run the YouTube research pulse: call the yt_research tool with action "
     "'pulse' exactly once. It re-reads exact view counts for recent videos that "
