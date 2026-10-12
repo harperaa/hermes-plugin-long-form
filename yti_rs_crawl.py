@@ -135,7 +135,7 @@ class Crawler:
         the date it was done — paid work is not repeated inside the refresh
         window. Seed terms are free and never skipped."""
         if node.type == "search_term":
-            days = float(self.c.get("search_refresh_days", 1) or 0)
+            days = float(self.c.get("search_refresh_days", 0.5) or 0)
         else:
             days = float(self.c.get("channel_refresh_days", self.c.get("refresh_after_days", 14)) or 0)
         if node.type == "seed_term" or days <= 0:
@@ -270,7 +270,7 @@ class Crawler:
                 if fresh:
                     self._set_status(node.id, "skipped")
                     self.stats["skipped_fresh"] += 1
-                    window = self.c.get("search_refresh_days", 1) if node.type == "search_term" else self.c.get("channel_refresh_days", 14)
+                    window = self.c.get("search_refresh_days", 0.5) if node.type == "search_term" else self.c.get("channel_refresh_days", 14)
                     self.log(f"[{node.depth}] {node.type} {node.key!r} skipped — expanded {fresh[:10]}, "
                              f"inside the {window}-day refresh window")
                     continue

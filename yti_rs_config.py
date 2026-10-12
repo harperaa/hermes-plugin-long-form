@@ -42,11 +42,11 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "recommendations_per_video": 3,
         "include_followed_channels": True,
         # pay for a node once. Searches are the only way new videos on
-        # channels we do not follow can appear, so they re-run daily (page 1
-        # only after the first time); a channel or related-title search is
+        # channels we do not follow can appear, so they re-run with each of
+        # the two daily crawls (page 1 only after the first time); a channel is
         # skipped for two weeks, and a channel whose catalogue is already in
         # the DB is only refreshed through the free channel/latest call
-        "search_refresh_days": 1,
+        "search_refresh_days": 0.5,
         "channel_refresh_days": 14,
         "repage_known_channels": False,
     },

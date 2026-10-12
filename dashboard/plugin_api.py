@@ -91,12 +91,17 @@ def _migrate_cron_prompt() -> None:
             stored = (job.get("prompt") or "").replace("youtube-insights", "long-form") if job else ""
             if job and stored in old_prompts + (new_prompt,) and (job.get("prompt") or "") != new_prompt:
                 cron_jobs.update_job(job["id"], {"prompt": new_prompt})
-        # the pulse moved from six-hourly to twice a day on 2026-10-12; a job
-        # still on the old default schedule follows (a mentee's own schedule
-        # is a different string and is left alone)
-        job = cron_jobs.resolve_job_ref(mod.PULSE_NAME)
-        if job and (job.get("schedule") or {}).get("expr") == mod.PULSE_SCHEDULE_V1:
-            cron_jobs.update_job(job["id"], {"schedule": mod.PULSE_SCHEDULE})
+        # 2026-10-12: the pulse moved from six-hourly to twice a day and the
+        # crawl from daily to twice a day; a job still on the old default
+        # schedule follows (a mentee's own schedule is a different string and
+        # is left alone)
+        for name, old_schedule, new_schedule in (
+            (mod.PULSE_NAME, mod.PULSE_SCHEDULE_V1, mod.PULSE_SCHEDULE),
+            (mod.CRAWL_NAME, mod.CRAWL_SCHEDULE_V1, mod.CRAWL_SCHEDULE),
+        ):
+            job = cron_jobs.resolve_job_ref(name)
+            if job and (job.get("schedule") or {}).get("expr") == old_schedule:
+                cron_jobs.update_job(job["id"], {"schedule": new_schedule})
     except Exception:
         pass
 

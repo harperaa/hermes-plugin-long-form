@@ -69,15 +69,17 @@ SNAPSHOT_PROMPT = (
     "quote it — never report a failed snapshot as fine."
 )
 
-# Fifth routine: the daily incremental crawl. Seed searches are the only way
+# Fifth routine: the incremental crawl, twice a day. Seed searches are the only way
 # new videos on channels we do not follow reach the Supply / Demand chart, so
-# they re-run every morning once Google's quota has reset (midnight Pacific).
+# they re-run at 04:00, once Google's quota has reset (midnight Pacific), and
+# again at 16:00 so an upload does not wait a whole day to reach the chart.
 # Known channels refresh through the free call; new channels are catalogued
 # once. About 5,000 free Data API units; TranscriptAPI only as the fallback.
 CRAWL_NAME = "youtube-research-crawl"
-CRAWL_SCHEDULE = "0 4 * * *"
+CRAWL_SCHEDULE_V1 = "0 4 * * *"       # until 2026-10-12: once a day
+CRAWL_SCHEDULE = "0 4,16 * * *"
 CRAWL_PROMPT = (
-    "Run the daily incremental YouTube research crawl: call the yt_research "
+    "Run the incremental YouTube research crawl: call the yt_research "
     "tool with action 'crawl' exactly once with no params. It re-runs the "
     "niche's seed searches, catalogues channels it has not seen, refreshes "
     "known ones for free and rescores, so new videos reach the research tab. "

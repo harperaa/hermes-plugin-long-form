@@ -2242,7 +2242,7 @@
           h("div", { className: "yti-rs-step" }, h("b", null, h(Tip, { k: "tier1" }, "Tier 1 · Discovery")),
             h("div", { className: "yti-muted yti-small" },
               (ov && ov.fullPassDone)
-                ? "Full pass done for this niche set. A crawl now only touches what the database has not paid for: seed searches run again once a day (page 1), new channels are catalogued once, known channels refresh through the free call. It stops on its own, usually well under the cap. Scheduled daily at 04:00 so new videos reach the Supply / Demand chart every morning."
+                ? "Full pass done for this niche set. A crawl now only touches what the database has not paid for: seed searches run again on each pass (page 1), new channels are catalogued once, known channels refresh through the free call. It stops on its own, usually well under the cap. Scheduled twice a day, 04:00 and 16:00, so new videos reach the Supply / Demand chart within about twelve hours."
                 : "No full pass yet for this niche set: the next crawl runs the depth-first search to exhaustion (bounded by the monthly budget, not the per-run cap). After that, crawls are incremental and cheap.",
               (sec.youtube ? " Discovery is on the YouTube Data API's free quota." : " Add a YouTube API key on Setup to make discovery free.")),
             h("div", { className: "yti-rs-inline" },
