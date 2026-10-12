@@ -25,7 +25,7 @@ CRON_PROMPT_V1 = (
     "each kanbanTaskId from the yt_trigger_analysis result)."
 )
 
-CRON_PROMPT = (
+CRON_PROMPT_V2 = (
     "Run the YouTube intelligence refresh. Step 1: call the yt_fetch_videos "
     "tool to pull the latest videos and transcripts for all tracked channels. "
     "Step 2: call yt_trigger_analysis (default limit and ordering). Each "
@@ -54,6 +54,22 @@ CRON_PROMPT = (
     "yt_trigger_analysis result), and whether ideal-mechanics.md was "
     "regenerated."
 )
+
+# Appended to both agent-run jobs on 2026-10-12. Cron runs are unattended, so
+# hermes' approval layer (approvals.cron_mode, default deny) blocks interpreter
+# heredocs, `python -c`, and execute_code outright — the model's habit for
+# "write a long file" — and every block costs a turn. The mirror sentence
+# retires a leftover of the youtube-insights → long-form rename that the
+# agent kept carrying forward in its own summaries.
+UNATTENDED_TOOLING_NOTE = (
+    " TOOLING (this job runs unattended): the terminal blocks python/node "
+    "heredocs, `python -c` / `node -e` programs and execute_code — do not try "
+    "them. Create and change files with the write_file and edit tools; copy "
+    "with plain cp; read with read_file. There is no mirror: the workspace "
+    "lives only under plugins-data/long-form — never copy output to a "
+    "youtube-insights path or any second location."
+)
+CRON_PROMPT = CRON_PROMPT_V2 + UNATTENDED_TOOLING_NOTE
 
 # Third routine: the free Tier-0 research snapshot (spec P4/§3.3). Exact daily
 # view trajectories for every followed/tracked channel; costs nothing.
@@ -315,7 +331,7 @@ PIPELINE_PROMPT_V6 = PIPELINE_PROMPT_V5 + (
 # formats with failure rates, cross-niche gaps, teardowns) is better evidence
 # than the insight base alone. When it holds enough to aim with, it steers
 # the run; when it does not, the run is exactly what it was before.
-PIPELINE_PROMPT = PIPELINE_PROMPT_V6 + (
+PIPELINE_PROMPT_V7 = PIPELINE_PROMPT_V6 + (
     " RESEARCH STEER (do this right after Step 0, before Step 1): call the "
     "yt_research tool with action 'brief' exactly once. If the result has "
     "ready:false, say so in the summary and run every step below exactly as "
@@ -344,6 +360,7 @@ PIPELINE_PROMPT = PIPELINE_PROMPT_V6 + (
     "wilson_lb, example titles). The SUMMARY lists, per topic, which brief "
     "evidence it rests on."
 )
+PIPELINE_PROMPT = PIPELINE_PROMPT_V7 + UNATTENDED_TOOLING_NOTE
 
 
 def _hermes_argv() -> list[str]:
