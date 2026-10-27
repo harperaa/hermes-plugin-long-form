@@ -901,6 +901,154 @@
     );
   }
 
+  // Publish a page folder to surge.sh. First visit connects the account
+  // (no SURGE_TOKEN stored yet): email + password mints the token on the
+  // backend (a new email creates the account), or a pasted token with the
+  // email left empty. The secret rides in one request and is cleared from
+  // state right after; it is never shown back. Then the domain step, and on
+  // success the public URL with a copy button. Publishing again to the same
+  // domain replaces the page, so the domain is prefilled from the last run.
+  function PublishModal(props) {
+    var statusState = useState(null);            // null = checking
+    var status = statusState[0], setStatus = statusState[1];
+    var emailState = useState("");
+    var email = emailState[0], setEmail = emailState[1];
+    var secretState = useState("");
+    var secret = secretState[0], setSecret = secretState[1];
+    var domainState = useState((props.published && props.published.domain) || "");
+    var domain = domainState[0], setDomain = domainState[1];
+    var busyState = useState(false);
+    var busy = busyState[0], setBusy = busyState[1];
+    var errState = useState(null);
+    var err = errState[0], setErr = errState[1];
+    var doneState = useState(null);
+    var done = doneState[0], setDone = doneState[1];
+    var copiedState = useState(false);
+    var copied = copiedState[0], setCopied = copiedState[1];
+    useEffect(function () {
+      api("/publish-status").then(function (s) {
+        s = s || {};
+        setStatus({ connected: !!s.connected, email: s.email || "" });
+        if (s.email) setEmail(function (cur) { return cur || s.email; });
+      }).catch(function (e) {
+        setStatus({ connected: false, email: "" });
+        setErr(errorLines(e));
+      });
+    }, []);
+    function connect() {
+      if (busy || !secret.trim()) return;
+      setBusy(true); setErr(null);
+      var payload = { email: email.trim(), secret: secret };
+      post("/publish-connect", payload)
+        .then(function (r) {
+          setSecret("");
+          var s = (r && r.status) || {};
+          setStatus({ connected: s.connected !== false, email: s.email || email.trim() });
+        })
+        .catch(function (e) { setErr(errorLines(e)); })
+        .finally(function () { setBusy(false); });
+    }
+    function publish() {
+      if (busy) return;
+      setBusy(true); setErr(null); setDone(null);
+      post("/artifact-publish", { path: props.dir, domain: domain.trim() })
+        .then(function (r) {
+          setDone(r || {});
+          if (r && r.domain) setDomain(r.domain);
+          if (props.onPublished) props.onPublished(r);
+        })
+        .catch(function (e) { setErr(errorLines(e)); })
+        .finally(function () { setBusy(false); });
+    }
+    function copyUrl() {
+      if (!done || !done.url) return;
+      var mark = function () { setCopied(true); setTimeout(function () { setCopied(false); }, 1500); };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(done.url).then(mark, function () {});
+      }
+    }
+    var errBox = err ? h("div", { className: "yti-notice yti-notice-error" },
+      err.length === 1 ? err[0] : h("ul", { className: "yti-notice-list" },
+        err.map(function (l, i) { return h("li", { key: i }, l); }))) : null;
+    var body, actions;
+    if (status === null) {
+      body = h("div", { className: "yti-empty" }, "Checking the surge.sh connection…");
+      actions = h("div", { className: "yti-modal-actions" },
+        h(Button, { size: "sm", variant: "outline", onClick: props.onClose }, "Cancel"));
+    } else if (!status.connected) {
+      body = [
+        h("p", { key: "sub", className: "yti-modal-sub" },
+          "Pages are hosted on surge.sh, the same account shorts-lab uses for ad packs. Connect it once; the token is kept in your Hermes keys."),
+        h("ul", { key: "help", className: "yti-pub-help" },
+          h("li", null, "surge.sh is free for static pages. A new email creates the account on the spot; an existing account signs in."),
+          h("li", null, "Published pages live at https://<name>.surge.sh; publishing again to the same name replaces the page."),
+          h("li", null, "Already have a surge token? Paste it as the secret and leave the email empty.")),
+        h("label", { key: "l1" }, "Email"),
+        h("input", {
+          key: "email",
+          value: email,
+          autoFocus: true,
+          placeholder: "you@example.com (empty when pasting a token)",
+          onChange: function (e) { setEmail(e.target.value); },
+        }),
+        h("label", { key: "l2" }, "Password or token"),
+        h("input", {
+          key: "secret",
+          type: "password",
+          value: secret,
+          autoComplete: "new-password",
+          placeholder: "Password (new account or existing) — or paste a surge token and leave email empty",
+          onChange: function (e) { setSecret(e.target.value); },
+          onKeyDown: function (e) { if (e.key === "Enter") connect(); },
+        }),
+        errBox ? h("div", { key: "err" }, errBox) : null,
+      ];
+      actions = h("div", { className: "yti-modal-actions" },
+        h(Button, { size: "sm", variant: "outline", onClick: props.onClose }, "Cancel"),
+        h(Button, { size: "sm", disabled: busy || !secret.trim(), onClick: connect },
+          busy ? "Connecting…" : "Connect"));
+    } else if (done) {
+      body = [
+        h("p", { key: "sub", className: "yti-modal-sub" },
+          "Published. The page is public at this address; Publish again to replace it."),
+        h("div", { key: "url", className: "yti-pub-url" },
+          h("a", { href: done.url, target: "_blank", rel: "noopener" }, done.url),
+          h(Button, { size: "sm", variant: "outline", onClick: copyUrl }, copied ? "Copied!" : "Copy")),
+        done.files ? h("div", { key: "n", className: "yti-muted yti-small" },
+          done.files + " file" + (done.files === 1 ? "" : "s") + " uploaded from " + (done.dir || props.dir)) : null,
+      ];
+      actions = h("div", { className: "yti-modal-actions" },
+        h(Button, { size: "sm", onClick: props.onClose }, "Done"));
+    } else {
+      body = [
+        h("p", { key: "sub", className: "yti-modal-sub" },
+          "Publishes ", h("code", null, props.dir), " (index.html and its images) to surge.sh",
+          status.email ? " as " + status.email : "", "."),
+        h("label", { key: "l1" }, "Domain"),
+        h("input", {
+          key: "domain",
+          value: domain,
+          autoFocus: true,
+          placeholder: "name → name.surge.sh, or leave empty for an automatic name",
+          onChange: function (e) { setDomain(e.target.value); },
+          onKeyDown: function (e) { if (e.key === "Enter") publish(); },
+        }),
+        h("p", { key: "note", className: "yti-muted yti-small" },
+          "The page becomes public at that URL. Publishing again to the same name replaces it; " +
+          "a new name makes a second copy."),
+        errBox ? h("div", { key: "err" }, errBox) : null,
+      ];
+      actions = h("div", { className: "yti-modal-actions" },
+        h(Button, { size: "sm", variant: "outline", onClick: props.onClose }, "Cancel"),
+        h(Button, { size: "sm", disabled: busy, onClick: publish },
+          busy ? "Publishing…" : "Publish 🌐"));
+    }
+    return h(YtiModal, { onClose: props.onClose },
+      h("h3", null, "Publish this page to surge.sh"),
+      body,
+      actions);
+  }
+
   function ArtifactsView() {
     var treeState = useState(null);
     var tree = treeState[0], setTree = treeState[1];
@@ -969,6 +1117,8 @@
     var artFeedback = artFeedbackState[0], setArtFeedback = artFeedbackState[1];
     var artNoticeState = useState(null);   // {ok, lines} under the preview head
     var artNotice = artNoticeState[0], setArtNotice = artNoticeState[1];
+    var pubModalState = useState(false);   // surge.sh publish modal for artDir
+    var pubModal = pubModalState[0], setPubModal = pubModalState[1];
     // Selected .html page as a blob: URL (authed fetch, ?inline=1) + its error.
     var pageBlobState = useState(null);
     var pageBlob = pageBlobState[0], setPageBlob = pageBlobState[1];
@@ -1407,6 +1557,10 @@
           onClick: function (e) { if (!pageBlob) e.preventDefault(); },
           title: pageBlob ? "Open the finished page in its own tab" : "Loading the page…" },
           "Open page ↗") : null,
+        (art && art.published && art.published.url) ? h("a", { className: "yti-rs-btnlink",
+          href: art.published.url, target: "_blank", rel: "noopener",
+          title: "The public copy on surge.sh: " + art.published.url },
+          "Published ↗") : null,
         artDir ? h(Button, {
           size: "sm",
           className: artOpen ? "yti-busy" : undefined,
@@ -1423,6 +1577,17 @@
           title: "Re-render index.html from artifact.json and the images on disk — no research, no agent",
           onClick: function () { rebuildArtifact(artDir); },
         }, busy ? "Rebuilding…" : "Rebuild page") : null,
+        artDir ? h(Button, {
+          size: "sm",
+          variant: "outline",
+          disabled: artOpen,
+          title: artOpen
+            ? "Working — publish once the page is built"
+            : (art && art.published
+              ? "Publish this page again to surge.sh (replaces " + art.published.domain + ")"
+              : "Host this page publicly on surge.sh and get a shareable link"),
+          onClick: function () { setPubModal(true); },
+        }, "Publish 🌐") : null,
         artChat ? h("a", { className: "yti-gen-link", href: artChat,
           onClick: function (e) { e.preventDefault(); window.location.assign(artChat); } }, "chat ↗") : null,
         artTask ? h("a", { className: "yti-gen-link", href: artTask,
@@ -1731,6 +1896,12 @@
         busy: artBusy, error: artError,
         onClose: function () { setArtModal(false); },
         onSubmit: buildArtifact,
+      }) : null,
+      pubModal && artDir ? h(PublishModal, {
+        dir: artDir,
+        published: art && art.published,
+        onClose: function () { setPubModal(false); },
+        onPublished: function () { loadTree(); },
       }) : null,
       artIterModal && artDir ? h(YtiModal, { onClose: function () { setArtIterModal(false); } },
         h("h3", null, "Iterate on this page"),
@@ -2871,6 +3042,9 @@
             title: "Open the finished video page in its own tab",
             onClick: function (e) { e.preventDefault(); openPage(art.page); } },
             pageOpening ? "Opening…" : "Open page ↗") : null,
+          (art.published && art.published.url) ? h("a", { className: "yti-rs-btnlink",
+            href: art.published.url, target: "_blank", rel: "noopener",
+            title: "The public copy on surge.sh: " + art.published.url }, "Published ↗") : null,
           s2.dir ? h("a", { className: "yti-rs-btnlink", href: "/longform?tab=artifacts&path=" + encodeURIComponent(s2.dir), title: "Open this video's folder on the Artifacts tab" }, "Artifacts folder →") : null,
           gen.taskId ? h("a", { className: "yti-rs-btnlink", href: "/kanban?task=" + encodeURIComponent(gen.taskId), title: "Open the scripts task on the Kanban" }, "Task →") : null,
           art.taskId ? h("a", { className: "yti-rs-btnlink", href: "/kanban?task=" + encodeURIComponent(art.taskId), title: "Open the video page task on the Kanban" }, "Page task →") : null

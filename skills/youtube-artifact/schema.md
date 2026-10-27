@@ -70,6 +70,7 @@ optional `intro` (string or list of paragraphs).
   index.html         rendered by build_artifact.py; never hand-edited
   img/s01.jpg …      one per step, from generate-image (timestamp suffixes are fine)
   history/           previous index.html copies, written automatically on re-render
+  published.json     written by the dashboard's Publish button (surge.sh URL); never by the agent
 ```
 
 Nothing else may sit in the folder: scratch scripts, logs, prompts and notes

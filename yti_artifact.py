@@ -439,12 +439,21 @@ def rebuild(rel_path: str) -> dict[str, Any]:
 # States and completion
 # ---------------------------------------------------------------------------
 
+def _published(root: Path) -> Optional[dict[str, Any]]:
+    try:
+        d = json.loads((root / "published.json").read_text(encoding="utf-8"))
+        return d if isinstance(d, dict) and d.get("url") else None
+    except (OSError, ValueError):
+        return None
+
+
 def states() -> dict[str, dict[str, Any]]:
     out = yti_generate._states_for(ARTIFACT_META_KEY)
     ws = yti_paths.workspace_dir()
     for key, st in out.items():
         page = ws / key / "index.html"
         st["page"] = f"{key}/index.html" if page.exists() else None
+        st["published"] = _published(ws / key)
     return out
 
 
@@ -464,12 +473,12 @@ def state_for_dir(rel_dir: Optional[str]) -> dict[str, Any]:
         st = all_states.get(key) or {}
         page = f"{key}/index.html" if (p / "index.html").exists() else None
         best = {"status": st.get("status") or ("done" if page else None), "taskId": st.get("taskId"),
-                "dir": key, "page": page, "sessionId": st.get("sessionId")}
+                "dir": key, "page": page, "sessionId": st.get("sessionId"), "published": _published(p)}
     # an open task whose folder does not exist yet
     for key, st in all_states.items():
         if st.get("status") == "open" and key.startswith(rel_dir.rstrip("/") + "/"):
             best = {"status": "open", "taskId": st.get("taskId"), "dir": key, "page": None,
-                    "sessionId": st.get("sessionId")}
+                    "sessionId": st.get("sessionId"), "published": None}
     return best
 
 
@@ -477,7 +486,7 @@ def _sweep(root: Path) -> list[str]:
     removed: list[str] = []
     if not root.is_dir():
         return removed
-    keep = {"index.html", "artifact.json", "img", "history", "README.md", "SUMMARY.md"}
+    keep = {"index.html", "artifact.json", "img", "history", "README.md", "SUMMARY.md", "published.json"}
     for p in root.iterdir():
         if p.name in keep or p.name.startswith("."):
             continue

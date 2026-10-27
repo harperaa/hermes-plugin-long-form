@@ -265,7 +265,8 @@ def validate(doc: Any, base_dir: Path) -> list[str]:
 
     # stray files: only the page, its data, images and history belong here
     if base_dir.is_dir():
-        allowed_top = {"index.html", "artifact.json", "img", "history", "README.md", "SUMMARY.md"}
+        allowed_top = {"index.html", "artifact.json", "img", "history", "README.md", "SUMMARY.md",
+                       "published.json"}
         for f in base_dir.iterdir():
             if f.name.startswith(".") or f.name in allowed_top:
                 continue

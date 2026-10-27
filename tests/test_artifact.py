@@ -339,3 +339,107 @@ def test_routes_serve_rebuild_and_create(tmp_home, art_kanban, monkeypatch):
     p = c.post("/api/plugins/long-form/produce", json={"path": "youtube/2026-10-27/recommended/d/script-outline.md"}).json()
     assert p["ok"] and p["outDir"].endswith("/d/artifact")
     assert c.post("/api/plugins/long-form/produce", json={"path": "youtube/none.md"}).status_code == 400
+
+
+# ---- publish to surge.sh ----------------------------------------------------
+
+class _Resp:
+    def __init__(self, status, text="", payload=None):
+        self.status_code = status
+        self.text = text
+        self._payload = payload
+
+    def json(self):
+        return self._payload
+
+
+def test_publish_bundles_page_and_records_url(tmp_home, monkeypatch):
+    import tarfile, io
+    import yti_publish
+    ws = yti_paths.workspace_dir()
+    folder = _write_doc(ws / "youtube/2026-10-27/artifacts/pub", _minimal_doc())
+    assert yti_artifact.rebuild("youtube/2026-10-27/artifacts/pub")["ok"]
+    # not connected -> refused before any network call
+    monkeypatch.delenv("SURGE_TOKEN", raising=False)
+    with pytest.raises(RuntimeError, match="not connected"):
+        yti_publish.publish("youtube/2026-10-27/artifacts/pub")
+    monkeypatch.setenv("SURGE_TOKEN", "tok-123")
+    sent = {}
+
+    def fake_put(url, data=None, auth=None, headers=None, timeout=None):
+        sent.update({"url": url, "auth": auth, "headers": headers})
+        with tarfile.open(fileobj=io.BytesIO(data), mode="r:gz") as tar:
+            sent["names"] = sorted(m.name for m in tar.getmembers())
+        return _Resp(200, '{"type":"progress"}\n{"type":"info","message":"Success"}\n')
+    monkeypatch.setattr(yti_publish.requests, "put", fake_put)
+    entry = yti_publish.publish("youtube/2026-10-27/artifacts/pub/index.html", "My Page")
+    assert entry["domain"] == "my-page.surge.sh" and entry["url"] == "https://my-page.surge.sh"
+    assert sent["url"].endswith("/my-page.surge.sh") and sent["auth"] == ("token", "tok-123")
+    assert sent["headers"]["file-count"] == "4"
+    assert sent["names"] == ["my-page/img/s01.jpg", "my-page/img/s02.jpg", "my-page/img/s03.jpg", "my-page/index.html"]
+    assert yti_publish.published_for(folder)["url"] == entry["url"]
+    assert yti_publish.recent_pages()[0]["domain"] == "my-page.surge.sh"
+    # published.json is neither a stray for the gate nor for the sweep
+    assert yti_artifact.rebuild("youtube/2026-10-27/artifacts/pub")["ok"]
+    assert yti_artifact._sweep(folder) == []
+    # default domain comes from the page title + date; a failed stream raises
+    assert yti_publish.default_domain(folder).startswith("test-page-")
+    monkeypatch.setattr(yti_publish.requests, "put", lambda *a, **k: _Resp(200, '{"type":"error","message":"nope"}\n'))
+    with pytest.raises(RuntimeError, match="nope"):
+        yti_publish.publish("youtube/2026-10-27/artifacts/pub")
+    with pytest.raises(ValueError):
+        yti_publish.normalize_domain("bad domain!.com", folder)
+    # a folder that fails the gate is never published
+    doc = _minimal_doc(); doc["sections"] = doc["sections"][:1]
+    _write_doc(ws / "youtube/2026-10-27/artifacts/broken", doc)
+    (ws / "youtube/2026-10-27/artifacts/broken/index.html").write_text("x")
+    with pytest.raises(RuntimeError, match="quality gate"):
+        yti_publish.publish("youtube/2026-10-27/artifacts/broken")
+
+
+def test_publish_connect_stores_token_in_hermes_env(tmp_home, monkeypatch):
+    import yti_publish
+    monkeypatch.delenv("SURGE_TOKEN", raising=False)
+    monkeypatch.delenv("SURGE_LOGIN", raising=False)
+    assert not yti_publish.is_connected()
+    monkeypatch.setattr(yti_publish.requests, "post",
+                        lambda url, auth=None, json=None, timeout=None: _Resp(200, payload={"token": "minted-1"}))
+    assert yti_publish.connect("me@example.com", "pw")["ok"]
+    env = (tmp_home / ".env").read_text()
+    assert "SURGE_TOKEN=minted-1" in env and "SURGE_LOGIN=me@example.com" in env
+    assert yti_publish.is_connected() and yti_publish.default_email() == "me@example.com"
+    # existing token path validates with /list; a rejected token is not stored
+    monkeypatch.setattr(yti_publish.requests, "get", lambda url, auth=None, timeout=None: _Resp(401))
+    assert not yti_publish.connect("", "bad-token")["ok"]
+    assert "bad-token" not in (tmp_home / ".env").read_text()
+    monkeypatch.setattr(yti_publish.requests, "get", lambda url, auth=None, timeout=None: _Resp(200))
+    assert yti_publish.connect("", "good-token")["ok"]
+    assert (tmp_home / ".env").read_text().count("SURGE_TOKEN=") == 1
+    assert yti_publish.status()["connected"]
+
+
+def test_publish_routes(tmp_home, art_kanban, monkeypatch):
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+    from tests.test_generate_tasks import _cron_stubs
+    import yti_publish
+    jobs_mod, execs_mod = _cron_stubs()
+    api = _load_api_registered(monkeypatch, jobs_mod, execs_mod)
+    app = FastAPI(); app.include_router(api.router, prefix="/api/plugins/long-form")
+    c = TestClient(app)
+    monkeypatch.delenv("SURGE_TOKEN", raising=False)
+    assert c.get("/api/plugins/long-form/publish-status").json()["connected"] is False
+    ws = yti_paths.workspace_dir()
+    _write_doc(ws / "youtube/2026-10-27/artifacts/q", _minimal_doc())
+    assert yti_artifact.rebuild("youtube/2026-10-27/artifacts/q")["ok"]
+    r = c.post("/api/plugins/long-form/artifact-publish", json={"path": "youtube/2026-10-27/artifacts/q"})
+    assert r.status_code == 409
+    monkeypatch.setattr(yti_publish.requests, "put",
+                        lambda *a, **k: _Resp(200, '{"type":"info"}\n'))
+    monkeypatch.setenv("SURGE_TOKEN", "t")
+    r = c.post("/api/plugins/long-form/artifact-publish", json={"path": "youtube/2026-10-27/artifacts/q", "domain": "q-page"})
+    assert r.status_code == 200 and r.json()["url"] == "https://q-page.surge.sh"
+    t = yti_artifact.create_topic_task("Q")
+    st = c.get("/api/plugins/long-form/artifact-states").json()["states"]
+    assert st[t["outDir"]]["published"] is None
+    assert c.post("/api/plugins/long-form/publish-connect", json={"email": "", "secret": ""}).status_code == 400

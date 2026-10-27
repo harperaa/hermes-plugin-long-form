@@ -441,6 +441,12 @@
 .yti-page-frame { display: block; width: 100%; min-height: 70vh; height: 70vh; border: 1px solid var(--color-border); border-radius: 6px; background: #fff; }
 .yti-notice-list { margin: 4px 0 0; padding-left: 18px; }
 .yti-notice-list li { margin: 2px 0; }
+/* surge.sh publish modal */
+.yti-pub-help { margin: 0 0 6px; padding-left: 18px; font-size: 12.5px; color: var(--color-muted-foreground); }
+.yti-pub-help li { margin: 3px 0; }
+.yti-pub-url { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 10px 0 6px; padding: 10px 12px; border: 1px solid var(--color-border); border-radius: 6px; background: var(--color-muted, rgba(127,127,127,.08)); }
+.yti-pub-url a { color: var(--color-primary, #14b8a6); font-weight: 600; word-break: break-all; text-decoration: none; }
+.yti-pub-url a:hover { text-decoration: underline; }
 .yti-pre { font-size: 12px; white-space: pre-wrap; color: inherit; }
 .yti-md-editor { width: 100%; min-height: 50vh; font-family: var(--font-mono, monospace); font-size: 13px; color: inherit; background: transparent; border: 1px solid var(--color-border); border-radius: 6px; padding: 10px; }
 .yti-md h1, .yti-md h2, .yti-md h3, .yti-md h4 { color: inherit; margin: 14px 0 6px; }

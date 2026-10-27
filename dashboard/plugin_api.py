@@ -33,6 +33,7 @@ import yti_insights  # noqa: E402
 import yti_analysis  # noqa: E402
 import yti_generate  # noqa: E402
 import yti_artifact  # noqa: E402
+import yti_publish  # noqa: E402
 import yti_paths  # noqa: E402
 import yti_workspace  # noqa: E402
 
@@ -256,6 +257,48 @@ def post_artifact_rebuild(body: ArtifactRebuildBody) -> dict[str, Any]:
     if result.get("error"):
         raise HTTPException(status_code=400, detail=result.get("problems") or [result["error"]])
     return result
+
+
+@router.get("/publish-status")
+def get_publish_status() -> dict[str, Any]:
+    """Is surge.sh connected (SURGE_TOKEN), the email to prefill, and the
+    pages published from this instance."""
+    return yti_publish.status()
+
+
+class PublishConnectBody(BaseModel):
+    email: str = ""      # with a password: mint (and for a new email, create) the account
+    secret: str = ""     # the password, or an existing surge token when email is empty
+
+
+@router.post("/publish-connect")
+def post_publish_connect(body: PublishConnectBody) -> dict[str, Any]:
+    res = yti_publish.connect(body.email, body.secret)
+    if not res.get("ok"):
+        raise HTTPException(status_code=400, detail=res.get("error") or "connect failed")
+    return {"ok": True, "status": yti_publish.status()}
+
+
+class ArtifactPublishBody(BaseModel):
+    path: str
+    domain: str = ""
+
+
+@router.post("/artifact-publish")
+def post_artifact_publish(body: ArtifactPublishBody) -> dict[str, Any]:
+    """Publish a page folder (index.html + img/) to surge.sh and record the
+    public URL beside the page."""
+    if not yti_publish.is_connected():
+        raise HTTPException(status_code=409, detail="surge.sh is not connected")
+    try:
+        entry = yti_publish.publish(body.path, body.domain)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except RuntimeError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=502, detail=str(exc)[:300])
+    return {"ok": True, **entry}
 
 
 @router.get("/page/{path:path}")

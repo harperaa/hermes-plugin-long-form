@@ -52,7 +52,11 @@ dashboard under **Settings → Environment**.
   place (Open page ↗), **Iterate ↻** opens a feedback task against the same
   folder, **Rebuild page** re-renders without an agent, and a completion
   validator re-runs the skill's quality gate (fix task, max 2) before a
-  page counts as done.
+  page counts as done. **Publish 🌐** hosts a page publicly on surge.sh
+  (same account and `SURGE_TOKEN` as shorts-lab's ad packs; connect with
+  an email + password once, or paste an existing token) and records the
+  URL beside the page as `published.json`; publishing again to the same
+  name replaces it.
 
 **Agent tools** (toolset `youtube_insights`):
 `yt_add_channel`, `yt_remove_channel`, `yt_list_channels`,
