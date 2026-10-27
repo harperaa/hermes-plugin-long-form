@@ -1,0 +1,234 @@
+{
+  "id": "black-october-2026",
+  "title": "Black October 2026",
+  "eyebrow": "Workshop briefing · 27 Oct 2026",
+  "lede": "In eleven days the software that AI builders stand on took ten separate hits: a language runtime, a certificate authority, an AI gateway library, two hosting platforms, a CLI, a WordPress vendor, a git server, a console that held provider keys, and a criminal running autonomous agents. None of it was exotic. All of it was keys, patches and trust.",
+  "description": "Verified timeline, top 10 incidents and ten safeguards from the October 2026 security incidents that hit AI infrastructure.",
+  "chips": [
+    {"text": "10 incidents, 17 to 27 Oct", "tone": "crit"},
+    {"text": "\"Black October\" is a nickname, not a campaign", "tone": "warn"},
+    {"text": "Every claim checked against a primary or trade source", "tone": "ok"}
+  ],
+  "sections": [
+    {"type": "callout", "tone": "warn", "paragraphs": [
+      "**\"Black October\" is a nickname.** It started as a social-media label and has since been used in headlines by The Guardian and The Washington Post (23 Oct). Trade press mostly says \"a rough week\". No evidence ties the incidents together as one campaign. Railway is the only vendor that said its own breach was part of a series, aimed at AI inference providers.",
+      "Everything here was re-checked on 27 Oct against vendor statements where they exist and against The Hacker News, BleepingComputer, SecurityWeek, CISA and Mozilla's bug tracker. Where a number was corrected in later reporting, the corrected number is used and the old one is named."
+    ]},
+    {"type": "facts", "heading": "The shape of it", "items": [
+      {"label": "Window", "big": "11 days", "bullets": ["Opens 17 Oct: eMudhra keys reported, first PHP2Shell probe", "Continues 27 Oct: Chrome drops the eMudhra root, CISA confirms PHP2Shell exploitation"]},
+      {"label": "Busiest day", "big": "21 Oct", "bullets": ["LiteLLM poisoned", "PHP2Shell patched", "Railway discloses", "GitLab ships a CVSS 10 fix", "TeamUpdraft confirms", "eMudhra explains"]},
+      {"label": "Root causes that repeat", "big": "3", "bullets": ["A leaked credential, never revoked", "A trusted channel turned into delivery", "An admin surface on the open internet"]},
+      {"label": "Where AI actually appears", "big": "2", "bullets": ["As the attacker: Cairn agents, 100+ sites", "As the target: Railway, LiteLLM, OpenCode, Zeabur all hold AI provider keys"]}
+    ]},
+    {"type": "list", "heading": "Before the window", "intro": "The month's worst incidents were loaded months earlier.", "items": [
+      {"when": "Jan 2024", "text": "Zeabur mints admin tokens with no expiry and stores them in plaintext. They are still valid in October 2026."},
+      {"when": "30 Apr 2025", "text": "eMudhra runs a key ceremony for 24 intermediate CAs. A wrap/unwrap bug produces a second, weak key set. The weak keys are the ones that ship."},
+      {"when": "27 May 2026", "text": "A LiteLLM master key is committed to a public repository. It is flagged. It is not revoked."},
+      {"when": "Late Aug 2026", "text": "Zeabur's first breach, through a customer's NextChat app. The admin tokens are left out of the rotation that follows."},
+      {"when": "9 Sep to 7 Oct", "text": "Intruder inside TiDB Cloud (PingCAP); customer database data reported unaffected."},
+      {"when": "10 Oct 2026", "text": "The unrevoked LiteLLM key is used. The attacker reaches an internal LiteLLM deployment exposed to the internet and reads engineers' GitHub CLI tokens out of its logs."},
+      {"when": "14 to 15 Oct", "text": "Zeabur's second breach: the 2024 tokens open the shared cluster and platform database."},
+      {"when": "16 Oct (night)", "text": "Intruder reaches a legacy OpenCode system. CERT-In alerts State Bank of India to a dark-web dump the same day."}
+    ]},
+    {"type": "timeline", "heading": "Timeline: 14 to 29 October", "unit": "day", "start": "2026-10-14", "end": "2026-10-30",
+     "intro": "One row per incident. A bar is a window during which something was live or being exploited. A dot is a disclosure, a patch, a block, or a deadline. Hover or tap a mark for the detail. All dates UTC.",
+     "caption": "Oct 2026 · week boundaries shaded · 16 days", "caption_right": "Source list at the end of the page",
+     "shade": [["2026-10-17", "2026-10-19"], ["2026-10-24", "2026-10-26"]],
+     "rows": [
+      {"label": "LiteLLM", "events": [
+        {"at": "2026-10-21T10:08", "tone": "crit", "text": "21 Oct 10:08 UTC: org-owner token overrides branch protection; release workflow repointed to a lookalike repo"},
+        {"from": "2026-10-21T11:39", "to": "2026-10-21T14:20", "text": "21 Oct 11:39 to 14:20 UTC: poisoned 1.107.0 downloadable from PyPI (to 13:23) and Docker Hub (to 14:20)"},
+        {"at": "2026-10-21T14:20", "tone": "ok", "text": "21 Oct 14:20 UTC: last Docker Hub tag repointed to a clean image"},
+        {"at": "2026-10-24T12:00", "tone": "", "text": "24 Oct: LiteLLM publishes root cause (tokens read from logs of an exposed internal deployment)"}]},
+      {"label": "Railway", "events": [
+        {"at": "2026-10-21T16:00", "tone": "crit", "text": "21 Oct: Railway discloses intruder on the environment-variable store; some values decrypted; deploys paused"},
+        {"at": "2026-10-22T23:00", "tone": "ok", "text": "22 Oct 23:22 UTC: deploys restored on all plans; customers told to rotate every variable"}]},
+      {"label": "Zeabur", "events": [
+        {"from": "2026-10-14", "to": "2026-10-16", "text": "14 to 15 Oct: attacker uses 2024 admin tokens (no expiry, plaintext) to read the shared cluster and platform DB"},
+        {"at": "2026-10-19T12:00", "tone": "", "text": "19 Oct: Zeabur announces shutdown; 3.2M env-var records and 321,810 accounts exposed; services pause 1 Dec"}]},
+      {"label": "PHP2Shell", "events": [
+        {"at": "2026-10-17T12:00", "tone": "crit", "text": "17 Oct: Amazon honeypot logs an exploit attempt, four days before disclosure"},
+        {"at": "2026-10-21T14:00", "tone": "ok", "text": "21 Oct 14:00 UTC: PHP 8.5.12 / 8.4.27 / 8.3.36 / 8.2.35 released; CISA alert the same day"},
+        {"from": "2026-10-21T14:24", "to": "2026-10-29", "text": "21 Oct onward: exploitation attempts in the millions; Mirai-derived 'Potassium' wave fails (Sophos, 23 Oct)"},
+        {"at": "2026-10-23T10:00", "tone": "warn", "text": "23 Oct: PHP warns of a third issue, CVE-2026-115560, no emergency fix"},
+        {"at": "2026-10-25T12:00", "tone": "warn", "text": "25 Oct: Unit 42 retracts its claim that a European government intrusion used PHP2Shell"},
+        {"at": "2026-10-26T12:00", "tone": "", "text": "26 Oct: CISA adds both CVEs to the Known Exploited Vulnerabilities list"},
+        {"at": "2026-10-29T12:00", "tone": "warn", "text": "29 Oct: federal patch deadline"}]},
+      {"label": "OVHcloud CLI", "events": [
+        {"from": "2026-10-19T12:47", "to": "2026-10-19T14:21", "text": "19 Oct 12:47 to 14:21 UTC: five release archives replaced with a secret stealer (94 minutes)"},
+        {"at": "2026-10-19T14:24", "tone": "ok", "text": "19 Oct: clean v0.16.0 published as an immutable release"},
+        {"at": "2026-10-20T12:00", "tone": "", "text": "20 Oct: public reporting; users told to change every secret on disk"}]},
+      {"label": "TeamUpdraft", "events": [
+        {"from": "2026-10-17", "to": "2026-10-19", "text": "17 to 18 Oct: unauthorised access to teamupdraft.com's customer database (connection keys)"},
+        {"from": "2026-10-18T12:00", "to": "2026-10-19T07:00", "text": "18 to 19 Oct, about 18 hours: stolen UpdraftCentral keys push backdoor plugins under 99 names"},
+        {"at": "2026-10-19T08:00", "tone": "crit", "text": "19 Oct: Nethemba spots a plugin nobody installed; Patchstack analysis"},
+        {"at": "2026-10-21T12:00", "tone": "ok", "text": "21 Oct: TeamUpdraft confirms; 1.26.13 / 2.26.13 revoke old keys (backdoors must be removed by hand)"}]},
+      {"label": "Cairn agents", "events": [
+        {"at": "2026-10-19T12:00", "tone": "", "text": "19 Oct: NorForge reports 20+ exposed Cairn panels; 100+ of 1,100+ targeted sites breached, about $50 each"},
+        {"at": "2026-10-20T12:00", "tone": "crit", "text": "20 Oct: Reuters names Deere, SharkNinja and Cummins among victims from the attacker's own records"}]},
+      {"label": "eMudhra", "events": [
+        {"at": "2026-10-17T18:05", "tone": "crit", "text": "17 Oct 18:05 UTC: researcher reports eight intermediate CA keys recoverable from public certs"},
+        {"at": "2026-10-17T19:45", "tone": "ok", "text": "17 Oct 19:45 UTC: Chrome CRLSet block; Firefox OneCRL at 22:59"},
+        {"at": "2026-10-18T12:00", "tone": "ok", "text": "18 Oct: eMudhra revokes the eight certificates"},
+        {"at": "2026-10-20T12:00", "tone": "ok", "text": "20 Oct: Mozilla and Chrome confirm; Microsoft blocks; Go 1.27.3 and 1.26.10 ship"},
+        {"at": "2026-10-22T12:00", "tone": "", "text": "22 Oct: eMudhra says it will leave the global TLS business"},
+        {"at": "2026-10-27T16:00", "tone": "ok", "text": "27 Oct: Chrome root store 43 removes emSign ECC Root CA - G3 from user devices"}]},
+      {"label": "GitLab", "events": [
+        {"at": "2026-10-21T20:00", "tone": "ok", "text": "21 Oct: 19.5.1 fixes CVE-2026-110264, CVSS 10.0 unauthenticated RCE affecting releases since 7.0 (2014)"}]},
+      {"label": "OpenCode", "events": [
+        {"at": "2026-10-16T23:00", "tone": "crit", "text": "Night of 16 Oct: intruder reaches a legacy system behind OpenCode Console"},
+        {"at": "2026-10-17T12:00", "tone": "", "text": "17 Oct: disclosure; 1.4% of Console users told to revoke OpenAI, Anthropic and Google keys"}]},
+      {"label": "SBI (context)", "events": [
+        {"at": "2026-10-16T12:00", "tone": "crit", "text": "16 Oct: CERT-In alerts State Bank of India to a ~375,000-record dark-web dump"},
+        {"at": "2026-10-21T12:00", "tone": "", "text": "21 Oct: SBI exchange filing confirms 3,897 customer records so far"}]}
+     ]},
+    {"type": "timeline", "heading": "The worst day, hour by hour", "unit": "hour", "start": "2026-10-21T09:00", "end": "2026-10-21T16:00",
+     "intro": "21 October, in UTC. The LiteLLM compromise ran its whole course in four hours and twelve minutes while PHP's patch was still counting down.",
+     "caption": "21 Oct 2026 · 09:00 to 16:00 UTC", "caption_right": "Times from LiteLLM's incident report and The Hacker News",
+     "legend": ["Malicious artifacts downloadable", "Milestone", "Attacker action", "Takedown or patch", "Warning"],
+     "note": "Also on 21 Oct, times not published: Railway's disclosure, CISA's PHP alert, GitLab 19.5.1 with the CVSS 10.0 fix, TeamUpdraft's confirmation, Brotli and Node.js security releases, and eMudhra's first explanation of the weak keys.",
+     "rows": [
+      {"label": "Attacker · GitHub", "events": [
+        {"at": "2026-10-21T10:08", "tone": "crit", "text": "10:08: branch protection rejects a workflow change; five seconds later an org-owner token overrides it"},
+        {"at": "2026-10-21T11:11", "tone": "crit", "text": "11:11: second engineer's token satisfies the production approval gate"},
+        {"at": "2026-10-21T12:10", "tone": "ok", "text": "12:09 to 12:24: LiteLLM removes the unauthorised workflow revision"}]},
+      {"label": "Attacker · pipeline", "events": [
+        {"at": "2026-10-21T10:47", "tone": "crit", "text": "10:46: modified workflow starts a staging run from the lookalike repo Berri-AI/litellm"},
+        {"at": "2026-10-21T11:54", "tone": "crit", "text": "11:53: third engineer's token deletes the production and staging workflow records"},
+        {"at": "2026-10-21T13:51", "tone": "ok", "text": "13:51: GHCR tags found unavailable"}]},
+      {"label": "PyPI", "events": [
+        {"from": "2026-10-21T11:40", "to": "2026-10-21T13:23", "text": "11:39 to 13:23: seven poisoned litellm==1.107.0 wheels live on PyPI"},
+        {"at": "2026-10-21T13:23", "tone": "ok", "text": "13:23: PyPI removes litellm==1.107.0"}]},
+      {"label": "Docker Hub", "events": [
+        {"from": "2026-10-21T11:47", "to": "2026-10-21T14:20", "text": "11:46 to 14:20: Docker Hub tags v1.107.0, latest, main-latest, main-stable point at the poisoned image"},
+        {"at": "2026-10-21T14:20", "tone": "ok", "text": "14:20: all Docker Hub tags removed or repointed to clean artifacts"}]},
+      {"label": "PHP project", "events": [
+        {"at": "2026-10-21T14:00", "tone": "ok", "text": "14:00: PHP releases the PHP2Shell patches (8.5.12, 8.4.27, 8.3.36, 8.2.35)"}]}
+     ]},
+    {"type": "cards", "heading": "Top 10 incidents", "intro": "Ranked by how directly each one touches a founder shipping an AI product. Each card ends with the one-line takeaway and its primary source.", "items": [
+      {"title": "LiteLLM 1.107.0 ships a credential stealer", "when": "21 Oct · live on PyPI 11:39 to 13:23 UTC · on Docker Hub until 14:20 · root cause 24 Oct",
+       "chips": [{"text": "Confirmed by vendor", "tone": "ok"}, {"text": "Supply chain", "tone": "crit"}, {"text": "~3.3M downloads/day", "tone": ""}],
+       "paragraphs": [
+         "LiteLLM is the Python gateway thousands of AI apps use to talk to every model provider. The attacker held GitHub CLI tokens for three engineers. LiteLLM's own report says those tokens were read from the logs of an internal LiteLLM deployment that was reachable from the internet, after a master key committed to a public repo in May was flagged but never revoked. One token belonged to an organisation owner. With it the attacker overrode branch protection at 10:08 UTC, pointed the release workflow at a lookalike repository (`Berri-AI/litellm`), passed the production approval gate with a second engineer's token at 11:11, and let LiteLLM's own pipeline build, sign and publish seven poisoned wheels. A third token deleted the workflow logs. The payload (`cook.pth`, `sitecustomize.py`) runs every time Python starts, even if your code never imports LiteLLM, steals cloud and AI credentials, and installs an hourly remote code loader.",
+         "The official `v1.107.0` git tag is clean. The tags `latest`, `main-latest` and `main-stable` on Docker Hub all pointed at the bad image for two and a half hours. Safe version to pin: 1.106.2."],
+       "say": "Two stolen tokens and a lookalike repo were enough to make the real pipeline sign the malware. If you pulled `latest` that afternoon, every Python process on that box was compromised.",
+       "sources_label": "Primary", "sources": [{"text": "LiteLLM incident report", "url": "https://docs.litellm.ai/blog/security-incident-oct-21-2026"}, {"text": "Microsoft analysis", "url": "https://www.microsoft.com/en-us/security/blog/2026/10/23/inside-the-litellm-1-107-0-supply-chain-compromise-credential-theft-through-python-startup-hooks/"}],
+       "note": "Correction: the download figure is about 3.3 million a day, not 3.4."},
+      {"title": "Railway's secret store is read, some values decrypted", "when": "Disclosed 21 Oct · deploys paused, restored 22 Oct",
+       "chips": [{"text": "Confirmed by vendor", "tone": "ok"}, {"text": "Platform breach", "tone": "crit"}, {"text": "Subset of users, count withheld", "tone": "warn"}],
+       "paragraphs": ["Railway found an intruder on the systems that hold customer environment variables, and said that in some cases encrypted variables were obtained and decrypted. Variables on Railway are where people put API keys, database URLs and registry credentials. Railway said the incident was \"part of a series of attacks targeting AI inference providers\", notified those providers directly, invalidated pre-incident API tokens, CLI logins and browser sessions, and told every customer to rotate every stored variable. Volumes and files were not in scope."],
+       "say": "Your platform's variable store is a vault with one door. Railway lost the door. Everything you had in there is now someone else's, until you rotate it.",
+       "sources": [{"text": "BleepingComputer", "url": "https://www.bleepingcomputer.com/news/security/railway-warns-devs-to-rotate-secrets-after-potential-breach/"}],
+       "note": "Primary: Railway's 21 Oct disclosure. Correction: an early social claim of an npm vector is unsupported."},
+      {"title": "Zeabur breached twice, shuts down", "when": "Intrusion 14 to 15 Oct · shutdown announced 19 Oct · services pause 1 Dec, end 31 Dec",
+       "chips": [{"text": "Confirmed by vendor", "tone": "ok"}, {"text": "Platform breach", "tone": "crit"}, {"text": "3.2M env-var records · 321,810 accounts", "tone": ""}],
+       "paragraphs": ["Zeabur is a \"vibe coding\" deploy platform popular with the same audience as Railway. In August an attacker got in through a customer's NextChat app. Zeabur rotated credentials, but not the admin tokens it had minted in January 2024 with no expiry and stored in plaintext, and its admin portals stayed reachable from the public internet. On 14 to 15 October those tokens opened the shared cluster across nine regions and the platform database: over 3.2 million environment-variable records, 321,810 accounts, root sign-ins on 101 servers, SSH keys planted on 50, and 16 customer disks copied to attacker VMs. On 19 October Zeabur announced it will stop renewals and pause shared services on 1 December and end everything by 31 December."],
+       "say": "A platform your mentees could have picked in September will not exist by New Year. Two breaches, one unrotated token, company gone. Have an exit plan for every vendor.",
+       "sources": [{"text": "BleepingComputer", "url": "https://www.bleepingcomputer.com/news/security/zeabur-shutting-down-after-second-security-breach-in-two-months/"}],
+       "note": "The \"321,810 accounts\" figure from the social posts is confirmed."},
+      {"title": "PHP2Shell: two unauthenticated RCEs in PHP itself", "when": "Probed 17 Oct · patched 21 Oct 14:00 UTC · CISA KEV 26 Oct · federal deadline 29 Oct",
+       "chips": [{"text": "Confirmed · CISA", "tone": "ok"}, {"text": "CVSS 9.2 · exploited", "tone": "crit"}, {"text": "Numbers got corrected", "tone": "warn"}],
+       "paragraphs": ["CVE-2026-109618 and CVE-2026-109619 let an unauthenticated request run code on a PHP server. Fixed in PHP 8.5.12, 8.4.27, 8.3.36 and 8.2.35; anything older than 8.2 gets source backports or nothing. Amazon's honeypot saw an attempt on 17 October, four days before disclosure. Governments in the Netherlands, Finland, Belgium, Luxembourg, the UK and Australia pulled sites offline as a precaution, which the press first reported as breaches. Attempts reached the millions; Sophos tied one wave to a Mirai-derived botnet called Potassium that failed. On 23 October PHP warned of a third issue, CVE-2026-115560, with no emergency fix. On 25 October Palo Alto's Unit 42 retracted its claim that a European government intrusion used PHP2Shell: \"We are unable to confirm that initial access is associated with the specific PHP2Shell CVEs.\" On 26 October CISA added both CVEs to its Known Exploited Vulnerabilities list with a 29 October deadline for federal agencies."],
+       "say": "Probed before it was public, patched in a day, on CISA's exploited list five days later. If you cannot name every PHP version you run, you cannot patch it in time.",
+       "sources": [{"text": "CISA alert", "url": "https://www.cisa.gov/news-events/alerts/2026/10/21/critical-vulnerabilities-php-require-immediate-patching"}, {"text": "Tenable FAQ", "url": "https://www.tenable.com/blog/php2shell-cve-2026-109618-cve-2026-109619-frequently-asked-questions-about-critical-php-remote"}, {"text": "The Hacker News coverage", "url": "https://thehackernews.com/search?q=PHP2Shell"}],
+       "note": "Corrections: KEV date is 26 Oct, not 27. The \"70% of websites\" line is not in any source checked."},
+      {"title": "OVHcloud CLI releases swapped for a stealer", "when": "19 Oct · 12:47 to 14:21 UTC · 94 minutes",
+       "chips": [{"text": "Confirmed by vendor", "tone": "ok"}, {"text": "Supply chain", "tone": "crit"}],
+       "paragraphs": ["A hijacked contributor account replaced the download archives on five existing releases, v0.11.0 through v0.15.0, with a build that reads secrets off disk. GitHub's release-immutability setting was off, so a privileged account could rewrite published assets without touching source, tags or CI. The install script has never checked a hash. OVHcloud turned immutability on, shipped a clean v0.16.0, and told anyone who installed in the window to change every secret on that machine."],
+       "say": "The source was clean. The tag was clean. The pipeline was clean. The download button was not. Verify what you download, not what you read.",
+       "sources": [{"text": "BleepingComputer", "url": "https://www.bleepingcomputer.com/news/security/ovhcloud-cli-releases-backdoored-on-github-to-steal-developer-secrets/"}, {"text": "The Hacker News", "url": "https://thehackernews.com/2026/10/hackers-hijack-five-ovhcloud-cli.html"}]},
+      {"title": "TeamUpdraft keys used to backdoor WordPress sites", "when": "Site accessed 17 to 18 Oct · backdoor campaign ~18 h, 18 to 19 Oct · confirmed 21 Oct",
+       "chips": [{"text": "Confirmed by vendor", "tone": "ok"}, {"text": "Trusted channel abused", "tone": "crit"}, {"text": "Install base 3M+ (not 4M)", "tone": "warn"}],
+       "paragraphs": ["Attackers reached teamupdraft.com's customer database and took the connection keys for UpdraftCentral, UpdraftVault and UpdraftClone, the remote-management side of the UpdraftPlus backup plugin. With those keys they pushed backdoor plugins under 99 different names (\"Site Health Cache\" among them) that created admin-level accounts. Nethemba caught it when WordPress flagged a plugin nobody had installed. Updates 1.26.13 and 2.26.13 revoke the old keys but do not remove backdoors already planted."],
+       "say": "A backup tool's management key is a master key to every site it manages. The patch revokes the key. It does not evict the intruder. Go look for users you did not create.",
+       "sources": [{"text": "CSO", "url": "https://www.csoonline.com/article/4238422/wordpress-sites-compromised-after-teamupdraft-credential-exposure.html"}, {"text": "Nethemba analysis", "url": "https://nethemba.com/updraftcentral-backdoor-analysis/"}],
+       "note": "Correction: sources split on 3M vs 4M installs; over three million is the safe figure."},
+      {"title": "One operator, autonomous AI agents, 100+ company sites", "when": "Reported 19 Oct (NorForge) · victims named 20 Oct (Reuters)",
+       "chips": [{"text": "Confirmed by researcher + victims", "tone": "ok"}, {"text": "AI as attacker", "tone": "crit"}, {"text": "~$50 per breach", "tone": ""}],
+       "paragraphs": ["NorForge's Snorre Fagerland found more than 20 control panels for Cairn, an open-source agent platform, left open on the internet. Through them a Chinese-speaking operator had pointed agents at more than 1,100 sites and got into over 100, including sites belonging to Deere, SharkNinja and Cummins per Reuters' review of the attacker's own records. Roughly $5,000 in model tokens, about $50 per success. Deere and SharkNinja say no sensitive data was reached. How much was taken overall is unknown.", "This Cairn is not Cisco Talos's CAIRN, a defensive tool for hunting AI-using malware released 22 September."],
+       "say": "Fifty dollars a breach, and we only know because the attacker left his own dashboard on the open internet. Same mistake you are about to make with yours.",
+       "sources": [{"text": "SecurityWeek", "url": "https://www.securityweek.com/ai-platform-cairn-abused-to-hack-over-100-organizations/"}],
+       "note": "Primary: NorForge report; Reuters. Correction: \"1,200 sites\" was later given as 1,100+."},
+      {"title": "eMudhra: eight CA keys anyone could compute", "when": "Reported 17 Oct 18:05 UTC · Chrome block 19:45 · Firefox 22:59 · revoked 18 Oct · Go fix 20 Oct · root removed from Chrome 27 Oct",
+       "chips": [{"text": "Confirmed · Mozilla, Chrome", "tone": "ok"}, {"text": "Trust infrastructure", "tone": "crit"}, {"text": "~30,000 certificates", "tone": ""}],
+       "paragraphs": ["A researcher found that the P-384 private keys of eight eMudhra intermediate CAs (six TLS, two code-signing, all cross-signed by Sectigo) were tiny integers recoverable from the public certificates in seconds. One of them is reported as literally the number 4. eMudhra traces it to a wrap/unwrap bug in its 30 April 2025 key ceremony that produced a second, weak key set, which is the set that shipped. Chrome blocked within two hours, Firefox within five, Apple on the 19th, Microsoft on the 20th; Go shipped 1.27.3 and 1.26.10 the same day. Mozilla and Google then removed the signing root entirely, reaching Chrome users on 27 October. eMudhra said on 22 October it will leave the global TLS business, about 1% of its revenue. No misissued certificate was found in Certificate Transparency logs; the risk is clients that never update."],
+       "say": "Thirty thousand sites had to replace certificates because of a bug in a script run eighteen months earlier. Your vendor's mistake is your outage.",
+       "sources": [{"text": "Mozilla bug 2083449", "url": "https://bugzilla.mozilla.org/show_bug.cgi?id=2083449"}, {"text": "eMudhra statement", "url": "https://emudhra.com/en/post/certificate-security-incident"}, {"text": "The Hacker News", "url": "https://thehackernews.com/2026/10/eight-emudhra-ca-keys-compromised.html"}]},
+      {"title": "GitLab: CVSS 10.0 unauthenticated RCE back to 2014", "when": "Patched 21 Oct in 19.5.1 · no exploitation known as of 23 Oct",
+       "chips": [{"text": "Confirmed by vendor", "tone": "ok"}, {"text": "Patch now", "tone": "crit"}, {"text": "CVE-2026-110264", "tone": ""}],
+       "paragraphs": ["An integer overflow in Onigmo, the regex engine inside Ruby, lets a crafted input (one path is a rendered `.org` file) run code on a self-managed GitLab without logging in. Every release since 7.0 is affected. GitLab.com was patched first; self-managed users get 19.5.1, 19.4.3, 19.3.6 and backports. There is no workaround. The upstream Ruby fix existed only on the unreleased 4.1 branch, so GitLab patched its own copy of Ruby."],
+       "say": "Twelve years of releases, one regex, no workaround. If you self-host your git server, it is an internet-facing runtime like any other.",
+       "sources": [{"text": "Astra advisory", "url": "https://www.getastra.com/blog/security-advisory/cve-2026-110264-gitlabs-critical-cvss-10-0-regex-rce-explained/"}],
+       "note": "Primary: GitLab critical patch release 19.5.1. Correction: early posts called it account takeover; it is unauthenticated RCE."},
+      {"title": "OpenCode Console: stored OpenAI, Anthropic and Google keys exposed", "when": "Intrusion night of 16 Oct · disclosed 17 Oct",
+       "chips": [{"text": "Confirmed by vendor", "tone": "ok"}, {"text": "Provider keys", "tone": "crit"}, {"text": "1.4% of Console users", "tone": "warn"}],
+       "paragraphs": ["An intruder reached a legacy system behind OpenCode's hosted Console and may have read the provider keys users had saved there. Keys in the local CLI or desktop app were not involved. Users reported surprise bills: $281 on one OpenAI key, $168 on an Anthropic key, one loss put at $1,700. OpenCode called it part of a \"distillation attack\"; researchers dispute the label and OpenCode has not said how the attacker got in."],
+       "say": "Every key you paste into someone else's dashboard is now their security problem and your bill. Spend caps turn a breach into a nuisance.",
+       "sources": [{"text": "The Hacker News", "url": "https://thehackernews.com/2026/10/opencode-console-breach-may-have.html"}]}
+    ]},
+    {"type": "table", "heading": "Also this month, verified but outside the ten", "columns": ["Item", "Date", "Status", "Note"], "rows": [
+      ["State Bank of India dark-web dump", "Alert 16 Oct · filing 21 Oct", {"text": "Partly confirmed", "chip": true, "tone": "warn"}, "SBI confirmed 3,897 customer records inside a ~375,000-record dump. Social posts said \"375K records breached\". Both numbers are real; only one is the confirmed breach."],
+      ["Siemens Software Center, CVE-2026-110936", "15 Oct", {"text": "Confirmed · KEV", "chip": true, "tone": "ok"}, "ClickFix lures (fake \"run this command\" prompts, not fake CAPTCHAs) plus DLL side-loading. IT tool, no industrial victims reported."],
+      ["TiDB Cloud (PingCAP) intrusion", "9 Sep to 7 Oct, disclosed 19 Oct", {"text": "Confirmed", "chip": true, "tone": "ok"}, "Another data platform. Customer database data reported unaffected."],
+      ["Plex \"Plex2Shell\" chain", "17 Oct", {"text": "Confirmed · KEV", "chip": true, "tone": "ok"}, "No evidence of media-library theft, despite posts."],
+      ["Tor exit relays running Ebury", "5 Oct", {"text": "Confirmed", "chip": true, "tone": "ok"}, "333 relays used to intercept SSH. Trust the transport less."],
+      ["Meta Muse shared conversations", "18 Oct · sharing paused 20 Oct", {"text": "Confirmed", "chip": true, "tone": "ok"}, "6,800+ addresses discoverable in DNS. Muse is a personal assistant, not a coding agent."],
+      ["GMO Onamae Desktop Cloud", "20 Oct", {"text": "Confirmed", "chip": true, "tone": "ok"}, "26,739 servers shut down 21 Oct; unauthorised trades reported."],
+      ["Ahold Delhaize sites and apps", "11 to 12 Oct", {"text": "Confirmed", "chip": true, "tone": "ok"}, "Outage; stores open; no sensitive data theft found."],
+      ["Medi-Cal billing vendor (Paradigm)", "Disclosed 14 Sep", {"text": "Confirmed", "chip": true, "tone": "ok"}, "970,403 members; intrusion was Oct 2025, so not a Black October event."],
+      ["Nikkei 1.83M, Capcom 11.77M, ARTEX, Lazarus \"post-quantum\" malware", "·", {"text": "Not found", "chip": true, "tone": "crit"}, "None appears in any source checked. The real Lazarus item is Operation FlashHole (résumé lures), 21 Oct."]
+    ]},
+    {"type": "matrix", "heading": "What failed, incident by incident", "intro": "Six failure modes cover all ten. In the bottom row, a leaked credential appears in seven and an exposed admin surface in three. Nothing on this chart needed a zero-day except PHP and GitLab, and those needed only a patch.",
+     "row_label": "Incident", "columns": ["Credential leaked or stolen", "Never revoked, no expiry", "Trusted channel hijacked", "Known flaw, patch lag", "Admin surface on open internet", "Vendor failure you could not see"],
+     "rows": [
+      {"label": "LiteLLM", "marks": [1, 1, 1, 0, 1, 1]},
+      {"label": "Railway", "marks": [1, 0, 0, 0, 0, 1]},
+      {"label": "Zeabur", "marks": [1, 1, 0, 0, 1, 1]},
+      {"label": "PHP2Shell", "marks": [0, 0, 0, 1, 0, 0]},
+      {"label": "OVHcloud CLI", "marks": [1, 0, 1, 0, 0, 0]},
+      {"label": "TeamUpdraft", "marks": [1, 0, 1, 0, 0, 1]},
+      {"label": "Cairn agents", "marks": [0, 0, 0, 1, 1, 0]},
+      {"label": "eMudhra", "marks": [0, 0, 0, 0, 0, 1]},
+      {"label": "GitLab", "marks": [0, 0, 0, 1, 0, 0]},
+      {"label": "OpenCode", "marks": [1, 0, 0, 0, 0, 1]}
+     ],
+     "note": "The Cairn row is scored on the victim side: the breached sites had ordinary known weaknesses, and the attacker's own panels were the exposed surface that got him caught."},
+    {"type": "steps", "heading": "Ten safeguards, each tied to the incident that proves it", "intro": "Ordered by how many of the ten incidents each would have stopped. Three deserve special weight: keep secrets out of logs (that is how LiteLLM actually fell), put spend caps on every provider key (OpenCode), and keep an exit plan for every vendor (Zeabur made that literal). Items marked in red are the release gate before a paid pilot.", "items": [
+      {"title": "Revoke the moment a secret leaks, and give every token an expiry.", "gate": true, "image": "img/s01.jpg", "image_alt": "Sketchnote: a key tagged LEAKED falling into a bin, a calendar page reading EXPIRES", "text": "Flagging a leaked key is not fixing it. LiteLLM's key sat flagged for five months. Zeabur's admin tokens were created in January 2024 with no expiry and survived a full post-breach rotation. If it cannot expire, it will outlive your memory of it.", "proof": "LiteLLM, Zeabur"},
+      {"title": "Scan for secrets before every commit, and keep them out of logs.", "gate": true, "image": "img/s02.jpg", "image_alt": "Sketchnote: a commit arrow stopped by a shield labelled SCAN, a log scroll with a crossed-out key", "text": "Pre-commit scanning catches the May 27 commit. But the tokens that sank LiteLLM were read out of request logs on an internal gateway: a coding agent had embedded a GitHub OAuth token in a response body, and the gateway logged bodies. Never log full LLM request or response bodies in production. Redact `Authorization` and anything that looks like a key.", "proof": "LiteLLM"},
+      {"title": "Rotate on a schedule and after any vendor notice, and rehearse it.", "image": "img/s03.jpg", "image_alt": "Sketchnote: a circular arrow around three keys, a calendar reading QUARTERLY, a stopwatch", "text": "Railway, OpenCode and Zeabur all ended with \"rotate everything\". Teams that had never rotated did not know which variable fed which service. Write the runbook now, run it once a quarter, and time it.", "proof": "Railway, OpenCode, Zeabur, TeamUpdraft"},
+      {"title": "Pin versions, lock hashes, and wait a day before adopting a new release.", "gate": true, "image": "img/s04.jpg", "image_alt": "Sketchnote: a parcel with a push-pin through it, a crossed-out LATEST tag, an hourglass reading 24H", "text": "LiteLLM's bad wheel was live for 1 h 44 min on PyPI; `latest` on Docker Hub pointed at it for 2 h 34 min. A lockfile with hashes, a 24-hour adoption delay and a digest-pinned image in production would each have been enough. Moving tags are for dev, not prod.", "proof": "LiteLLM"},
+      {"title": "Verify every download, and turn on release immutability.", "gate": true, "image": "img/s05.jpg", "image_alt": "Sketchnote: a download arrow on a balance scale against a fingerprint labelled HASH, a shelf padlock labelled IMMUTABLE", "text": "OVHcloud's install path checked no hash and its releases were editable after publish. Check the signature or hash of every binary you install, and on your own GitHub releases enable immutability so a hijacked account cannot rewrite history.", "proof": "OVHcloud"},
+      {"title": "Make a release need two humans, not two tokens.", "gate": true, "image": "img/s06.jpg", "image_alt": "Sketchnote: two figures with hardware keys pulling one lever labelled RELEASE, two crossed-out paper tokens", "text": "LiteLLM's approval gate was two accounts, and both tokens were stolen. Use phishing-resistant sign-in (passkeys or hardware keys) on every maintainer account, publish to PyPI and npm with short-lived OIDC trusted publishing instead of long-lived tokens, and set branch protection that an organisation owner cannot bypass alone.", "proof": "LiteLLM, OVHcloud"},
+      {"title": "Patch internet-facing runtimes within days, from an inventory you already have.", "image": "img/s07.jpg", "image_alt": "Sketchnote: a stack of servers, a figure with a wrench, a calendar with a day circled and the word DEADLINE", "text": "PHP2Shell was probed before disclosure and on CISA's exploited list five days after the patch. GitLab's flaw reaches back to 2014 with no workaround. Know every PHP, Node, Go, Ruby and GitLab version you run, and subscribe to the vendor's security list rather than waiting for the news.", "proof": "PHP2Shell, GitLab"},
+      {"title": "Scope every stored secret, and put a spend cap on every AI provider key.", "image": "img/s08.jpg", "image_alt": "Sketchnote: a vault of small drawers labelled ONE KEY EACH, a gauge with a red line marked CAP", "text": "A platform variable store is one blast radius. Give each service its own key with the least access it needs, prefer platform-issued short-lived identity over pasted keys where the platform offers it, and set a monthly cap at OpenAI, Anthropic and Google so a stolen key costs you a lunch, not $1,700.", "proof": "Railway, OpenCode, Zeabur"},
+      {"title": "No admin panel, agent dashboard or internal tool on the open internet.", "image": "img/s09.jpg", "image_alt": "Sketchnote: a dashboard with an open door to a globe crossed out, the same dashboard behind a gate labelled VPN", "text": "The Cairn operator was caught because his panels were public. LiteLLM's internal gateway was reachable from the internet and that is where the tokens were read. Zeabur's admin portals stayed public between its two breaches. Put every dashboard behind a VPN, an identity-aware proxy or at least an allowlist. Yours included.", "proof": "Cairn, LiteLLM, Zeabur"},
+      {"title": "Know your chain, and keep a one-day exit plan for every vendor.", "image": "img/s10.jpg", "image_alt": "Sketchnote: a chain of vendor boxes with one link snapping, a figure with a suitcase at a door labelled EXIT, a calendar reading 1 DAY", "text": "eMudhra's customers had 30,000 certificates to replace on a browser's schedule. Zeabur's customers have until 1 December to be somewhere else. For each platform, registry, CA and model provider you depend on, write down how you would leave in a day, and keep your data and secrets in a form you can take with you.", "proof": "eMudhra, Zeabur, Railway"}
+    ]},
+    {"type": "callout", "tone": "info", "paragraphs": ["**Verify a number before repeating it.** This month alone: \"375K records\" became 3,897 confirmed; \"1,200 sites\" became 1,100+; \"70% of the web runs PHP\" appears in no source; Unit 42 withdrew a government-breach claim within four days; a dozen \"incidents\" in viral threads never happened. The vendor's own statement is the source of record."]},
+    {"type": "boxes", "heading": "What this means for a founder shipping an MVP", "items": [
+      {"tone": "no", "title": "Stop doing this week", "bullets": ["Pulling `latest` or any moving tag into production.", "Pasting provider keys into third-party consoles without a spend cap.", "Logging LLM request and response bodies.", "Leaving a dashboard, Honcho panel or agent UI on a public URL with only a password."]},
+      {"tone": "maybe", "title": "Do before the paid pilot", "bullets": ["Lockfile with hashes; 24-hour adoption delay on dependencies.", "Passkeys on GitHub, PyPI, npm, cloud consoles.", "Secret scanning in CI and a pre-commit hook.", "A tested rotation runbook with a backup of the old values."]},
+      {"tone": "yes", "title": "Keep doing", "bullets": ["Rotating after every vendor notice, even \"subset of users\".", "Reading the vendor's own statement before the thread about it.", "Patching runtimes inside the CISA deadline, even when you are not federal."]}
+    ]},
+    {"type": "faq", "heading": "Frequently asked", "items": [
+      {"q": "Were these attacks connected?", "a": "No evidence says so. Railway described its own incident as part of a series aimed at AI inference providers, and that is the only vendor claim of a pattern. The rest are independent: a weak-key bug from 2025, a regex overflow from 2014, a hijacked GitHub account, an unrotated token. The connection is the audience, not the attacker: all of it is infrastructure AI builders use."},
+      {"q": "Was AI used to find PHP2Shell?", "a": "Reporting says the PHP flaws were found with AI assistance, and the Cairn agents were AI-driven. For the other eight incidents AI was the target, not the tool. AI did not hack the internet; AI builders got hit from six directions in eleven days."},
+      {"q": "What is still unverified?", "a": "Railway's affected-user count (withheld). How the OpenCode intruder got in (not published). Whether any Cairn victim lost data (unknown). OVHcloud's download count (not published). Whether the LiteLLM internal deployment was reached through the May key or a separate vulnerability: LiteLLM says the key path is likely, not confirmed."}
+    ]},
+    {"type": "sources", "heading": "Sources checked 27 Oct 2026", "items": [
+      {"text": "Overview", "links": [{"text": "Wikipedia, Black October (information security)", "url": "https://en.wikipedia.org/wiki/Black_October_(information_security)"}, {"text": "ScruteX, 28 incidents checked", "url": "https://scrutex.ai/blogs/black-october-2026-cyber-incidents-explained"}]},
+      {"text": "LiteLLM", "links": [{"text": "LiteLLM incident report", "url": "https://docs.litellm.ai/blog/security-incident-oct-21-2026"}, {"text": "Microsoft Security", "url": "https://www.microsoft.com/en-us/security/blog/2026/10/23/inside-the-litellm-1-107-0-supply-chain-compromise-credential-theft-through-python-startup-hooks/"}, {"text": "Datadog Security Labs", "url": "https://securitylabs.datadoghq.com/articles/litellm-compromised-pypi-docker/"}]},
+      {"text": "Railway", "links": [{"text": "BleepingComputer, 22 Oct", "url": "https://www.bleepingcomputer.com/news/security/railway-warns-devs-to-rotate-secrets-after-potential-breach/"}]},
+      {"text": "Zeabur", "links": [{"text": "BleepingComputer, 20 Oct", "url": "https://www.bleepingcomputer.com/news/security/zeabur-shutting-down-after-second-security-breach-in-two-months/"}]},
+      {"text": "PHP2Shell", "links": [{"text": "CISA alert, 21 Oct", "url": "https://www.cisa.gov/news-events/alerts/2026/10/21/critical-vulnerabilities-php-require-immediate-patching"}, {"text": "Tenable FAQ", "url": "https://www.tenable.com/blog/php2shell-cve-2026-109618-cve-2026-109619-frequently-asked-questions-about-critical-php-remote"}, {"text": "watchTowr FAQ", "url": "https://watchtowr.com/intelligence/php-cve-2026-109618-faq/"}, {"text": "The Hacker News, 21 to 27 Oct", "url": "https://thehackernews.com/search?q=PHP2Shell"}]},
+      {"text": "OVHcloud", "links": [{"text": "BleepingComputer", "url": "https://www.bleepingcomputer.com/news/security/ovhcloud-cli-releases-backdoored-on-github-to-steal-developer-secrets/"}, {"text": "The Hacker News", "url": "https://thehackernews.com/2026/10/hackers-hijack-five-ovhcloud-cli.html"}]},
+      {"text": "TeamUpdraft", "links": [{"text": "CSO Online", "url": "https://www.csoonline.com/article/4238422/wordpress-sites-compromised-after-teamupdraft-credential-exposure.html"}, {"text": "Nethemba", "url": "https://nethemba.com/updraftcentral-backdoor-analysis/"}]},
+      {"text": "Cairn", "links": [{"text": "SecurityWeek", "url": "https://www.securityweek.com/ai-platform-cairn-abused-to-hack-over-100-organizations/"}, {"text": "Quartz on the Reuters findings", "url": "https://qz.com/ai-agents-hacker-john-deere-sharkninja-cummins-breach-101926"}]},
+      {"text": "eMudhra", "links": [{"text": "The Hacker News", "url": "https://thehackernews.com/2026/10/eight-emudhra-ca-keys-compromised.html"}, {"text": "Mozilla bug 2083449", "url": "https://bugzilla.mozilla.org/show_bug.cgi?id=2083449"}, {"text": "eMudhra statement", "url": "https://emudhra.com/en/post/certificate-security-incident"}]},
+      {"text": "GitLab", "links": [{"text": "Astra advisory", "url": "https://www.getastra.com/blog/security-advisory/cve-2026-110264-gitlabs-critical-cvss-10-0-regex-rce-explained/"}, {"text": "fixed-version table", "url": "https://www.konfirmity.com/advisories/gitlab-critical-patch-release-19-5-1"}]},
+      {"text": "OpenCode", "links": [{"text": "The Hacker News", "url": "https://thehackernews.com/2026/10/opencode-console-breach-may-have.html"}]},
+      {"text": "SBI", "links": [{"text": "The Hacker News", "url": "https://thehackernews.com/2026/10/state-bank-of-india-confirms-data-leak.html"}, {"text": "Internet Freedom Foundation", "url": "https://internetfreedom.in/sbi-told-investors-its-data-breach-doesnt-matter-what-about-the-3-897-customers-it-affected/"}]}
+    ]}
+  ]
+}

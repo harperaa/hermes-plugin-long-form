@@ -823,6 +823,84 @@
     );
   }
 
+  // Served page URL for a workspace-relative path (index.html, img/*): the
+  // backend streams the file raw so the page renders with its own images.
+  function pageUrl(relPath) {
+    return "/api/plugins/long-form/page/" +
+      String(relPath || "").split("/").map(encodeURIComponent).join("/");
+  }
+
+  // A plain <iframe src> / <a href> to the page route can't carry the
+  // dashboard auth header (loopback mode 401s). Fetch the page authed with
+  // `?inline=1` (images embedded as data: URIs, so no relative fetches) and
+  // hand back a blob: URL that renders complete anywhere. Caller revokes.
+  function fetchPageBlob(relPath) {
+    return SDK.authedFetch(pageUrl(relPath) + "?inline=1")
+      .then(function (r) {
+        if (!r.ok) throw new Error("page fetch failed (" + r.status + ")");
+        return r.text();
+      })
+      .then(function (text) {
+        return URL.createObjectURL(new Blob([text], { type: "text/html" }));
+      });
+  }
+
+  // Error detail from a failed api() call: a JSON list (validation problems)
+  // becomes a list of lines, anything else is one line.
+  function errorLines(e) {
+    var msg = String((e && e.message) || e || "Request failed");
+    try {
+      var parsed = JSON.parse(msg);
+      if (Array.isArray(parsed)) return parsed.map(String);
+      if (parsed && Array.isArray(parsed.detail)) return parsed.detail.map(String);
+      if (parsed && parsed.detail) return [String(parsed.detail)];
+    } catch (err) { /* plain text */ }
+    return [msg];
+  }
+
+  // Shared "Build a video page" form: the Artifacts header and the Research
+  // focus rows both collect a topic, the user's point of view and research
+  // guidance before the worker starts.
+  function ArtifactModal(props) {
+    var topicState = useState(props.topic || "");
+    var topic = topicState[0], setTopic = topicState[1];
+    var povState = useState("");
+    var pov = povState[0], setPov = povState[1];
+    var guideState = useState("");
+    var guide = guideState[0], setGuide = guideState[1];
+    return h(YtiModal, { onClose: props.onClose },
+      h("h3", null, props.title || "Build a video page on a topic"),
+      h("p", { className: "yti-modal-sub" }, props.intro ||
+        "Writes a verified research page — timeline graphics, the top items with talk tracks, and one sketchnote image per recommendation — into an artifact folder on this tab. Your point of view and guidance steer the research before anything is written."),
+      h("label", null, "Topic"),
+      h("input", {
+        value: topic,
+        autoFocus: !props.topic,
+        placeholder: "e.g. Black October 2026: what the month of breaches means for AI founders",
+        onChange: function (e) { setTopic(e.target.value); },
+      }),
+      h("label", null, "Your point of view"),
+      h("textarea", {
+        value: pov,
+        autoFocus: !!props.topic,
+        placeholder: "What you believe about this that the outlier video missed, the angle you want to take, who it is for",
+        onChange: function (e) { setPov(e.target.value); },
+      }),
+      h("label", null, "Research guidance"),
+      h("textarea", {
+        value: guide,
+        placeholder: "What to verify, which sources to trust, numbers you doubt, what to leave out",
+        onChange: function (e) { setGuide(e.target.value); },
+      }),
+      props.error ? h("div", { className: "yti-notice yti-notice-error" }, props.error) : null,
+      h("div", { className: "yti-modal-actions" },
+        h(Button, { size: "sm", variant: "outline", onClick: props.onClose }, "Cancel"),
+        h(Button, { size: "sm", disabled: !topic.trim() || !!props.busy,
+          onClick: function () { props.onSubmit(topic.trim(), pov, guide); } },
+          props.busy ? "Starting…" : "Build ✦"))
+    );
+  }
+
   function ArtifactsView() {
     var treeState = useState(null);
     var tree = treeState[0], setTree = treeState[1];
@@ -876,6 +954,26 @@
     var regenModal = regenModalState[0], setRegenModal = regenModalState[1];
     var regenFeedbackState = useState("");
     var regenFeedback = regenFeedbackState[0], setRegenFeedback = regenFeedbackState[1];
+    // Video pages (youtube-artifact): keyed by the artifact folder relPath.
+    var artStatesState = useState({});
+    var artStates = artStatesState[0], setArtStates = artStatesState[1];
+    var artModalState = useState(false);
+    var artModal = artModalState[0], setArtModal = artModalState[1];
+    var artBusyState = useState(false);
+    var artBusy = artBusyState[0], setArtBusy = artBusyState[1];
+    var artErrorState = useState(null);
+    var artError = artErrorState[0], setArtError = artErrorState[1];
+    var artIterModalState = useState(false);
+    var artIterModal = artIterModalState[0], setArtIterModal = artIterModalState[1];
+    var artFeedbackState = useState("");
+    var artFeedback = artFeedbackState[0], setArtFeedback = artFeedbackState[1];
+    var artNoticeState = useState(null);   // {ok, lines} under the preview head
+    var artNotice = artNoticeState[0], setArtNotice = artNoticeState[1];
+    // Selected .html page as a blob: URL (authed fetch, ?inline=1) + its error.
+    var pageBlobState = useState(null);
+    var pageBlob = pageBlobState[0], setPageBlob = pageBlobState[1];
+    var pageErrState = useState(null);
+    var pageErr = pageErrState[0], setPageErr = pageErrState[1];
     var stylesState = useState({ styles: [], selected: "" });
     var styleCat = stylesState[0], setStyleCat = stylesState[1];
     var stylePrevState = useState(null);
@@ -936,6 +1034,8 @@
         .catch(function () {});
       api("/regen-states").then(function (d) { setRegenStates((d && d.states) || {}); })
         .catch(function () {});
+      api("/artifact-states").then(function (d) { setArtStates((d && d.states) || {}); })
+        .catch(function () {});
       api("/styles").then(function (d) {
         if (d && d.styles) setStyleCat(d);
       }).catch(function () {});
@@ -952,7 +1052,8 @@
     }
     var hasOpenProduce = anyOpen(produce);
     var hasOpenRun = hasOpenProduce || anyOpen(iterate) || anyOpen(topicStates) ||
-      anyOpen(presentStates) || anyOpen(regenStates) || pipelineRunning;
+      anyOpen(presentStates) || anyOpen(regenStates) || anyOpen(artStates) ||
+      pipelineRunning;
     useEffect(function () {
       if (!hasOpenRun) return undefined;
       var id = window.setInterval(loadTree, 15000);
@@ -963,8 +1064,21 @@
       setEditing(null);
       setFile(null);
       setCopied("");
+      setArtNotice(null);
       if (pdfUrl) { URL.revokeObjectURL(pdfUrl); setPdfUrl(null); }
+      if (pageBlob) { URL.revokeObjectURL(pageBlob); setPageBlob(null); }
+      setPageErr(null);
       if (!sel) return;
+      if (sel.ext === ".html") {
+        // Rendered in an iframe from an authed fetch (blob: URL), never read
+        // as text and never a plain navigation to the page route.
+        setFile({ ok: true, kind: "page", mtime: sel.mtime, size: sel.size, ext: sel.ext });
+        var want = sel.relPath;
+        fetchPageBlob(want)
+          .then(function (u) { setPageBlob(u); })
+          .catch(function (e) { setPageErr(String((e && e.message) || e)); });
+        return;
+      }
       if (sel.ext === ".pdf") {
         SDK.authedFetch("/api/plugins/long-form/workspace/file?path=" +
                         encodeURIComponent(sel.relPath))
@@ -1090,6 +1204,70 @@
       }).catch(function (e) { alert(String((e && e.message) || e)); });
     }
 
+    // Nearest ancestor folder that holds an artifact.json — the unit the
+    // page actions (Iterate / Rebuild) work on. Falls back to the folder
+    // naming convention when the tree has not refreshed yet.
+    function artifactDirFor(node) {
+      if (!node) return null;
+      var rel = node.relPath || "";
+      var best = null;
+      function walk(nodes) {
+        (nodes || []).forEach(function (n) {
+          if (n.kind !== "dir") return;
+          var inside = rel === n.relPath || rel.indexOf(n.relPath + "/") === 0;
+          if (!inside) return;
+          var hasJson = (n.children || []).some(function (c) {
+            return c.kind === "file" && c.name === "artifact.json";
+          });
+          if (hasJson && (!best || n.relPath.length > best.length)) best = n.relPath;
+          walk(n.children);
+        });
+      }
+      walk(tree || []);
+      if (best) return best;
+      var m = rel.match(/^(.*\/artifact(?:-\d+)?)(?:\/|$)/);
+      return m ? m[1] : null;
+    }
+
+    function buildArtifact(topicText, pov, guidance) {
+      setArtBusy(true); setArtError(null);
+      api("/artifact", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ topic: topicText, pov: pov || "", guidance: guidance || "", video_id: null }),
+      }).then(function () {
+        setArtBusy(false); setArtModal(false); loadTree();
+      }).catch(function (e) { setArtBusy(false); setArtError(errorLines(e).join(" ")); });
+    }
+
+    function iterateArtifact(dir) {
+      if (!dir) return;
+      api("/artifact-iterate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ path: dir, feedback: artFeedback }),
+      }).then(function () {
+        setArtIterModal(false); setArtFeedback(""); loadTree();
+      }).catch(function (e) { alert(errorLines(e).join("\n")); });
+    }
+
+    function rebuildArtifact(dir) {
+      if (!dir) return;
+      setBusy(true); setArtNotice(null);
+      api("/artifact-rebuild", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ path: dir }),
+      }).then(function (r) {
+        setBusy(false);
+        setArtNotice({ ok: true, lines: ["Page rebuilt from artifact.json" + (r && r.page ? ": " + r.page : ".")] });
+        loadTree();
+      }).catch(function (e) {
+        setBusy(false);
+        setArtNotice({ ok: false, lines: errorLines(e) });
+      });
+    }
+
     function createPresentation() {
       if (!presTopic.trim() || !presOutline.trim()) return;
       api("/present", {
@@ -1134,6 +1312,16 @@
         "Select a file to preview it. Pipeline outputs land under ",
         h("code", null, "youtube/{date}/recommended/"),
         " — concepts, scripts, and generated assets.");
+    } else if (sel.ext === ".html") {
+      preview = pageErr
+        ? h("div", { className: "yti-notice yti-notice-error" }, "Could not load the page: " + pageErr)
+        : !pageBlob
+          ? h("div", { className: "yti-empty" }, "Loading page…")
+          : h("iframe", {
+              className: "yti-page-frame",
+              src: pageBlob,
+              title: sel.name,
+            });
     } else if (!file) {
       preview = h("div", { className: "yti-empty" }, "Loading…");
     } else if (file.ok === false) {
@@ -1183,8 +1371,17 @@
       ? "/chat?resume=" + encodeURIComponent(iter.sessionId) : null;
     var topicOpen = anyOpen(topicStates);
     var presentOpen = anyOpen(presentStates);
+    var artDir = artifactDirFor(sel);
+    var art = artDir ? artStates[artDir] : null;
+    var artOpen = !!art && art.status === "open";
+    var artChat = art && art.sessionId
+      ? "/chat?resume=" + encodeURIComponent(art.sessionId) : null;
+    var artTask = art && art.taskId
+      ? "/kanban?task=" + encodeURIComponent(art.taskId) : null;
+    var isPage = sel && sel.ext === ".html";
     var isAssetImage = sel && /\.(jpg|jpeg|png|webp)$/i.test(sel.name) &&
-      sel.relPath.indexOf("/assets/") !== -1;
+      (sel.relPath.indexOf("/assets/") !== -1 ||
+       (!!artDir && sel.relPath.indexOf(artDir + "/img/") === 0));
     var isDeckPdf = sel && sel.ext === ".pdf";
     var regen = sel && regenStates[sel.relPath];
     var regenOpen = !!regen && regen.status === "open";
@@ -1200,11 +1397,36 @@
           size: "sm",
           disabled: prodOpen,
           title: prodOpen
-            ? "Producing — images, thumbnails, and PDF are being generated"
-            : "Generate a full image set + thumbnails + PDF. Re-producing makes a NEW numbered set (assets/2, 3…) with its own N.-prefixed PDF — earlier sets are kept",
+            ? "Producing — the video page is being researched, drawn and built"
+            : "Build the video page: verified research, timeline graphics, one sketchnote image per recommendation — into an artifact/ folder beside this script. Re-producing makes artifact-2/, 3…",
           onClick: produceScript,
           className: "yti-produce-btn" + (prodOpen ? " yti-busy" : ""),
-        }, prodOpen ? "Producing…" : "Produce 🎥") : null,
+        }, prodOpen ? "Producing…" : "Produce ✦ page") : null,
+        isPage ? h("a", { className: "yti-rs-btnlink" + (pageBlob ? "" : " yti-faint"),
+          href: pageBlob || "#", target: "_blank", rel: "noopener",
+          onClick: function (e) { if (!pageBlob) e.preventDefault(); },
+          title: pageBlob ? "Open the finished page in its own tab" : "Loading the page…" },
+          "Open page ↗") : null,
+        artDir ? h(Button, {
+          size: "sm",
+          className: artOpen ? "yti-busy" : undefined,
+          disabled: artOpen,
+          title: artOpen
+            ? "Working — this page is being built or revised"
+            : "Revise this page from your feedback: content changes, new sections, image fixes — then re-render it",
+          onClick: function () { setArtFeedback(""); setArtIterModal(true); },
+        }, artOpen ? "Working…" : "Iterate ↻") : null,
+        artDir ? h(Button, {
+          size: "sm",
+          variant: "outline",
+          disabled: artOpen || busy,
+          title: "Re-render index.html from artifact.json and the images on disk — no research, no agent",
+          onClick: function () { rebuildArtifact(artDir); },
+        }, busy ? "Rebuilding…" : "Rebuild page") : null,
+        artChat ? h("a", { className: "yti-gen-link", href: artChat,
+          onClick: function (e) { e.preventDefault(); window.location.assign(artChat); } }, "chat ↗") : null,
+        artTask ? h("a", { className: "yti-gen-link", href: artTask,
+          onClick: function (e) { e.preventDefault(); window.location.assign(artTask); } }, "task ↗") : null,
         isScript ? h(Button, {
           size: "sm",
           variant: "outline",
@@ -1323,6 +1545,15 @@
         if ((regenStates[rel] || {}).status !== "open") return;
         spinPath(rel.split("/").slice(0, -1).join("/"));
       });
+      // Video pages (Produce ✦ page / Artifact ✦ / Iterate): keys are the
+      // artifact folder itself — spin it while open, tick it when done.
+      Object.keys(artStates || {}).forEach(function (rel) {
+        var st = (artStates[rel] || {}).status;
+        if (st === "open") { spinPath(rel); return; }
+        if (st !== "done") return;
+        var parts = rel.split("/");
+        for (var i = 2; i <= parts.length; i++) produced[parts.slice(0, i).join("/")] = 1;
+      });
       // 3 More 🔁 (pipeline): no per-run path — spin today's recommended
       // folder (browser-local AND UTC date, they can differ near midnight).
       if (pipelineRunning) {
@@ -1340,6 +1571,7 @@
     function subtreeHasProduced(n) {
       if (n.kind === "file")
         return !!(produce[n.relPath] && produce[n.relPath].status === "done");
+      if (artStates[n.relPath] && artStates[n.relPath].status === "done") return true;
       return (n.children || []).some(subtreeHasProduced);
     }
     // "Produced": ancestor chain back to the date folders; once a folder
@@ -1476,6 +1708,15 @@
           }, topicOpen ? "Generating…" : "Generate ✨"),
           h(Button, {
             size: "sm",
+            className: anyOpen(artStates) ? "yti-busy" : undefined,
+            disabled: anyOpen(artStates),
+            title: anyOpen(artStates)
+              ? "Building — a video page is being researched, drawn and rendered"
+              : "Build a video page on a topic: verified research, timeline graphics, top items with talk tracks, one sketchnote image per recommendation — steered by your point of view",
+            onClick: function () { setArtError(null); setArtModal(true); },
+          }, anyOpen(artStates) ? "Building…" : "Artifact ✦"),
+          h(Button, {
+            size: "sm",
             className: presentOpen ? "yti-busy" : undefined,
             disabled: presentOpen,
             title: presentOpen
@@ -1486,6 +1727,30 @@
           h(Button, { size: "sm", variant: "outline", onClick: loadTree }, "Refresh")
         )
       ),
+      artModal ? h(ArtifactModal, {
+        busy: artBusy, error: artError,
+        onClose: function () { setArtModal(false); },
+        onSubmit: buildArtifact,
+      }) : null,
+      artIterModal && artDir ? h(YtiModal, { onClose: function () { setArtIterModal(false); } },
+        h("h3", null, "Iterate on this page"),
+        h("p", { className: "yti-modal-sub" },
+          "Revises ", h("code", null, artDir), " from your feedback — content, ",
+          "sections, numbers, image fixes — then re-renders index.html. ",
+          "Earlier images are kept alongside; the page is versioned."),
+        h("label", null, "Feedback"),
+        h("textarea", {
+          value: artFeedback,
+          autoFocus: true,
+          placeholder: "Add a step 8 about rotating keys stored inside the instance… Make the images full width… The LiteLLM card overstates the download count, fix it to 3.3M",
+          onChange: function (e) { setArtFeedback(e.target.value); },
+        }),
+        h("div", { className: "yti-modal-actions" },
+          h(Button, { size: "sm", variant: "outline",
+            onClick: function () { setArtIterModal(false); } }, "Cancel"),
+          h(Button, { size: "sm", disabled: !artFeedback.trim(),
+            onClick: function () { iterateArtifact(artDir); } }, "Iterate ↻"))
+      ) : null,
       iterModal && sel ? h(YtiModal, { onClose: function () { setIterModal(false); } },
         h("h3", null, "Iterate on this script"),
         h("p", { className: "yti-modal-sub" },
@@ -1633,6 +1898,11 @@
         ),
         h("div", { className: "yti-preview" },
           previewHead,
+          artNotice ? h("div", { className: "yti-notice " + (artNotice.ok ? "yti-notice-ok" : "yti-notice-error") },
+            artNotice.ok ? null : h("b", null, "The page could not be rebuilt:"),
+            h("ul", { className: "yti-notice-list" }, (artNotice.lines || []).map(function (l, i) {
+              return h("li", { key: i }, l);
+            }))) : null,
           preview)
       )
     );
@@ -2525,6 +2795,32 @@
     const [st, setSt] = useState(null);
     const [busy, setBusy] = useState(null);
     const [msg, setMsg] = useState(null);
+    const [artModal, setArtModal] = useState(false);
+    const [artError, setArtError] = useState(null);
+    const [pageOpening, setPageOpening] = useState(false);
+    // No blob is held for the row, so build one on click (authed fetch) and
+    // open it; a plain href to the page route would 401 in loopback mode.
+    const openPage = function (rel) {
+      if (pageOpening) return;
+      setPageOpening(true); setMsg(null);
+      fetchPageBlob(rel)
+        .then(function (u) {
+          var w = window.open(u, "_blank", "noopener");
+          if (!w) setMsg("The browser blocked the new tab — allow pop-ups for this site and try again.");
+        })
+        .catch(function (e) { setMsg("Could not open the page: " + String((e && e.message) || e)); })
+        .finally(function () { setPageOpening(false); });
+    };
+    const buildArtifact = function (topic, pov, guidance) {
+      setBusy("artifact"); setArtError(null);
+      post("/research/artifacts", { video_id: props.id, action: "artifact", topic: topic, pov: pov || "", guidance: guidance || "" })
+        .then(function (r) {
+          setSt(r.state || st); setArtModal(false);
+          setMsg("Video page task created (" + (r.taskId || "") + ") — the page lands in " + (r.outDir || "the artifacts folder") + " when the worker finishes.");
+        })
+        .catch(function (e) { setArtError(errorLines(e).join(" ")); })
+        .finally(function () { setBusy(null); });
+    };
     const load = function () { api("/research/artifacts-state?id=" + encodeURIComponent(props.id)).then(setSt).catch(function () { setSt({}); }); };
     useEffect(load, [props.id]);  // eslint-disable-line
     const run = function (action) {
@@ -2541,6 +2837,7 @@
     };
     const s2 = st || {};
     const gen = s2.scripts || {};
+    const art = s2.artifact || {};
     const b = function (label, action, done, title, disabled) {
       return h(Button, { size: "sm", variant: done ? "outline" : undefined, disabled: !!busy || !!disabled, title: title,
         onClick: function () { run(action); } }, busy === action ? label + "…" : (done ? "✓ " : "") + label);
@@ -2559,13 +2856,34 @@
           b("Analysis", "analysis", s2.analysis,
             s2.analysis ? "analysis.md exists in " + s2.dir : (s2.analysis_queued ? "Analysis task is queued" : "Queue the analysis task: Video Summary + Top 20 Insights → analysis.md (needs the transcript; written first if missing)"),
             s2.no_captions || s2.analysis_queued),
-          b("Scripts", "scripts", gen.state === "done",
-            gen.state === "done" ? "Concepts and scripts exist in " + s2.dir : (gen.state === "open" ? "Scripts task is open (" + (gen.taskId || "") + ")" : "Create the ✨ task: gap-finder Mode A concepts (straight, hot take, contrarian) + script outlines into the artifacts folder"),
-            s2.no_captions || gen.state === "open"),
+          b("Scripts", "scripts", gen.status === "done",
+            gen.status === "done" ? "Concepts and scripts exist in " + s2.dir : (gen.status === "open" ? "Scripts task is open (" + (gen.taskId || "") + ")" : "Create the ✨ task: gap-finder Mode A concepts (straight, hot take, contrarian) + script outlines into the artifacts folder"),
+            s2.no_captions || gen.status === "open"),
+          h(Button, { size: "sm", variant: art.status === "done" ? "outline" : undefined,
+            disabled: !!busy || art.status === "open",
+            className: art.status === "open" ? "yti-busy" : undefined,
+            title: art.status === "done" ? "A video page exists in " + (art.dir || s2.dir || "the artifacts folder") + " — build another, or open it"
+              : art.status === "open" ? "Video page task is open (" + (art.taskId || "") + ")"
+              : "Build a video page from this outlier: your point of view + research guidance → verified research, timeline graphics, sketchnote images, one shareable page",
+            onClick: function () { setArtError(null); setArtModal(true); } },
+            busy === "artifact" ? "Artifact…" : art.status === "open" ? "Artifact…" : (art.status === "done" ? "✓ " : "") + "Artifact ✦"),
+          art.page ? h("a", { className: "yti-rs-btnlink" + (pageOpening ? " yti-busy" : ""), href: "#",
+            title: "Open the finished video page in its own tab",
+            onClick: function (e) { e.preventDefault(); openPage(art.page); } },
+            pageOpening ? "Opening…" : "Open page ↗") : null,
           s2.dir ? h("a", { className: "yti-rs-btnlink", href: "/longform?tab=artifacts&path=" + encodeURIComponent(s2.dir), title: "Open this video's folder on the Artifacts tab" }, "Artifacts folder →") : null,
-          gen.taskId ? h("a", { className: "yti-rs-btnlink", href: "/kanban?task=" + encodeURIComponent(gen.taskId), title: "Open the scripts task on the Kanban" }, "Task →") : null
+          gen.taskId ? h("a", { className: "yti-rs-btnlink", href: "/kanban?task=" + encodeURIComponent(gen.taskId), title: "Open the scripts task on the Kanban" }, "Task →") : null,
+          art.taskId ? h("a", { className: "yti-rs-btnlink", href: "/kanban?task=" + encodeURIComponent(art.taskId), title: "Open the video page task on the Kanban" }, "Page task →") : null
         ]),
-      msg ? h("div", { className: "yti-muted yti-small yti-rs-rowbar-msg" }, msg) : null);
+      msg ? h("div", { className: "yti-muted yti-small yti-rs-rowbar-msg" }, msg) : null,
+      artModal ? h(ArtifactModal, {
+        topic: props.title || "",
+        title: "Build a video page from this outlier",
+        intro: "Starts from what the teardown read about this video (opening, packaging, comments, formats) plus your point of view and research guidance, then writes a verified page with timeline graphics and one sketchnote image per recommendation into this video's artifacts folder.",
+        busy: busy === "artifact", error: artError,
+        onClose: function () { setArtModal(false); },
+        onSubmit: buildArtifact,
+      }) : null);
   }
 
   function momentumText(mo) {
@@ -2870,7 +3188,7 @@
                   : h("span", { className: "yti-muted" }, "—")),
               h("td", { className: "yti-center", title: tdTitle }, h("span", { className: "yti-rs-tdglyph yti-rs-tdglyph-" + (d.p.td === 1 ? "on" : d.p.td === -1 ? "no" : "off") }, tdGlyph)),
               h("td", { className: "yti-small yti-muted" }, h(FlagChips, { flags: (d.p.s > 0 ? ["date≈"] : []).concat(d.p.f).concat(d.p.sub == null && !d.p.fol ? ["size?"] : []) }))),
-              h("tr", { key: d.p.id + ":bar", className: "yti-rs-rowx-bar" + (isOpen ? " yti-rs-rowx-bar-on" : "") }, h("td", { colSpan: 12 }, h(FocusRowBar, { id: d.p.id, td: d.p.td, open: isOpen, onToggle: toggle }))),
+              h("tr", { key: d.p.id + ":bar", className: "yti-rs-rowx-bar" + (isOpen ? " yti-rs-rowx-bar-on" : "") }, h("td", { colSpan: 12 }, h(FocusRowBar, { id: d.p.id, title: d.p.t, td: d.p.td, open: isOpen, onToggle: toggle }))),
               isOpen ? h("tr", { key: d.p.id + ":td", className: "yti-rs-rowx-detail" }, h("td", { colSpan: 12 }, h(VideoTeardown, { id: d.p.id }))) : null];
           }))),
         q.focus.length > 60 ? h("div", { className: "yti-subtle", style: { marginTop: 6 } }, "Showing the first 60 of " + q.focus.length + " in the current sort order.") : null));

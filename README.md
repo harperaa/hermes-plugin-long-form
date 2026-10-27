@@ -41,6 +41,18 @@ dashboard under **Settings → Environment**.
 - **Insights** — full-text search (SQLite FTS5/BM25), category filter,
   most-sourced/most-recent sort, expandable cards with source videos,
   timestamps, and quotes; pagination; delete.
+- **Artifacts** — the workspace tree of concepts, scripts and pages.
+  **Produce ✦ page** on a script, **Artifact ✦** on a topic, or
+  **Artifact ✦** on a Research focus row (with your point of view and
+  research guidance) each create one kanban task that runs the
+  `youtube-artifact` skill: web-verified claims, scaled timeline graphics,
+  ranked cards, a failure-pattern matrix and numbered recommendations with
+  one sketchnote image each, rendered by `build_artifact.py` from an
+  `artifact.json` so every page shares one design. The page previews in
+  place (Open page ↗), **Iterate ↻** opens a feedback task against the same
+  folder, **Rebuild page** re-renders without an agent, and a completion
+  validator re-runs the skill's quality gate (fix task, max 2) before a
+  page counts as done.
 
 **Agent tools** (toolset `youtube_insights`):
 `yt_add_channel`, `yt_remove_channel`, `yt_list_channels`,
@@ -54,6 +66,9 @@ dashboard under **Settings → Environment**.
 
 **Skills** (load with `skill_view("long-form:<name>")`):
 `youtube-video-analyst`, `youtube-gap-finder`, `ideal-mechanics`,
+`youtube-content-creator`, `youtube-artifact` (+ `build_artifact.py`, the
+page renderer and quality gate, and a worked example), `generate-image`,
+`image-style-guide`, `outline-to-presentation`,
 `youtube-planner` (+ standalone dashboard scripts), `digest-url-liveness-gate`.
 
 **Cron:** `hermes long-form setup-cron --apply` installs the daily

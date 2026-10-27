@@ -17,10 +17,10 @@ from pathlib import Path
 from typing import Any, Optional
 
 try:
-    from . import yti_analysis, yti_generate, yti_paths, yti_rs_db, yti_store
+    from . import yti_analysis, yti_artifact, yti_generate, yti_paths, yti_rs_db, yti_store
     from .yti_rs_clients import ClientError
 except ImportError:  # pragma: no cover
-    import yti_analysis, yti_generate, yti_paths, yti_rs_db, yti_store  # type: ignore
+    import yti_analysis, yti_artifact, yti_generate, yti_paths, yti_rs_db, yti_store  # type: ignore
     from yti_rs_clients import ClientError  # type: ignore
 
 
@@ -68,7 +68,8 @@ def state(rconn: sqlite3.Connection, sconn: sqlite3.Connection, video_id: str,
             "analysis": analysis.exists(),
             "analysis_queued": (sv or {}).get("status") == "analyzing",
             "scripts": gen,
-            "scripts_dir": (rel + "/scripts") if rel and (d / "scripts").is_dir() else None}
+            "scripts_dir": (rel + "/scripts") if rel and (d / "scripts").is_dir() else None,
+            "artifact": yti_artifact.state_for_dir(str(d.relative_to(workspace)))}
 
 
 def ensure_transcript(rconn: sqlite3.Connection, sconn: sqlite3.Connection, video_id: str, tapi=None,
@@ -147,6 +148,53 @@ def run_scripts(rconn: sqlite3.Connection, sconn: sqlite3.Connection, video_id: 
     if ens.get("error"):
         return ens
     res = yti_generate.create_generation_task(video_id)
+    if res.get("error"):
+        return res
+    return {"ok": True, **res, "ensure": ens}
+
+
+def teardown_source(rconn: sqlite3.Connection, video_id: str, workspace: Optional[Path] = None) -> dict[str, Any]:
+    """What the page brief gets as source material for a research video:
+    the Tier 3 teardown read-out plus the workspace files that exist."""
+    try:
+        from .yti_rs_report import video_teardown
+    except ImportError:  # pragma: no cover
+        from yti_rs_report import video_teardown  # type: ignore
+    workspace = workspace or yti_paths.workspace_dir()
+    td = video_teardown(rconn, video_id)
+    v = _video(rconn, video_id) or {}
+    d = workspace_dir_for(v, workspace) if v else None
+    src: dict[str, Any] = {
+        "video": td.get("title"), "channel": td.get("channel"), "url": td.get("url"),
+        "teardown status": td.get("status"),
+        "how it opens (first 45 s)": (td.get("transcript") or {}).get("opening"),
+        "packaging": td.get("packaging"),
+        "viewer response": td.get("response"),
+        "top comments": [c.get("text") for c in (td.get("comments") or {}).get("top") or []],
+        "title formats matched": [f.get("label") for f in td.get("formats") or []],
+    }
+    if d is not None:
+        for name in ("transcript.txt", "analysis.md"):
+            if (d / name).exists():
+                src[name] = str(d / name)
+    return src
+
+
+def run_artifact(rconn: sqlite3.Connection, sconn: sqlite3.Connection, video_id: str, tapi=None, *,
+                 topic: str = "", pov: str = "", guidance: str = "") -> dict[str, Any]:
+    """Research tab Artifact ✦: a youtube-artifact page on this outlier,
+    from the operator's point of view, into the video's own folder."""
+    v = _video(rconn, video_id)
+    if not v:
+        return {"error": f"unknown video {video_id}"}
+    # a transcript on disk is the best seed the worker can get; a video
+    # without captions still gets a page (the research phase carries it)
+    ens = ensure_transcript(rconn, sconn, video_id, tapi)
+    source = teardown_source(rconn, video_id)
+    d = workspace_dir_for(v)
+    out_dir = yti_artifact._versioned(d, "artifact")
+    res = yti_artifact.create_topic_task((topic or "").strip() or (v.get("title") or video_id),
+                                         pov, guidance, source=source, out_dir=out_dir, video_id=video_id)
     if res.get("error"):
         return res
     return {"ok": True, **res, "ensure": ens}

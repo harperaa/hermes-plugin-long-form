@@ -5,3 +5,7 @@ __pycache__/
 .gstack/
 .tmp-playbook/
 .tmp-brief/
+
+# rendered by build_artifact.py from the example; never committed
+skills/youtube-artifact/example/index.html
+skills/youtube-artifact/example/history/

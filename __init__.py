@@ -93,6 +93,27 @@ def _on_kanban_task_completed(task_id: str, **kwargs) -> None:
                 import yti_generate  # type: ignore
             script_result = yti_generate.handle_script_completion(conn, task_id)
             if script_result is None:
+                # youtube-artifact page task? Sweep strays, re-run the
+                # skill's quality gate, open a fix task when it fails.
+                try:
+                    from . import yti_artifact
+                except ImportError:  # pragma: no cover
+                    import yti_artifact  # type: ignore
+                page_result = yti_artifact.handle_completion(conn, task_id)
+                if page_result is not None:
+                    conn.close()
+                    if page_result.get("fixTask"):
+                        logger.warning(
+                            "page %s failed its gate -> fix task %s (%s)",
+                            task_id, page_result["fixTask"],
+                            "; ".join(page_result.get("problems") or [])[:500])
+                    elif page_result.get("exhausted"):
+                        logger.error(
+                            "page %s still failing after retries: %s", task_id,
+                            "; ".join(page_result.get("problems") or [])[:500])
+                    else:
+                        logger.info("page %s validated and rendered", task_id)
+                    return
                 # Produce task? Sweep scratch files out of assets/ so the
                 # Artifacts tab shows only images.
                 sweep = yti_generate.handle_produce_completion(conn, task_id)

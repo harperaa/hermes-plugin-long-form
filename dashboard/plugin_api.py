@@ -32,8 +32,14 @@ import yti_fetcher  # noqa: E402
 import yti_insights  # noqa: E402
 import yti_analysis  # noqa: E402
 import yti_generate  # noqa: E402
+import yti_artifact  # noqa: E402
 import yti_paths  # noqa: E402
 import yti_workspace  # noqa: E402
+
+try:
+    from fastapi.responses import HTMLResponse
+except ImportError:  # pragma: no cover
+    HTMLResponse = None  # type: ignore
 
 router = APIRouter()
 
@@ -184,9 +190,12 @@ class ProduceBody(BaseModel):
 
 @router.post("/produce")
 def post_produce(body: ProduceBody) -> dict[str, Any]:
-    """Artifacts tab Produce button: images + thumbnails + production PDF
-    for one approved script (content-creator Mode B, Phase 6 + 6b)."""
-    result = yti_generate.create_produce_task(body.path)
+    """Artifacts tab Produce button: build the youtube-artifact PAGE for one
+    approved script (research-verified cards, timeline graphics, one
+    sketchnote per recommendation) into artifact/ beside the script. The
+    older images-and-PDF deck is still reachable through
+    yti_generate.create_produce_task for callers that want it."""
+    result = yti_artifact.create_script_task(body.path)
     if result.get("error"):
         raise HTTPException(status_code=400, detail=result["error"])
     return result
@@ -195,6 +204,76 @@ def post_produce(body: ProduceBody) -> dict[str, Any]:
 @router.get("/produce-states")
 def get_produce_states() -> dict[str, Any]:
     return {"states": yti_generate.produce_states()}
+
+
+class ArtifactTopicBody(BaseModel):
+    topic: str
+    pov: str = ""
+    guidance: str = ""
+    video_id: Optional[str] = None
+
+
+@router.post("/artifact")
+def post_artifact(body: ArtifactTopicBody) -> dict[str, Any]:
+    """Artifacts page Artifact ✦ button: a page on a topic from the
+    operator's point of view and research guidance."""
+    result = yti_artifact.create_topic_task(body.topic, body.pov, body.guidance,
+                                            video_id=body.video_id)
+    if result.get("error"):
+        raise HTTPException(status_code=400, detail=result["error"])
+    return result
+
+
+@router.get("/artifact-states")
+def get_artifact_states() -> dict[str, Any]:
+    return {"states": yti_artifact.states()}
+
+
+class ArtifactIterateBody(BaseModel):
+    path: str
+    feedback: str = ""
+
+
+@router.post("/artifact-iterate")
+def post_artifact_iterate(body: ArtifactIterateBody) -> dict[str, Any]:
+    """Artifacts page Iterate ↻ on a page folder: the smallest change that
+    satisfies the operator's feedback, then re-render."""
+    result = yti_artifact.create_iterate_task(body.path, body.feedback)
+    if result.get("error"):
+        raise HTTPException(status_code=400, detail=result["error"])
+    return result
+
+
+class ArtifactRebuildBody(BaseModel):
+    path: str
+
+
+@router.post("/artifact-rebuild")
+def post_artifact_rebuild(body: ArtifactRebuildBody) -> dict[str, Any]:
+    """Re-render index.html from artifact.json with no agent; 400 with the
+    gate's problem list when the content does not pass."""
+    result = yti_artifact.rebuild(body.path)
+    if result.get("error"):
+        raise HTTPException(status_code=400, detail=result.get("problems") or [result["error"]])
+    return result
+
+
+@router.get("/page/{path:path}")
+def get_page(path: str, inline: int = 0):
+    """Serve a rendered page (or one of its images) from the workspace.
+    `?inline=1` on an index.html embeds its images as data: URIs so the
+    dashboard can show it from a blob URL."""
+    res = yti_artifact.page_file(path, inline=bool(inline))
+    if res.get("error"):
+        raise HTTPException(status_code=404, detail=res["error"])
+    if "html" in res:
+        if HTMLResponse is None:  # pragma: no cover
+            raise HTTPException(status_code=500, detail="HTMLResponse unavailable")
+        return HTMLResponse(res["html"], headers={"Cache-Control": "no-cache"})
+    if FileResponse is None:  # pragma: no cover
+        raise HTTPException(status_code=500, detail="FileResponse unavailable")
+    return FileResponse(res["path"], media_type=res["media"],
+                        headers={"Cache-Control": "no-cache"})
 
 
 class IterateBody(BaseModel):
@@ -656,7 +735,10 @@ def research_supply_demand(niche: str = "") -> dict[str, Any]:
 
 class ArtifactBody(BaseModel):
     video_id: str
-    action: str          # transcript | analysis | scripts
+    action: str          # transcript | analysis | scripts | artifact
+    topic: str = ""      # artifact only: defaults to the video title
+    pov: str = ""        # artifact only: the operator's point of view
+    guidance: str = ""   # artifact only: research guidance
 
 
 @router.get("/research/artifacts-state")
@@ -678,11 +760,15 @@ def research_artifacts(body: ArtifactBody) -> dict[str, Any]:
         secrets = yti_rs_config.get_secrets()
         if secrets.transcriptapi_key:
             tapi = yti_rs_clients.TranscriptAPI(secrets.transcriptapi_key, conn=rconn)
-        fn = {"transcript": yti_rs_bridge.ensure_transcript, "analysis": yti_rs_bridge.run_analysis,
-              "scripts": yti_rs_bridge.run_scripts}.get(body.action)
-        if fn is None:
-            raise HTTPException(status_code=400, detail=f"unknown action {body.action}")
-        res = fn(rconn, sconn, body.video_id, tapi)
+        if body.action == "artifact":
+            res = yti_rs_bridge.run_artifact(rconn, sconn, body.video_id, tapi,
+                                             topic=body.topic, pov=body.pov, guidance=body.guidance)
+        else:
+            fn = {"transcript": yti_rs_bridge.ensure_transcript, "analysis": yti_rs_bridge.run_analysis,
+                  "scripts": yti_rs_bridge.run_scripts}.get(body.action)
+            if fn is None:
+                raise HTTPException(status_code=400, detail=f"unknown action {body.action}")
+            res = fn(rconn, sconn, body.video_id, tapi)
         if res.get("error"):
             raise HTTPException(status_code=400, detail=res["error"])
         res["state"] = yti_rs_bridge.state(rconn, sconn, body.video_id)

@@ -24,6 +24,7 @@ HIDDEN_ENTRIES = {".DS_Store", ".git", "node_modules"}
 TEXT_EXTS = {".md", ".txt", ".json", ".yml", ".yaml", ".log", ".csv"}
 EDITABLE_EXTS = {".md", ".txt", ".json", ".yml", ".yaml", ".csv"}
 MIME_BY_EXT = {
+    ".html": "text/html",
     ".png": "image/png",
     ".jpg": "image/jpeg",
     ".jpeg": "image/jpeg",
