@@ -601,6 +601,24 @@
 .yti-modal textarea { min-height: 110px; resize: vertical; }
 .yti-modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
 
+/* ---- artifact modal: the section plan (checkbox per page part) ---- */
+.yti-plan { border: 1px solid var(--color-border); border-radius: 6px; padding: 6px 10px; }
+.yti-plan-tools { margin: 2px 0 4px; }
+.yti-plan-tools a { color: inherit; text-decoration: underline; }
+.yti-modal .yti-plan-row {
+  display: grid; grid-template-columns: 18px 170px 1fr; align-items: baseline; gap: 8px;
+  margin: 0; padding: 3px 0; font-size: 13px; font-weight: 500; text-transform: none; letter-spacing: 0;
+  color: inherit; cursor: pointer;
+}
+.yti-modal .yti-plan-row input { width: auto; margin: 0; cursor: pointer; }
+.yti-plan-locked { cursor: default; }
+.yti-plan-locked .yti-plan-name::after { content: " (always)"; font-weight: 400; color: var(--color-muted-foreground); }
+.yti-plan-desc { font-size: 12px; font-weight: 400; }
+@media (max-width: 520px) {
+  .yti-modal .yti-plan-row { grid-template-columns: 18px 1fr; }
+  .yti-plan-desc { grid-column: 2; }
+}
+
 /* ---- artifacts head actions: keep buttons on one row ---- */
 .yti-artifacts-head .yti-actions {
   display: flex;

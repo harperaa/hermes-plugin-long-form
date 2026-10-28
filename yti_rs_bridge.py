@@ -181,7 +181,7 @@ def teardown_source(rconn: sqlite3.Connection, video_id: str, workspace: Optiona
 
 
 def run_artifact(rconn: sqlite3.Connection, sconn: sqlite3.Connection, video_id: str, tapi=None, *,
-                 topic: str = "", pov: str = "", guidance: str = "") -> dict[str, Any]:
+                 topic: str = "", pov: str = "", guidance: str = "", plan: Any = None) -> dict[str, Any]:
     """Research tab Artifact ✦: a youtube-artifact page on this outlier,
     from the operator's point of view, into the video's own folder."""
     v = _video(rconn, video_id)
@@ -194,7 +194,8 @@ def run_artifact(rconn: sqlite3.Connection, sconn: sqlite3.Connection, video_id:
     d = workspace_dir_for(v)
     out_dir = yti_artifact._versioned(d, "artifact")
     res = yti_artifact.create_topic_task((topic or "").strip() or (v.get("title") or video_id),
-                                         pov, guidance, source=source, out_dir=out_dir, video_id=video_id)
+                                         pov, guidance, source=source, out_dir=out_dir, video_id=video_id,
+                                         plan=plan)
     if res.get("error"):
         return res
     return {"ok": True, **res, "ensure": ens}

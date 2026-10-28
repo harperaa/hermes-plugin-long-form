@@ -44,7 +44,8 @@ dashboard under **Settings → Environment**.
 - **Artifacts** — the workspace tree of concepts, scripts and pages.
   **Produce ✦ page** on a script, **Artifact ✦** on a topic, or
   **Artifact ✦** on a Research focus row (with your point of view and
-  research guidance) each create one kanban task that runs the
+  research guidance, and a checklist of the page's sections so you can
+  keep, say, only the solutions with images) each create one kanban task that runs the
   `youtube-artifact` skill: web-verified claims, scaled timeline graphics,
   ranked cards, a failure-pattern matrix and numbered recommendations with
   one sketchnote image each, rendered by `build_artifact.py` from an

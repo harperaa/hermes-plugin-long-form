@@ -110,6 +110,34 @@ def test_gate_requires_steps_sources_and_valid_timeline(tmp_path):
     assert "outside the timeline range" in joined and "fewer than 4 events" in joined
 
 
+def test_gate_enforces_section_plan(tmp_path):
+    b = _builder()
+    # a plan narrows the page: steps + sources alone pass
+    doc = _minimal_doc(plan=["steps", "sources"])
+    doc["sections"] = [s for s in doc["sections"] if s["type"] in ("steps", "sources")]
+    folder = _write_doc(tmp_path / "narrow", doc)
+    assert b.build(folder, check_only=True)["ok"]
+    # a section outside the plan is refused, a planned one missing is refused
+    doc2 = _minimal_doc(plan=["steps", "sources"])
+    probs = b.validate(doc2, tmp_path / "narrow")
+    assert any("not in this page's plan" in x for x in probs)
+    doc3 = _minimal_doc(plan=["timeline", "steps", "sources"])
+    doc3["sections"] = [s for s in doc3["sections"] if s["type"] in ("steps", "sources")]
+    probs = b.validate(doc3, tmp_path / "narrow")
+    assert any("asks for a 'timeline' section" in x for x in probs)
+    # a plan must be known parts and carry sources
+    assert b.plan_errors(["steps"]) and b.plan_errors(["bogus", "sources"]) and b.plan_errors(["sources"])
+    assert not b.plan_errors(["cards", "sources"])
+    assert b.normalize_plan(["steps", "facts"]) == ["facts", "steps", "sources"]
+    with pytest.raises(ValueError):
+        b.normalize_plan(["bogus"])
+    assert b.is_full_plan(list(reversed(b.PLAN_TYPES)))
+    assert [x["type"] for x in b.PLAN_PARTS][-1] == "sources" and b.PLAN_PARTS[-1].get("locked")
+    # no plan: the classic minimums still apply
+    doc4 = _minimal_doc(); doc4["sections"] = doc4["sections"][2:]
+    assert any("at least 4" in x for x in b.validate(doc4, tmp_path / "narrow"))
+
+
 def test_render_inlines_images_and_keeps_history(tmp_path):
     b = _builder()
     folder = _write_doc(tmp_path / "d", _minimal_doc())
@@ -143,7 +171,7 @@ def art_kanban(monkeypatch):
     return fake
 
 
-def test_topic_task_carries_pov_guidance_and_contract(tmp_home, art_kanban):
+def test_topic_task_carries_pov_guidance_and_contract(conn, tmp_home, art_kanban):
     r = yti_artifact.create_topic_task("Black October", pov="Keys, not zero-days",
                                        guidance="verify the KEV date")
     assert r["ok"] and r["outDir"].startswith("youtube/") and "/artifacts/black-october" in r["outDir"]
@@ -152,9 +180,37 @@ def test_topic_task_carries_pov_guidance_and_contract(tmp_home, art_kanban):
     assert "long-form:youtube-artifact" in body and "build_artifact.py" in body
     assert "schema.md" in body and "example/artifact.json" in body
     assert art_kanban.created[-1]["skills"] == list(yti_artifact.ARTIFACT_SKILLS)
-    # dedupe while open
-    assert yti_artifact.create_topic_task("Black October").get("already") or True
+    # a second click is a second page, never the same folder: the first
+    # worker has not created its folder yet, so the map is what reserves it
+    r2 = yti_artifact.create_topic_task("Black October")
+    assert r2["ok"] and not r2.get("already") and r2["outDir"] == r["outDir"] + "-2"
+    assert r2["taskId"] != r["taskId"]
+    Path(yti_artifact._load_map(conn)[r["outDir"]]["outDir"]).mkdir(parents=True)
+    assert yti_artifact.create_topic_task("Black October")["outDir"] == r["outDir"] + "-3"
     assert yti_artifact.create_topic_task("")["error"]
+    assert "Page plan" in body and "The whole page" in body and "Do NOT write" not in body
+
+
+def test_topic_task_carries_a_narrowed_plan(conn, tmp_home, art_kanban):
+    r = yti_artifact.create_topic_task("Only fixes", plan=["sources", "steps"])
+    body = art_kanban.created[-1]["body"]
+    assert "Write exactly these sections" in body and '{"plan": ["steps", "sources"]}' in body
+    assert "Do NOT write: `callout`, `facts`" in body and "`timeline`" in body and "`cards`" in body
+    assert "ONE sketchnote per recommendation" in body
+    assert yti_artifact._load_map(conn)[r["outDir"]]["plan"] == ["steps", "sources"]
+    # no steps: the brief drops the image phase and the style block
+    yti_artifact.create_topic_task("Timeline only", plan=["timeline", "cards"])
+    body = art_kanban.created[-1]["body"]
+    assert "Images: none" in body and "ONE sketchnote" not in body
+    assert yti_artifact._load_map(conn)["youtube/" + yti_artifact._today() + "/artifacts/timeline-only"]["plan"] == ["timeline", "cards", "sources"]
+    # the whole page ticked is the classic brief (no plan stored)
+    yti_artifact.create_topic_task("Everything", plan=list(yti_artifact.builder().PLAN_TYPES))
+    assert "The whole page" in art_kanban.created[-1]["body"]
+    assert yti_artifact._load_map(conn)["youtube/" + yti_artifact._today() + "/artifacts/everything"]["plan"] is None
+    # bad parts are refused before any task exists
+    assert "unknown part" in yti_artifact.create_topic_task("Bad", plan=["bogus"])["error"]
+    assert "content section" in yti_artifact.create_topic_task("Bad2", plan=["sources"])["error"]
+    assert yti_artifact.plan_parts()[-1]["type"] == "sources"
 
 
 def test_script_task_versions_folder_and_marks_produce_state(tmp_home, art_kanban):
@@ -228,6 +284,25 @@ def test_completion_renders_clean_page_and_opens_fix_on_failure(conn, tmp_home, 
     assert yti_artifact.handle_completion(conn, "unknown") is None
 
 
+def test_completion_checks_the_task_plan_against_artifact_json(conn, tmp_home, art_kanban):
+    t = yti_artifact.create_topic_task("Narrow", plan=["steps"])
+    out = Path(yti_artifact._load_map(conn)[t["outDir"]]["outDir"])
+    # the worker wrote a full page without the plan: the gate passes on its
+    # own, but the page is not what the operator asked for -> fix task
+    _write_doc(out, _minimal_doc())
+    art_kanban.tasks[t["taskId"]]["status"] = "done"
+    r1 = yti_artifact.handle_completion(conn, t["taskId"])
+    assert r1["fixTask"] and any("must declare exactly" in p for p in r1["problems"])
+    assert '["steps", "sources"]' in art_kanban.tasks[r1["fixTask"]]["body"]
+    # fixed: the declared plan matches and the sections follow it
+    doc = _minimal_doc(plan=["steps", "sources"])
+    doc["sections"] = [s for s in doc["sections"] if s["type"] in ("steps", "sources")]
+    _write_doc(out, doc)
+    art_kanban.tasks[r1["fixTask"]]["status"] = "done"
+    assert yti_artifact.handle_completion(conn, r1["fixTask"])["clean"]
+    assert "Summary tiles" not in (out / "index.html").read_text()
+
+
 def test_state_for_dir_finds_newest_page(tmp_home, art_kanban):
     ws = yti_paths.workspace_dir()
     base = ws / "youtube/2026-10-20/chan/video"
@@ -268,11 +343,15 @@ def test_research_artifact_action_seeds_teardown(tmp_home, art_kanban, monkeypat
     rconn.commit()
     monkeypatch.setattr(yti_rs_bridge, "ensure_transcript", lambda *a, **k: {"ok": True, "skipped": True})
     sconn = yti_store.connect()
-    r = yti_rs_bridge.run_artifact(rconn, sconn, "v1", None, pov="my angle", guidance="check dates")
+    r = yti_rs_bridge.run_artifact(rconn, sconn, "v1", None, pov="my angle", guidance="check dates",
+                                   plan=["steps"])
     assert r["ok"] and "/chan/outlier-video/artifact" in r["outDir"]
     body = art_kanban.created[-1]["body"]
     assert "Outlier Video" in body and "my angle" in body and "check dates" in body
-    assert "Source material" in body
+    assert "Source material" in body and '{"plan": ["steps", "sources"]}' in body
+    r2 = yti_rs_bridge.run_artifact(rconn, sconn, "v1", None)
+    assert r2["ok"] and r2["outDir"] == r["outDir"] + "-2" and r2["taskId"] != r["taskId"]
+    assert "unknown part" in yti_rs_bridge.run_artifact(rconn, sconn, "v1", None, plan=["x"])["error"]
     st = yti_rs_bridge.state(rconn, sconn, "v1")
     assert st["artifact"]["status"] == "open"
     assert yti_rs_bridge.run_artifact(rconn, sconn, "missing", None)["error"]
@@ -331,6 +410,13 @@ def test_routes_serve_rebuild_and_create(tmp_home, art_kanban, monkeypatch):
     # topic task + states + iterate + produce
     t = c.post("/api/plugins/long-form/artifact", json={"topic": "Keys", "pov": "p", "guidance": "g"}).json()
     assert t["ok"] and t["outDir"] in c.get("/api/plugins/long-form/artifact-states").json()["states"]
+    cat = c.get("/api/plugins/long-form/artifact-sections").json()["sections"]
+    assert [x["type"] for x in cat] == list(yti_artifact.builder().PLAN_TYPES) and cat[-1]["locked"]
+    narrow = c.post("/api/plugins/long-form/artifact",
+                    json={"topic": "Narrow", "sections": ["steps", "sources"]}).json()
+    assert narrow["ok"] and art_kanban.created[-1]["body"].count('{"plan": ["steps", "sources"]}') == 1
+    bad = c.post("/api/plugins/long-form/artifact", json={"topic": "Bad", "sections": ["nope"]})
+    assert bad.status_code == 400 and "unknown part" in bad.json()["detail"]
     it = c.post("/api/plugins/long-form/artifact-iterate",
                 json={"path": "youtube/2026-10-27/artifacts/r/index.html", "feedback": "wider"}).json()
     assert it["ok"]

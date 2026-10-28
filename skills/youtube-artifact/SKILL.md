@@ -46,6 +46,13 @@ worst day), `cards` (top N), `table` (also-rans and not-found), `matrix`
 (corrections), `boxes` (stop / do before / keep doing), `faq`, `sources`.
 Drop a section only when the topic genuinely has nothing for it; never pad.
 
+When the brief carries a **Page plan** (the operator unticked parts of the
+page in the dashboard modal), that plan replaces the default order: write
+exactly the listed section types, put `"plan": [...]` at the top level of
+artifact.json exactly as the brief gives it, and write nothing outside it.
+A plan without `steps` means no images and no `img/` folder. Give the kept
+sections the full depth of the example; a narrower page is not a thinner one.
+
 Writing rules (the validator enforces the mechanical ones):
 - The page is the deliverable, not a script for the presenter. No "say this", no "on camera", no "this slide", no recording checklist, no "your original list". Takeaways are written as statements the viewer should remember.
 - One idea per sentence. No em dashes. No TODO/TBD. No placeholder text.

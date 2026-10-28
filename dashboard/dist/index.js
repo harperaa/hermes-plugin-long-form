@@ -861,6 +861,10 @@
   // Shared "Build a video page" form: the Artifacts header and the Research
   // focus rows both collect a topic, the user's point of view and research
   // guidance before the worker starts.
+  // The first thing the form asks is which parts of the page to build: the
+  // catalogue comes from the backend (page order, Sources locked on), every
+  // part starts checked, and the plan rides with the task so the worker
+  // writes exactly those sections and the gate refuses anything else.
   function ArtifactModal(props) {
     var topicState = useState(props.topic || "");
     var topic = topicState[0], setTopic = topicState[1];
@@ -868,10 +872,54 @@
     var pov = povState[0], setPov = povState[1];
     var guideState = useState("");
     var guide = guideState[0], setGuide = guideState[1];
+    var partsState = useState(null);
+    var parts = partsState[0], setParts = partsState[1];
+    var keptState = useState({});
+    var kept = keptState[0], setKept = keptState[1];
+    useEffect(function () {
+      var alive = true;
+      api("/artifact-sections").then(function (r) {
+        if (!alive) return;
+        var list = (r && r.sections) || [];
+        var all = {};
+        list.forEach(function (x) { all[x.type] = true; });
+        setParts(list); setKept(all);
+      }).catch(function () { if (alive) setParts([]); });
+      return function () { alive = false; };
+    }, []);
+    function toggle(t) {
+      setKept(function (k) { var n = Object.assign({}, k); n[t] = !n[t]; return n; });
+    }
+    function setAll(on) {
+      var n = {};
+      (parts || []).forEach(function (x) { n[x.type] = on || !!x.locked; });
+      setKept(n);
+    }
+    var chosen = (parts || []).filter(function (x) { return kept[x.type] || x.locked; }).map(function (x) { return x.type; });
+    var contentCount = chosen.filter(function (t) { return t !== "sources"; }).length;
+    var allOn = parts && chosen.length === parts.length;
     return h(YtiModal, { onClose: props.onClose },
       h("h3", null, props.title || "Build a video page on a topic"),
       h("p", { className: "yti-modal-sub" }, props.intro ||
         "Writes a verified research page — timeline graphics, the top items with talk tracks, and one sketchnote image per recommendation — into an artifact folder on this tab. Your point of view and guidance steer the research before anything is written."),
+      h("label", null, "Sections to build"),
+      parts === null ? h("div", { className: "yti-muted yti-small" }, "Loading the section list…") :
+      h("div", { className: "yti-plan" },
+        h("div", { className: "yti-plan-tools yti-small" },
+          h("a", { href: "#", onClick: function (e) { e.preventDefault(); setAll(true); } }, "All"),
+          " · ",
+          h("a", { href: "#", onClick: function (e) { e.preventDefault(); setAll(false); } }, "None"),
+          h("span", { className: "yti-muted" }, allOn ? " — the whole page" : " — " + contentCount + " of " + (parts.length - 1) + " content sections")),
+        parts.map(function (x) {
+          var on = !!kept[x.type] || !!x.locked;
+          return h("label", { key: x.type, className: "yti-plan-row" + (x.locked ? " yti-plan-locked" : ""),
+              title: x.locked ? "Always included: every claim on the page needs a source" : "" },
+            h("input", { type: "checkbox", checked: on, disabled: !!x.locked,
+              onChange: function () { if (!x.locked) toggle(x.type); } }),
+            h("span", { className: "yti-plan-name" }, x.label),
+            h("span", { className: "yti-plan-desc yti-muted" }, x.desc));
+        }),
+        contentCount === 0 ? h("div", { className: "yti-notice yti-notice-error" }, "Keep at least one section besides Sources.") : null),
       h("label", null, "Topic"),
       h("input", {
         value: topic,
@@ -895,9 +943,9 @@
       props.error ? h("div", { className: "yti-notice yti-notice-error" }, props.error) : null,
       h("div", { className: "yti-modal-actions" },
         h(Button, { size: "sm", variant: "outline", onClick: props.onClose }, "Cancel"),
-        h(Button, { size: "sm", disabled: !topic.trim() || !!props.busy,
-          onClick: function () { props.onSubmit(topic.trim(), pov, guide); } },
-          props.busy ? "Starting…" : "Build ✦"))
+        h(Button, { size: "sm", disabled: !topic.trim() || !!props.busy || parts === null || contentCount === 0,
+          onClick: function () { props.onSubmit(topic.trim(), pov, guide, allOn ? [] : chosen); } },
+          props.busy ? "Starting…" : (allOn ? "Build ✦" : "Build " + contentCount + " section" + (contentCount === 1 ? "" : "s") + " ✦")))
     );
   }
 
@@ -1379,12 +1427,13 @@
       return m ? m[1] : null;
     }
 
-    function buildArtifact(topicText, pov, guidance) {
+    function buildArtifact(topicText, pov, guidance, sections) {
       setArtBusy(true); setArtError(null);
       api("/artifact", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ topic: topicText, pov: pov || "", guidance: guidance || "", video_id: null }),
+        body: JSON.stringify({ topic: topicText, pov: pov || "", guidance: guidance || "", video_id: null,
+                               sections: sections || [] }),
       }).then(function () {
         setArtBusy(false); setArtModal(false); loadTree();
       }).catch(function (e) { setArtBusy(false); setArtError(errorLines(e).join(" ")); });
@@ -1740,13 +1789,16 @@
       return (n.children || []).some(subtreeHasProduced);
     }
     // "Produced": ancestor chain back to the date folders; once a folder
-    // itself holds the produced script (directly or via a scripts/ child),
-    // show that entire folder untouched — mirrors the With Images rules.
+    // itself holds the produced script (directly or via a scripts/ child)
+    // or IS a finished video page (the artifact folder: index.html,
+    // artifact.json, img/, history/), show that entire folder untouched —
+    // mirrors the With Images rules.
     function pruneToProduced(nodes) {
       var out = [];
       nodes.forEach(function (n) {
         if (n.kind !== "dir") return;
         if (!subtreeHasProduced(n)) return;
+        if (artStates[n.relPath] && artStates[n.relPath].status === "done") { out.push(n); return; }
         var direct = (n.children || []).some(function (c) {
           return c.kind === "file" && produce[c.relPath] &&
             produce[c.relPath].status === "done";
@@ -2982,9 +3034,10 @@
         .catch(function (e) { setMsg("Could not open the page: " + String((e && e.message) || e)); })
         .finally(function () { setPageOpening(false); });
     };
-    const buildArtifact = function (topic, pov, guidance) {
+    const buildArtifact = function (topic, pov, guidance, sections) {
       setBusy("artifact"); setArtError(null);
-      post("/research/artifacts", { video_id: props.id, action: "artifact", topic: topic, pov: pov || "", guidance: guidance || "" })
+      post("/research/artifacts", { video_id: props.id, action: "artifact", topic: topic, pov: pov || "",
+                                    guidance: guidance || "", sections: sections || [] })
         .then(function (r) {
           setSt(r.state || st); setArtModal(false);
           setMsg("Video page task created (" + (r.taskId || "") + ") — the page lands in " + (r.outDir || "the artifacts folder") + " when the worker finishes.");

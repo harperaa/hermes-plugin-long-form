@@ -30,6 +30,25 @@ BOX_TONES = {"yes", "no", "maybe"}
 SECTION_TYPES = {"facts", "list", "timeline", "cards", "table", "matrix",
                  "steps", "callout", "boxes", "checklist", "faq", "sources",
                  "prose"}
+# The page plan: the parts the dashboard's Artifact modal lets the operator
+# keep or skip, in page order. A doc may carry `plan: [type, ...]` (a subset
+# of these, always with "sources"); the gate then demands every planned type
+# and refuses any section outside the plan. Without a plan the classic rules
+# apply (4+ sections, steps and sources required).
+PLAN_PARTS: list[dict[str, Any]] = [
+    {"type": "callout", "label": "Framing callout", "desc": "What the name or claim is and is not; corrections"},
+    {"type": "facts", "label": "Summary tiles", "desc": "The shape of it: 3 or 4 tiles, one number each"},
+    {"type": "list", "label": "Lead-up list", "desc": "Dated list of what was loaded before the window"},
+    {"type": "timeline", "label": "Timeline graphics", "desc": "Day timeline, plus the worst day hour by hour"},
+    {"type": "cards", "label": "Top problems", "desc": "The ranked incidents or items, each with its source"},
+    {"type": "table", "label": "Also-rans table", "desc": "Verified but outside the ranking, and the not-founds"},
+    {"type": "matrix", "label": "Failure-pattern matrix", "desc": "What failed, item by item"},
+    {"type": "steps", "label": "Solutions with images", "desc": "Numbered recommendations, one sketchnote each"},
+    {"type": "boxes", "label": "Stop / do before / keep doing", "desc": "What it means for the audience"},
+    {"type": "faq", "label": "FAQ", "desc": "Questions the viewer will ask, and what stayed unverified"},
+    {"type": "sources", "label": "Sources", "desc": "The bibliography; always included", "locked": True},
+]
+PLAN_TYPES = [x["type"] for x in PLAN_PARTS]
 IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".webp"}
 MIN_IMAGE_BYTES = 20_000
 BANNED_IN_PROSE = ("—",)          # em dash: the house style never uses it
@@ -103,6 +122,42 @@ def _walk_text(node: Any, path: str, out: list[tuple[str, str]]) -> None:
             _walk_text(v, f"{path}[{i}]", out)
 
 
+def plan_errors(plan: Any) -> list[str]:
+    """Why a plan (list of section types) is unusable; empty when fine."""
+    if not isinstance(plan, list) or not all(isinstance(t, str) for t in plan):
+        return ["must be a list of section type names"]
+    bad = [t for t in plan if t not in PLAN_TYPES]
+    if bad:
+        return [f"unknown part(s) {bad}; allowed {PLAN_TYPES}"]
+    if len(set(plan)) != len(plan):
+        return ["lists a part twice"]
+    if "sources" not in plan:
+        return ["must include 'sources'; every claim on the page needs a source"]
+    if len(plan) < 2:
+        return ["needs at least one content section besides 'sources'"]
+    return []
+
+
+def normalize_plan(parts: Any) -> list[str]:
+    """Order a plan in page order (sources always last). Raises ValueError."""
+    if not isinstance(parts, (list, tuple)):
+        raise ValueError("plan must be a list")
+    chosen = {str(t).strip() for t in parts if str(t).strip()}
+    unknown = sorted(chosen - set(PLAN_TYPES))
+    if unknown:
+        raise ValueError(f"unknown part(s) {unknown}; allowed {PLAN_TYPES}")
+    chosen.add("sources")
+    plan = [t for t in PLAN_TYPES if t in chosen]
+    errs = plan_errors(plan)
+    if errs:
+        raise ValueError("; ".join(errs))
+    return plan
+
+
+def is_full_plan(plan: Any) -> bool:
+    return isinstance(plan, list) and sorted(plan) == sorted(PLAN_TYPES)
+
+
 def validate(doc: Any, base_dir: Path) -> list[str]:
     p: list[str] = []
     if not isinstance(doc, dict):
@@ -135,14 +190,26 @@ def validate(doc: Any, base_dir: Path) -> list[str]:
             p.append(f"chips[{i}]: tone must be one of {sorted(TONES)}")
 
     sections = doc.get("sections")
-    if not isinstance(sections, list) or len(sections) < 4:
-        p.append("sections: at least 4 sections (facts, one graphic or cards, steps, sources)")
-        sections = sections if isinstance(sections, list) else []
+    sections = sections if isinstance(sections, list) else []
     types = [s.get("type") for s in sections if isinstance(s, dict)]
-    if "steps" not in types:
-        p.append("sections: a 'steps' section (the numbered recommendations with images) is required")
-    if "sources" not in types:
-        p.append("sections: a 'sources' section is required; every claim on the page needs a source")
+    plan = doc.get("plan")
+    if plan is not None:
+        plan_problems = plan_errors(plan)
+        p.extend(f"plan: {e}" for e in plan_problems)
+        if not plan_problems:
+            for t in plan:
+                if t not in types:
+                    p.append(f"sections: the plan asks for a '{t}' section and none is present")
+            for i, t in enumerate(types):
+                if t not in plan:
+                    p.append(f"sections[{i}] ({t}): not in this page's plan {plan}; remove it (do not pad the page)")
+    else:
+        if len(sections) < 4:
+            p.append("sections: at least 4 sections (facts, one graphic or cards, steps, sources)")
+        if "steps" not in types:
+            p.append("sections: a 'steps' section (the numbered recommendations with images) is required")
+        if "sources" not in types:
+            p.append("sections: a 'sources' section is required; every claim on the page needs a source")
 
     for i, s in enumerate(sections):
         w = f"sections[{i}]"

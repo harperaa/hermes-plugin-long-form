@@ -88,13 +88,38 @@ def _save_map(conn, mapping: dict[str, Any]) -> None:
 # Output folders
 # ---------------------------------------------------------------------------
 
-def _versioned(parent: Path, stem: str = "artifact") -> Path:
-    """artifact/, then artifact-2/, artifact-3/ ... never overwrite a page."""
+def reserved_dirs() -> set[str]:
+    """Every folder a page task was ever given (absolute paths). A task that
+    is still running has not created its folder yet, so folder existence
+    alone cannot tell two clicks apart; the map can."""
+    try:
+        conn = yti_store.connect()
+    except Exception:  # noqa: BLE001
+        return set()
+    try:
+        return {str(e.get("outDir")) for e in _load_map(conn).values()
+                if isinstance(e, dict) and e.get("outDir")}
+    except Exception:  # noqa: BLE001
+        return set()
+    finally:
+        conn.close()
+
+
+def _versioned(parent: Path, stem: str = "artifact", taken: Optional[set[str]] = None) -> Path:
+    """artifact/, then artifact-2/, artifact-3/ ... never overwrite a page:
+    a folder counts as used when it exists on disk OR a task (open or done)
+    was already pointed at it, so every click builds into its own folder."""
+    if taken is None:
+        taken = reserved_dirs()
+
+    def used(d: Path) -> bool:
+        return d.exists() or str(d) in taken
+
     first = parent / stem
-    if not first.exists():
+    if not used(first):
         return first
     n = 2
-    while (parent / f"{stem}-{n}").exists():
+    while used(parent / f"{stem}-{n}"):
         n += 1
     return parent / f"{stem}-{n}"
 
@@ -127,15 +152,21 @@ def _dashboard_link(out_dir: Path) -> str:
     return f"/longform?tab=artifacts&path={rel}"
 
 
-def _common_tail(out_dir: Path) -> list[str]:
-    return [
-        "",
-        "### Phase 3 to 5 (images, render, publish) — from the skill",
+def _common_tail(out_dir: Path, plan: Optional[list[str]] = None) -> list[str]:
+    images = [
         "Images: ONE sketchnote per recommendation through the",
         "`long-form:generate-image` skill, in parallel, anchored on the",
         f"selected style baseline `--input \"{yti_generate.selected_baseline_path()}\"`,",
         "with every rendered word in `--expect-text` and the step's meaning in",
         f"`--context`. Save them under {out_dir}/img/. Look at each one once.",
+    ] if (plan is None or "steps" in plan) else [
+        "Images: none. The plan has no steps section, so this page carries no",
+        "generated images and no img/ folder.",
+    ]
+    return [
+        "",
+        "### Phase 3 to 5 (images, render, publish) — from the skill",
+    ] + images + [
         "Render with:",
         f"  python3 {_BUILDER} {out_dir}",
         "and fix every problem it prints until it says OK. A completion",
@@ -156,7 +187,49 @@ def _common_tail(out_dir: Path) -> list[str]:
         "- No claim without a source you fetched. No em dashes. No images from",
         "  anything but generate-image.",
         "- Never hand-edit index.html; it is rendered from artifact.json.",
-    ] + yti_generate.selected_style_block()
+    ] + (yti_generate.selected_style_block() if (plan is None or "steps" in plan) else [])
+
+
+def plan_parts() -> list[dict[str, Any]]:
+    """The section catalogue the Artifact modal shows (page order)."""
+    return [dict(x) for x in builder().PLAN_PARTS]
+
+
+def normalize_plan(parts: Any) -> Optional[list[str]]:
+    """Dashboard input -> ordered plan, or None when it is the whole page
+    (so the classic brief and gate apply). Raises ValueError on bad parts."""
+    if parts in (None, "", [], ()):
+        return None
+    b = builder()
+    plan = b.normalize_plan(parts)
+    return None if b.is_full_plan(plan) else plan
+
+
+def _plan_block(plan: Optional[list[str]]) -> list[str]:
+    if plan is None:
+        return [
+            "### Page plan",
+            "The whole page: write every section in the order the example uses",
+            "(drop one only when the topic genuinely has nothing for it; never pad).",
+        ]
+    parts = {x["type"]: x for x in builder().PLAN_PARTS}
+    skipped = [t for t in builder().PLAN_TYPES if t not in plan]
+    out = [
+        "### Page plan (the operator chose these sections; nothing else)",
+        "Write exactly these sections, in this order:",
+    ] + [f"- `{t}`: {parts[t]['label']}. {parts[t]['desc']}." for t in plan] + [
+        "",
+        "Do NOT write: " + ", ".join(f"`{t}`" for t in skipped) + ".",
+        "The page is deliberately narrower than the example. Research only",
+        "what the chosen sections need, and give those sections the full depth",
+        "the example gives them. Put the plan at the top level of artifact.json",
+        "exactly as:",
+        "```",
+        json.dumps({"plan": plan}),
+        "```",
+        "The gate refuses a section outside the plan and a missing planned one.",
+    ]
+    return out
 
 
 def _pov_block(pov: str, guidance: str) -> list[str]:
@@ -187,7 +260,8 @@ def _context_block() -> list[str]:
 
 
 def build_topic_brief(topic: str, pov: str, guidance: str, out_dir: Path,
-                      source: Optional[dict[str, Any]] = None) -> str:
+                      source: Optional[dict[str, Any]] = None,
+                      plan: Optional[list[str]] = None) -> str:
     head = [
         "## MANDATORY: Build ONE youtube-artifact page on a topic.",
         "",
@@ -210,17 +284,17 @@ def build_topic_brief(topic: str, pov: str, guidance: str, out_dir: Path,
                 v = json.dumps(v, ensure_ascii=False)[:1500]
             src.append(f"- **{k}:** {v}")
         src.append("")
-    return "\n".join(head + src + _pov_block(pov, guidance) + [""] + _context_block() + [
+    return "\n".join(head + src + _pov_block(pov, guidance) + [""] + _plan_block(plan) + [""]
+                     + _context_block() + [
         "",
         "### Phase 1 to 2 (research, write) — from the skill",
         "Build the claim list from the topic, the point of view and the source",
         "material; verify every claim with `web_search` + `web_extract` against",
         "a primary source and a trade source; record corrections and",
-        "not-founds; then write artifact.json in the contract, in the section",
-        "order the example uses (drop a section only when the topic has",
-        "nothing for it). The research guidance above overrides the default",
+        "not-founds; then write artifact.json in the contract, following the",
+        "page plan above. The research guidance above overrides the default",
         "order of work.",
-    ] + _common_tail(out_dir))
+    ] + _common_tail(out_dir, plan))
 
 
 def build_script_brief(script_abs: Path, out_dir: Path) -> str:
@@ -309,6 +383,8 @@ def build_fix_brief(entry: dict[str, Any], problems: list[str]) -> str:
         f"**Artifact folder:** {out_dir}",
         f"**Contract:** {_SKILL_DIR / 'schema.md'}",
         f"**Topic:** {entry.get('topic') or ''}",
+    ] + ([f"**Page plan (artifact.json `plan`, nothing outside it):** {json.dumps(entry['plan'])}"]
+         if entry.get("plan") else []) + [
         "",
         "Load `long-form:youtube-artifact`. Fix exactly the problems listed:",
         "missing or thin sections get written (with sources fetched), missing",
@@ -341,7 +417,7 @@ def _create(conn, key: str, title: str, body: str, extra: dict[str, Any]) -> dic
             workspace_kind="scratch", skills=list(ARTIFACT_SKILLS), priority=10)
     mapping[key] = {"taskId": task_id, "createdAt": _now_iso(), "outDir": extra.get("outDirAbs"),
                     "topic": extra.get("topic"), "kind": extra.get("kind"),
-                    "fixRetries": 0, "videoId": extra.get("videoId")}
+                    "fixRetries": 0, "videoId": extra.get("videoId"), "plan": extra.get("plan")}
     _save_map(conn, mapping)
     kick_dispatcher()
     return {"ok": True, "taskId": task_id, "outDir": key}
@@ -349,12 +425,18 @@ def _create(conn, key: str, title: str, body: str, extra: dict[str, Any]) -> dic
 
 def create_topic_task(topic: str, pov: str = "", guidance: str = "",
                       source: Optional[dict[str, Any]] = None,
-                      out_dir: Optional[Path] = None, video_id: Optional[str] = None) -> dict[str, Any]:
+                      out_dir: Optional[Path] = None, video_id: Optional[str] = None,
+                      plan: Any = None) -> dict[str, Any]:
     """Artifacts page Artifact ✦ (no source) or Research tab Artifact (with a
-    teardown as source and the video's own folder as out_dir)."""
+    teardown as source and the video's own folder as out_dir). `plan` is the
+    section list the operator kept in the modal (None/empty = whole page)."""
     topic = (topic or "").strip()
     if not topic:
         return {"error": "topic is required"}
+    try:
+        plan = normalize_plan(plan)
+    except ValueError as exc:
+        return {"error": f"page plan: {exc}"}
     out_dir = out_dir or out_dir_for_topic(topic)
     ws = yti_paths.workspace_dir()
     try:
@@ -364,8 +446,9 @@ def create_topic_task(topic: str, pov: str = "", guidance: str = "",
     conn = yti_store.connect()
     try:
         return _create(conn, key, f"Page: {topic[:70]}",
-                       build_topic_brief(topic, pov, guidance, out_dir, source),
-                       {"outDirAbs": str(out_dir), "topic": topic, "kind": "topic", "videoId": video_id})
+                       build_topic_brief(topic, pov, guidance, out_dir, source, plan),
+                       {"outDirAbs": str(out_dir), "topic": topic, "kind": "topic", "videoId": video_id,
+                        "plan": plan})
     except Exception as exc:  # noqa: BLE001
         return {"error": f"could not create the page task: {exc}"}
     finally:
@@ -506,6 +589,22 @@ def _sweep(root: Path) -> list[str]:
     return removed
 
 
+def _plan_mismatch(root: Path, plan: Optional[list[str]]) -> list[str]:
+    """The task carried a section plan: artifact.json must declare the same
+    one, so the gate enforced it and the page is what the operator asked for."""
+    if not plan:
+        return []
+    try:
+        doc = json.loads((root / "artifact.json").read_text(encoding="utf-8"))
+    except Exception:  # noqa: BLE001
+        return []  # the builder already reported the missing/invalid file
+    got = doc.get("plan") if isinstance(doc, dict) else None
+    if got != plan:
+        return [f"plan: artifact.json must declare exactly {json.dumps(plan)} (the sections the operator chose); "
+                f"found {json.dumps(got)}"]
+    return []
+
+
 def handle_completion(conn, kanban_task_id: str) -> Optional[dict[str, Any]]:
     """kanban_task_completed hook: sweep strays, re-run the skill's gate,
     open a fix task (max ARTIFACT_MAX_RETRIES) when the page does not pass."""
@@ -516,7 +615,8 @@ def handle_completion(conn, kanban_task_id: str) -> Optional[dict[str, Any]]:
         root = Path(entry.get("outDir") or (yti_paths.workspace_dir() / key))
         removed = _sweep(root)
         rep = builder().build(root)  # renders when clean, so the page is always current
-        problems = rep.get("problems") or []
+        problems = list(rep.get("problems") or [])
+        problems += _plan_mismatch(root, entry.get("plan"))
         if not problems:
             return {"ok": True, "clean": True, "key": key, "swept": len(removed), "page": rep.get("page")}
         retries = int(entry.get("fixRetries") or 0)

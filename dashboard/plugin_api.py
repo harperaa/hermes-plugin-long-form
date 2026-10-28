@@ -212,14 +212,23 @@ class ArtifactTopicBody(BaseModel):
     pov: str = ""
     guidance: str = ""
     video_id: Optional[str] = None
+    sections: list[str] = []   # the page plan: section types kept in the modal; empty = whole page
+
+
+@router.get("/artifact-sections")
+def get_artifact_sections() -> dict[str, Any]:
+    """The section catalogue the Artifact modal lists (page order; 'sources'
+    is locked on)."""
+    return {"sections": yti_artifact.plan_parts()}
 
 
 @router.post("/artifact")
 def post_artifact(body: ArtifactTopicBody) -> dict[str, Any]:
     """Artifacts page Artifact ✦ button: a page on a topic from the
-    operator's point of view and research guidance."""
+    operator's point of view and research guidance, limited to the
+    sections they kept."""
     result = yti_artifact.create_topic_task(body.topic, body.pov, body.guidance,
-                                            video_id=body.video_id)
+                                            video_id=body.video_id, plan=body.sections)
     if result.get("error"):
         raise HTTPException(status_code=400, detail=result["error"])
     return result
@@ -782,6 +791,7 @@ class ArtifactBody(BaseModel):
     topic: str = ""      # artifact only: defaults to the video title
     pov: str = ""        # artifact only: the operator's point of view
     guidance: str = ""   # artifact only: research guidance
+    sections: list[str] = []   # artifact only: the page plan (empty = whole page)
 
 
 @router.get("/research/artifacts-state")
@@ -805,7 +815,8 @@ def research_artifacts(body: ArtifactBody) -> dict[str, Any]:
             tapi = yti_rs_clients.TranscriptAPI(secrets.transcriptapi_key, conn=rconn)
         if body.action == "artifact":
             res = yti_rs_bridge.run_artifact(rconn, sconn, body.video_id, tapi,
-                                             topic=body.topic, pov=body.pov, guidance=body.guidance)
+                                             topic=body.topic, pov=body.pov, guidance=body.guidance,
+                                             plan=body.sections)
         else:
             fn = {"transcript": yti_rs_bridge.ensure_transcript, "analysis": yti_rs_bridge.run_analysis,
                   "scripts": yti_rs_bridge.run_scripts}.get(body.action)

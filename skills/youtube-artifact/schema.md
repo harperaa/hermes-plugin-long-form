@@ -17,7 +17,8 @@ camera", "before you record", "talk track", "this slide" and the like).
 | `lede` | yes | 20 to 70 words: what the page is, for whom, the thesis |
 | `chips` | yes | 2 to 4 of `{text, tone}`; tone ∈ `crit warn ok na` or empty |
 | `description` | no | one sentence for link previews (defaults to the lede) |
-| `sections` | yes | ordered list, at least 4, must include one `steps` and one `sources` |
+| `sections` | yes | ordered list, at least 4, must include one `steps` and one `sources` (unless `plan` says otherwise) |
+| `plan` | no | the section types the operator chose in the dashboard's Artifact modal, in page order, always ending with `sources` (e.g. `["steps", "sources"]`). When present the page must contain every planned type and nothing outside the plan; the 4-section and `steps` minimums do not apply. The task brief gives the exact value; copy it. |
 | `id` | no | stable id for per-viewer checklist state |
 | `credit` | no | footer credit text |
 | `css_extra` | no | a few CSS declarations for a one-off tweak; never a redesign |
