@@ -76,7 +76,9 @@ Writing rules (the validator enforces the mechanical ones):
 - Two to four `question` open loops across the page: a question the viewer
   wants answered, placed early, closed by a beat further down (the 300k
   story, the no-selling rule, the comment hack). Never one the next beat
-  answers, and never a question the page does not answer.
+  answers, and never a question the page does not answer. Keep each one
+  plain and short, under 14 words, the way it would be spoken: "What is the
+  hidden cost of no leads?", not a clause with a condition in front of it.
 
 ## Phase 2b: Packaging (thumbnails, titles, hooks)
 

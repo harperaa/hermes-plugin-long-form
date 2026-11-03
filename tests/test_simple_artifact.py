@@ -171,8 +171,8 @@ def test_gate_rejects_presenter_talk_order_and_missing_images(tmp_path):
     # open loops are questions, short, and read as such
     doc = _minimal_doc(); doc["sections"][0]["question"] = "What costs more than lost sales"
     assert any("question mark" in x for x in b.validate(doc, folder))
-    doc = _minimal_doc(); doc["sections"][2]["beats"][0]["question"] = " ".join(["w"] * 40) + "?"
-    assert any("under 32" in x for x in b.validate(doc, folder))
+    doc = _minimal_doc(); doc["sections"][2]["beats"][0]["question"] = " ".join(["w"] * 20) + "?"
+    assert any("under 14" in x for x in b.validate(doc, folder))
     doc = _minimal_doc(); doc["sections"][0]["question"] = "Why does the crowd get this backwards?"
     assert not b.validate(doc, folder)
     # the chosen length is enforced, roughly: the minimal page has 8 images

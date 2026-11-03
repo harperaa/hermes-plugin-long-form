@@ -43,7 +43,7 @@ Collapsed by default at the top of the page. Every piece makes the same promise 
 
 - **bullets**: 1 to 8 strings, each under 32 words. A bullet is a cue, not a paragraph.
 - **key**: `{text, tone?}`, tone in `ok crit warn` or empty. The one line to land; rendered as a highlighted bar. On the promise it renders right under the image, as the hook.
-- **question**: an optional open loop, on the promise or on any beat: a question under 32 words, ending in `?`, read to the viewer here and answered by a later beat. Use two to four per page; never one the next beat answers immediately.
+- **question**: an optional open loop, on the promise or on any beat: one plain spoken question under 14 words, ending in `?`, read to the viewer here and answered by a later beat. Use two to four per page; never one the next beat answers immediately.
 - **image** + **image_alt**: `img/<file>.jpg` generated with the generate-image skill (at least 20 KB), and one sentence describing the sketch.
 - **beat**: `{label?, heading, image, image_alt, bullets?, contrast?, story?, key?, question?}`. A beat needs `bullets`, a `contrast`, or both.
   - `contrast`: `{crowd: [..], me: [..]}`, 1 to 4 bullets each. What the crowd says versus what I say.

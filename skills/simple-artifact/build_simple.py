@@ -124,8 +124,8 @@ def _question(v: Any, where: str, p: list[str]) -> None:
         return
     if not v.strip().endswith("?"):
         p.append(f"{where}.question: ends with a question mark; it is read to the viewer as a question")
-    if len(v.split()) > 32:
-        p.append(f"{where}.question: {len(v.split())} words; keep the loop under 32")
+    if len(v.split()) > 14:
+        p.append(f"{where}.question: {len(v.split())} words; an open loop is one plain question, under 14 words")
 
 
 def _key(v: Any, where: str, p: list[str]) -> None:

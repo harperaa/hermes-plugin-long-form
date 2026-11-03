@@ -679,7 +679,7 @@
         "text": "If you are not getting leads every day, this is for you.",
         "tone": "ok"
       },
-      "question": "What costs you more than the sales you are missing when you have no leads?"
+      "question": "What is the hidden cost of no leads?"
     },
     {
       "type": "problem",
@@ -712,7 +712,7 @@
             "text": "Building is the most productive-looking way to avoid selling.",
             "tone": "crit"
           },
-          "question": "If building is the trap, what did I do instead that turned into a 300k sale?"
+          "question": "What did I do instead that sold for 300k?"
         },
         {
           "label": "Story",
@@ -813,7 +813,7 @@
             "3. Rented leads: affiliates, partnerships, paid ads.",
             "Today: short form. The other two another day."
           ],
-          "question": "Why will your short form posts never ask anyone to buy anything?"
+          "question": "Why should your posts never sell anything?"
         },
         {
           "label": "Step one",
@@ -831,7 +831,7 @@
             "text": "One platform, the one you already live on.",
             "tone": ""
           },
-          "question": "How did 8k followers in 8 months come from comments, not posts?"
+          "question": "How did comments, not posts, bring 8k followers?"
         },
         {
           "label": "Step two",
