@@ -461,7 +461,7 @@ def build_simple_fix_brief(entry: dict[str, Any], problems: list[str]) -> str:
         f"**Artifact folder:** {out_dir}",
         f"**Contract:** {_SIMPLE_SKILL_DIR / 'schema.md'}",
         f"**Title:** {entry.get('topic') or ''}",
-        f"**Length:** {entry.get('images') or 10} illustrated beats (`target_images` in artifact.json).",
+        f"**Length:** {entry.get('images') or 20} illustrated beats (`target_images` in artifact.json).",
         "",
         "Load `long-form:simple-artifact`. Fix exactly the problems listed:",
         "missing sections or beats get written from the source already in the",
@@ -501,7 +501,7 @@ def out_dir_for_simple(title: str) -> Path:
                       _slug(title) + "-brief")
 
 
-def build_simple_brief(title: str, url: str, content: str, out_dir: Path, images: int = 10,
+def build_simple_brief(title: str, url: str, content: str, out_dir: Path, images: int = 20,
                        hook: str = "") -> str:
     title = (title or "").strip()
     url = (url or "").strip()
@@ -694,7 +694,7 @@ def create_topic_task(topic: str, pov: str = "", guidance: str = "",
 
 
 def create_simple_task(title: str = "", url: str = "", content: str = "",
-                       images: int = 10, hook: str = "") -> dict[str, Any]:
+                       images: int = 20, hook: str = "") -> dict[str, Any]:
     """Artifacts page Simple artifact ✦ button: a brief page from a URL
     and/or pasted content; *images* (10 or 20) sets the page length."""
     title = (title or "").strip()

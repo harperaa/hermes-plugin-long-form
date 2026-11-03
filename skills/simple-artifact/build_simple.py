@@ -416,7 +416,7 @@ def _render_beat(num: str, b: dict) -> str:
     if b.get("bullets"):
         out.append(_ul(b["bullets"]))
     if b.get("story"):
-        out.append("<details><summary>Full story</summary>" + _ul(b["story"], "") + "</details>")
+        out.append("<details open><summary>Full story</summary>" + _ul(b["story"], "") + "</details>")
     out.append(_keyline(b.get("key")))
     out.append(_loop(b.get("question")))
     out.append("</section>")

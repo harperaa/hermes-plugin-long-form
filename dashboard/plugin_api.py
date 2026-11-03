@@ -238,7 +238,7 @@ class ArtifactSimpleBody(BaseModel):
     title: str = ""
     url: str = ""
     content: str = ""
-    images: int = 10        # 10 (a ~10 minute talk) or 20 (~20 minutes)
+    images: int = 20        # 20 (a ~20 minute talk, the default) or 10 (~10 minutes)
     hook: str = ""          # the operator's own hook; shown first in the packaging block
 
 

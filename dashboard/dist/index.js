@@ -1016,7 +1016,7 @@
     var url = urlState[0], setUrl = urlState[1];
     var contentState = useState("");
     var content = contentState[0], setContent = contentState[1];
-    var imagesState = useState(10);
+    var imagesState = useState(20);
     var images = imagesState[0], setImages = imagesState[1];
     var hookState = useState("");
     var hook = hookState[0], setHook = hookState[1];
@@ -1030,7 +1030,7 @@
         "Turns a URL or pasted content into the page you present from: Promise, Problem (what the crowd says vs what you say), Value, Apply today, Summary and a like-and-subscribe close. Bullets, not prose; one sketchnote image per beat; nothing from the source dropped."),
       h("label", null, "Length"),
       h("div", { className: "yti-seg" },
-        [10, 20].map(function (n) {
+        [20, 10].map(function (n) {
           return h(Button, { key: n, size: "sm", variant: images === n ? undefined : "outline",
               title: n + " illustrated beats, one sketchnote each: a talk of about " + n + " minutes",
               onClick: function () { setImages(n); } },
@@ -1567,7 +1567,7 @@
       api("/artifact-simple", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title: title || "", url: url || "", content: content || "", images: images || 10,
+        body: JSON.stringify({ title: title || "", url: url || "", content: content || "", images: images || 20,
                                hook: hook || "" }),
       }).then(function () {
         setSimpleBusy(false); setSimpleModal(false); loadTree();

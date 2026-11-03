@@ -101,7 +101,7 @@ def test_example_passes_gate_and_renders(tmp_path):
     assert ids == sorted(ids)
     assert "prefers-color-scheme: dark" in html and 'data-theme="dark"' in html and 'class="theme"' in html
     assert html.count("<figure>") == rep["images"] + rep["thumbnails"]
-    assert "What the crowd says" in html and "<details><summary>Full story</summary>" in html
+    assert "What the crowd says" in html and "<details open><summary>Full story</summary>" in html
     # the packaging block opens the page, collapsed: five portrait thumbnails, titles, hooks, the reference set
     assert rep["thumbnails"] == 5
     pack = html.split('<details class="pack" id="packaging">', 1)[1].split("</details>", 1)[0]
@@ -209,7 +209,7 @@ def art_kanban(monkeypatch):
 
 def test_simple_task_from_url_or_content(conn, tmp_home, art_kanban):
     r = yti_artifact.create_simple_task("Leads Every Day", url="https://example.com/note",
-                                        content="Most businesses lack leads.\nBuild first is a trap.")
+                                        content="Most businesses lack leads.\nBuild first is a trap.", images=10)
     assert r["ok"] and r["outDir"] == f"youtube/{yti_artifact._today()}/artifacts/leads-every-day-brief"
     t = art_kanban.created[-1]
     assert t["title"] == "Brief page: Leads Every Day"
