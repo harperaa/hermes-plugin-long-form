@@ -73,6 +73,10 @@ Writing rules (the validator enforces the mechanical ones):
   description"), not the direction to say it.
 - One idea per sentence. No em dashes. No placeholders.
 - A `key` line on the beats that have a line worth landing. Not on every beat.
+- Two to four `question` open loops across the page: a question the viewer
+  wants answered, placed early, closed by a beat further down (the 300k
+  story, the no-selling rule, the comment hack). Never one the next beat
+  answers, and never a question the page does not answer.
 
 ## Phase 3: Images (one per beat, in parallel)
 

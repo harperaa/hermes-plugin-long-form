@@ -27,16 +27,17 @@ like. The page is the outline the operator speaks from, written as content.
 ## Shared shapes
 
 - **bullets**: 1 to 8 strings, each under 32 words. A bullet is a cue, not a paragraph.
-- **key**: `{text, tone?}`, tone in `ok crit warn` or empty. The one line to land; rendered as a highlighted bar.
+- **key**: `{text, tone?}`, tone in `ok crit warn` or empty. The one line to land; rendered as a highlighted bar. On the promise it renders right under the image, as the hook.
+- **question**: an optional open loop, on the promise or on any beat: a question under 32 words, ending in `?`, read to the viewer here and answered by a later beat. Use two to four per page; never one the next beat answers immediately.
 - **image** + **image_alt**: `img/<file>.jpg` generated with the generate-image skill (at least 20 KB), and one sentence describing the sketch.
-- **beat**: `{label?, heading, image, image_alt, bullets?, contrast?, story?, key?}`. A beat needs `bullets`, a `contrast`, or both.
+- **beat**: `{label?, heading, image, image_alt, bullets?, contrast?, story?, key?, question?}`. A beat needs `bullets`, a `contrast`, or both.
   - `contrast`: `{crowd: [..], me: [..]}`, 1 to 4 bullets each. What the crowd says versus what I say.
   - `story`: 2 to 14 bullets, collapsed under "Full story". Use it when the source carries a story, an example, or detail that a consolidated beat cannot hold in its cues: keep every fact there and put a one or two bullet cue in `bullets`. Nothing from the source is cut to fit a beat; it moves here.
   - `label`: short tag shown beside the beat number (`Story`, `Step one`, `Proof`).
 
 ## Sections
 
-- **promise**: `heading`, `image`, `image_alt`, `bullets` (2 to 6: what the viewer leaves with for sticking around), `key?`.
+- **promise**: `heading`, `image`, `image_alt`, `key?` (the hook, shown first), `bullets` (2 to 6: what the viewer leaves with for sticking around), `question?`.
 - **problem**: `heading`, `beats` (2 or more). At least one beat carries a `contrast`.
 - **value**: `heading`, `beats` (3 or more), in a logical order. Examples and stories stay as beats with a `story` block.
 - **apply**: `heading`, `image`, `image_alt`, `steps` (2 to 5 of `{title, text}`, text under 30 words: something easy and fast for an immediate win), `key?`.

@@ -95,6 +95,20 @@ def _bullets(v: Any, where: str, p: list[str], *, lo: int = 1, hi: int = MAX_BUL
             p.append(f"{where}[{i}]: {len(b.split())} words; a bullet is a cue, keep it under {MAX_BULLET_WORDS}")
 
 
+def _question(v: Any, where: str, p: list[str]) -> None:
+    """An open loop: a question read to the viewer here and answered later on
+    the page. Optional on the promise and on any beat."""
+    if v is None:
+        return
+    if not isinstance(v, str) or not v.strip():
+        p.append(f"{where}.question: must be a non-empty string")
+        return
+    if not v.strip().endswith("?"):
+        p.append(f"{where}.question: ends with a question mark; it is read to the viewer as a question")
+    if len(v.split()) > 32:
+        p.append(f"{where}.question: {len(v.split())} words; keep the loop under 32")
+
+
 def _key(v: Any, where: str, p: list[str]) -> None:
     if v is None:
         return
@@ -144,6 +158,7 @@ def _beat(b: Any, where: str, base: Path, p: list[str], images: list[str]) -> No
         _bullets(b["story"], f"{where}.story", p, lo=2, hi=14)
     if "label" in b and not isinstance(b["label"], str):
         p.append(f"{where}.label: must be a string")
+    _question(b.get("question"), where, p)
     _key(b.get("key"), where, p)
 
 
@@ -186,6 +201,7 @@ def validate(doc: Any, base_dir: Path) -> list[str]:
         if t == "promise":
             _image(s, w, base_dir, p, images)
             _bullets(s.get("bullets"), f"{w}.bullets", p, lo=2, hi=6)
+            _question(s.get("question"), w, p)
             _key(s.get("key"), w, p)
         elif t in ("problem", "value"):
             beats = s.get("beats")
@@ -297,6 +313,10 @@ ul.cues li::marker{color:var(--accent)}
 .key.crit{border-color:var(--crit);background:var(--crit-bg)}
 .key.ok{border-color:var(--ok);background:var(--ok-bg)}
 .key.warn{border-color:var(--warn);background:var(--warn-bg)}
+.loop{display:flex;gap:12px;align-items:flex-start;margin:16px 0 0;padding:12px 16px;border:1px dashed var(--accent);border-radius:8px;background:var(--surface)}
+.loop .q{flex:none;width:30px;height:30px;border-radius:50%;background:var(--accent);color:var(--accent-ink);font-family:var(--display);font-weight:700;font-size:19px;display:flex;align-items:center;justify-content:center}
+.loop p{margin:2px 0 0;font-family:var(--display);font-size:20px;font-weight:600;line-height:1.25}
+.loop small{display:block;font-family:var(--body);font-size:13px;font-weight:400;color:var(--muted);margin-top:4px}
 .vs{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px}
 @media (max-width:600px){.vs{grid-template-columns:1fr}}
 .vs div{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:12px 14px}
@@ -350,6 +370,12 @@ def _keyline(k: Any) -> str:
     return f'<div class="key{(" " + tone) if tone else ""}">{inline(k["text"])}</div>'
 
 
+def _loop(q: Any) -> str:
+    if not q:
+        return ""
+    return f'<div class="loop"><span class="q">?</span><p>{inline(q)}<small>Open loop: answered later in the talk</small></p></div>'
+
+
 def _render_beat(num: str, b: dict) -> str:
     label = b.get("label")
     n = f"{num}" + (f" · {esc(label)}" if label else "")
@@ -363,6 +389,7 @@ def _render_beat(num: str, b: dict) -> str:
     if b.get("story"):
         out.append("<details><summary>Full story</summary>" + _ul(b["story"], "") + "</details>")
     out.append(_keyline(b.get("key")))
+    out.append(_loop(b.get("question")))
     out.append("</section>")
     return "".join(out)
 
@@ -376,8 +403,9 @@ def render(doc: dict) -> str:
     parts: list[str] = []
     # 1 promise
     s = secs["promise"]
+    # the promise's key line is the hook: it sits right under the image, before the bullets
     parts.append(f'<section class="part" id="promise"><div class="eyebrow">1 · Promise</div><h2>{inline(s["heading"])}</h2>'
-                 + _figure(s) + _ul(s["bullets"]) + _keyline(s.get("key")) + "</section>")
+                 + _figure(s) + _keyline(s.get("key")) + _ul(s["bullets"]) + _loop(s.get("question")) + "</section>")
     # 2 problem, 3 value
     for idx, t in ((2, "problem"), (3, "value")):
         s = secs[t]

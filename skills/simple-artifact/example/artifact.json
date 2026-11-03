@@ -22,7 +22,8 @@
       "key": {
         "text": "If you are not getting leads every day, this is for you.",
         "tone": "ok"
-      }
+      },
+      "question": "What costs you more than the sales you are missing when you have no leads?"
     },
     {
       "type": "problem",
@@ -54,7 +55,8 @@
           "key": {
             "text": "Building is the most productive-looking way to avoid selling.",
             "tone": "crit"
-          }
+          },
+          "question": "If building is the trap, what did I do instead that turned into a 300k sale?"
         },
         {
           "label": "Story",
@@ -154,7 +156,8 @@
             "2. High trust referral leads.",
             "3. Rented leads: affiliates, partnerships, paid ads.",
             "Today: short form. The other two another day."
-          ]
+          ],
+          "question": "Why will your short form posts never ask anyone to buy anything?"
         },
         {
           "label": "Step one",
@@ -171,7 +174,8 @@
           "key": {
             "text": "One platform, the one you already live on.",
             "tone": ""
-          }
+          },
+          "question": "How did 8k followers in 8 months come from comments, not posts?"
         },
         {
           "label": "Step two",

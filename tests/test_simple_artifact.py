@@ -81,6 +81,10 @@ def test_example_passes_gate_and_renders(tmp_path):
     assert "prefers-color-scheme: dark" in html and 'data-theme="dark"' in html and 'class="theme"' in html
     assert html.count("<figure>") == rep["images"]
     assert "What the crowd says" in html and "<details><summary>Full story</summary>" in html
+    # four open loops on the example, and the promise hook sits between its image and its bullets
+    assert html.count('<div class="loop">') == 4
+    promise = html.split('id="promise"', 1)[1].split('id="problem"', 1)[0]
+    assert promise.index("</figure>") < promise.index('<div class="key') < promise.index('<ul class="cues">')
 
 
 def test_gate_rejects_presenter_talk_order_and_missing_images(tmp_path):
@@ -113,6 +117,13 @@ def test_gate_rejects_presenter_talk_order_and_missing_images(tmp_path):
     # bullets are cues
     doc = _minimal_doc(); doc["sections"][4]["bullets"] = [" ".join(["w"] * 40), "b", "c"]
     assert any("keep it under" in x for x in b.validate(doc, folder))
+    # open loops are questions, short, and read as such
+    doc = _minimal_doc(); doc["sections"][0]["question"] = "What costs more than lost sales"
+    assert any("question mark" in x for x in b.validate(doc, folder))
+    doc = _minimal_doc(); doc["sections"][2]["beats"][0]["question"] = " ".join(["w"] * 40) + "?"
+    assert any("under 32" in x for x in b.validate(doc, folder))
+    doc = _minimal_doc(); doc["sections"][0]["question"] = "Why does the crowd get this backwards?"
+    assert not b.validate(doc, folder)
     # the chosen length is enforced, roughly: the minimal page has 8 images
     doc = _minimal_doc(target_images=10)
     assert any("target_images is 10" in x and "split" in x for x in b.validate(doc, folder))
