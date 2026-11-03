@@ -239,7 +239,7 @@ def test_simple_task_from_url_or_content(conn, tmp_home, art_kanban):
 
 
 def test_simple_folder_lifecycle_dispatches_to_simple_builder(conn, tmp_home, art_kanban):
-    r = yti_artifact.create_simple_task("Lifecycle", content="some notes")
+    r = yti_artifact.create_simple_task("Lifecycle", content="some notes", images=10)
     key = r["outDir"]
     root = yti_paths.workspace_dir() / key
     task_id = r["taskId"]
