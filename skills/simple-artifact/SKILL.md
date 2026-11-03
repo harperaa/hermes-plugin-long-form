@@ -127,21 +127,33 @@ cd <plugin>/skills/generate-image
 STYLE="Sketchnote on warm cream paper with faint pencil grid, charcoal hand-drawn linework, muted pastel fills (pale sky blue, mint, buttercream, dusty coral), thin hand-drawn frame with corner brackets, one hand-lettered title at the top only, one red accent. The ONLY words anywhere in the image are the labels listed, each appearing exactly once; render no other text of any kind, no slogans, no captions."
 python3 generate-image.py --input <baseline> --aspect-ratio 16:9 --retries 3 \
   --out <artifact-dir>/img/s05.jpg \
-  --expect-text "PREMIUM OFFER,PAINFUL,SPECIFIC,RICH" \
-  --context "Four audience types: optional vs painful, general vs specific. Pick the most painful, most specific problem for the richest people." \
-  --prompt "$STYLE Title: PREMIUM OFFER. A hand-drawn two by two grid; the top right cell is filled with mint and circled in red; a label PAINFUL along the top edge, a label SPECIFIC along the right edge, and a small sketched crown with the label RICH inside the circled cell." > <scratch>/s05.log 2>&1 &
+  --expect-text "PREMIUM OFFER,OPTIONAL,PAINFUL,GENERAL,SPECIFIC,RICH" \
+  --context "Four audience types on two axes: optional vs painful, general vs specific. Pick the painful and specific corner, for the richest people." \
+  --prompt "$STYLE Title: PREMIUM OFFER. A hand-drawn two by two grid. Above the columns: OPTIONAL over the left, PAINFUL over the right. Beside the rows on the right edge: SPECIFIC beside the top row, GENERAL beside the bottom row. The top right cell is filled with mint and circled in red with a small sketched crown and the label RICH inside it. Each label appears exactly once." > <scratch>/s05.log 2>&1 &
 ```
 
 Rules:
-- A title of 2 to 5 words plus 0 to 3 labels. Put every word in
+- A title of 2 to 5 words plus 0 to 5 labels. Put every word in
   `--expect-text`; `--context` carries what the beat teaches.
+- The image draws the beat's own bullets. Its labels are the beat's own
+  nouns (the four things to study are PACKAGING, FORMAT, DELIVERY,
+  THUMBNAIL, not "film strip" and "speech bubble"). A picture that does not
+  say what the bullets say is wrong even when it is pretty.
+- A chart or matrix labels every axis end: both columns and both rows of a
+  two by two, both ends of an axis, not just the winning corner.
+- Numbers and money read as spoken: a price tag says $1 and $5 with the
+  sign first; 8K, not 8000.
+- Say what you mean in plain nouns the model cannot misread: "an online
+  video player window", not "a video card" (it drew graphics cards).
 - Run at most six generations at once (the xAI rate limit is six requests
   per second); more than that and the extras fail with resource-exhausted.
 - If a word keeps misspelling, add a plain hint in the prompt ("the word
   REFERRALS has a double R in the middle"). Do not spell it letter by letter.
 - Logs and scratch go in your task workspace, never in the artifact folder.
-- Look at every image once (read the file) before you reference it. QA
-  catches spelling, not composition.
+- Look at every image once (read the file) before you reference it, with
+  the beat's bullets beside it: does it show what they say, are all the
+  labels there, is anything literal-minded or off-topic in it? QA catches
+  spelling, not meaning. Regenerate the ones that fail that look.
 
 ## Phase 4: Render and gate
 
