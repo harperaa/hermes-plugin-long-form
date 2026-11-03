@@ -104,8 +104,10 @@ def test_example_passes_gate_and_renders(tmp_path):
     assert "What the crowd says" in html and "<details><summary>Full story</summary>" in html
     # the packaging block opens the page, collapsed: five portrait thumbnails, titles, hooks, the reference set
     assert rep["thumbnails"] == 5
-    pack = html.split('<details class="pack">', 1)[1].split("</details>", 1)[0]
-    assert html.index('<details class="pack">') < html.index('id="promise"')
+    pack = html.split('<details class="pack" id="packaging">', 1)[1].split("</details>", 1)[0]
+    # the block sits after the footer, closed, reached only through the footer's Packaging link
+    assert html.index('<details class="pack" id="packaging">') > html.index("<footer>")
+    assert 'class="pack-link" data-pack-link>Packaging</a></footer>' in html and "<summary>Packaging" in html
     assert pack.count('src="img/thumb-') == 5 and 'class="refs"' in pack
     assert pack.count('<span class="frame">') == 20 and "Winning title frames" in pack and "Seeded templates" in pack
     assert "If you are not getting leads every day, this is for you." in pack

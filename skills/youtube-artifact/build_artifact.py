@@ -760,11 +760,16 @@ def render(doc: dict) -> str:
         f'<h1 style="margin-top:8px">{inline(doc["title"])}</h1>'
         f'<p class="lede">{inline(doc["lede"])}</p>'
         f'<div class="status">{chips}</div></header>\n'
-        + (yti_packaging.render(doc["packaging"], inline) + "\n" if (yti_packaging and doc.get("packaging")) else "")
         + sections
-        + (f'<p class="foot">{inline(doc["credit"])} · {esc(generated)}</p>\n' if doc.get("credit") else "")
+        + (f'<p class="foot">{inline(doc["credit"])} · {esc(generated)}'
+           + (f" · {yti_packaging.LINK}" if (yti_packaging and doc.get("packaging")) else "") + "</p>\n"
+           if doc.get("credit") else
+           (f'<p class="foot">{yti_packaging.LINK}</p>\n' if (yti_packaging and doc.get("packaging")) else ""))
+        + (yti_packaging.render(doc["packaging"], inline) + "\n" if (yti_packaging and doc.get("packaging")) else "")
         + "</div>\n"
-        + f"<script>window.__ARTIFACT__={data};</script>\n<script>" + JS + "</script>\n</body>\n</html>\n"
+        + f"<script>window.__ARTIFACT__={data};</script>\n<script>" + JS + "</script>\n"
+        + (f"<script>{yti_packaging.LINK_JS}</script>\n" if (yti_packaging and doc.get("packaging")) else "")
+        + "</body>\n</html>\n"
     )
 
 

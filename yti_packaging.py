@@ -340,13 +340,12 @@ def validate(pk: Any, base_dir: Path, promise: Optional[str]) -> list[str]:
 
 
 CSS = r"""
-.pack{margin:20px 0 0;border:1px solid var(--line);border-radius:10px;background:var(--surface)}
-.pack>summary{cursor:pointer;padding:12px 16px;font-family:var(--display);font-size:18px;font-weight:600;list-style:none;display:flex;align-items:center;gap:10px}
-.pack>summary::-webkit-details-marker{display:none}
-.pack>summary::before{content:"▸";color:var(--accent);font-size:16px}
-.pack[open]>summary::before{content:"▾"}
-.pack>summary small{font-family:var(--body);font-size:13px;font-weight:400;color:var(--muted)}
+.pack{margin:14px 0 0;border:1px solid var(--line);border-radius:10px;background:var(--surface)}
+.pack:not([open]){display:none}
+.pack>summary{display:none}
 .pack .body{padding:0 16px 16px}
+a.pack-link{color:var(--muted);text-decoration:none;border-bottom:1px dotted var(--line)}
+a.pack-link:hover{color:var(--accent)}
 .pack h4{font-family:var(--display);font-size:15px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:18px 0 8px}
 .pack .promise{border-left:4px solid var(--ok);background:var(--ok-bg);padding:8px 14px;border-radius:0 6px 6px 0;font-family:var(--display);font-size:18px;font-weight:600;margin-top:4px}
 .pack ol{margin:0;padding-left:24px}
@@ -378,8 +377,16 @@ def _esc(s: Any) -> str:
     return _html.escape(str(s if s is not None else ""), quote=True)
 
 
+LINK = '<a href="#packaging" class="pack-link" data-pack-link>Packaging</a>'
+LINK_JS = ("(function(){var l=document.querySelector('[data-pack-link]'),d=document.getElementById('packaging');"
+           "if(!l||!d)return;l.addEventListener('click',function(e){e.preventDefault();d.open=!d.open;"
+           "if(d.open)d.scrollIntoView({behavior:'smooth',block:'start'});});"
+           "if(location.hash==='#packaging'){d.open=true;}})();")
+
+
 def render(pk: dict[str, Any], inline_fn=None) -> str:
-    """The collapsed block. *inline_fn* is the builder's inline-markup
+    """The block, hidden until the footer's Packaging link opens it (or the
+    page is opened at #packaging). *inline_fn* is the builder's inline-markup
     function (escape + `code`/**bold**/links); escaping only by default."""
     inl = inline_fn or _esc
     given_tag = '<span class="given">yours</span>'
@@ -414,7 +421,7 @@ def render(pk: dict[str, Any], inline_fn=None) -> str:
         patterns = "<h4>Patterns followed</h4><ul class=\"pat\">" + "".join(f"<li>{inl(s)}</li>" for s in pk["patterns"]) + "</ul>"
     n = len(ex["items"][:EXAMPLE_LIMIT])
     return (
-        '<details class="pack"><summary>Packaging</summary><div class="body">'
+        '<details class="pack" id="packaging"><summary>Packaging</summary><div class="body">'
         f'<h4>The promise every piece makes</h4><div class="promise">{inl(pk["promise"])}</div>'
         f'<h4>Thumbnails</h4><div class="thumbs">{thumbs}</div>'
         f'<h4>Titles ({len(pk["titles"])}, each in a winning frame)</h4><ol class="titles">{titles}</ol>'

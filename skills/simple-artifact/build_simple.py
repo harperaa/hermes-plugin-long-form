@@ -473,8 +473,9 @@ def render(doc: dict) -> str:
         '<div class="wrap">\n<header>'
         f'<div class="eyebrow">{inline(doc["eyebrow"])}</div><h1>{inline(doc["title"])}</h1>'
         f'<p class="lede">{inline(doc["lede"])}</p><div class="status">{chips}</div><div class="flow">{flow}</div>'
-        "</header>\n" + yti_packaging.render(doc["packaging"], inline) + "\n" + "\n".join(parts) +
-        f"\n<footer>{foot}</footer>\n</div>\n<script>{THEME_JS}</script>\n</body>\n</html>\n"
+        "</header>\n" + "\n".join(parts) +
+        f"\n<footer>{foot} · {yti_packaging.LINK}</footer>\n" + yti_packaging.render(doc["packaging"], inline) +
+        f"\n</div>\n<script>{THEME_JS}</script>\n<script>{yti_packaging.LINK_JS}</script>\n</body>\n</html>\n"
     )
 
 
