@@ -97,21 +97,15 @@ promise the page makes: copy the promise section's key line into
    count, accent color, face placement, props, title frames. Store the
    printed JSON as `packaging.examples` unchanged.
 2. `python3 <plugin>/yti_packaging.py portrait` prints the operator's
-   portrait. Generate the five thumbnails with it as `--input` (the real
-   person, on one side of the frame) AND two reference thumbnails from the
-   set as `--reference` (full size: `https://i.ytimg.com/vi/<id>/maxresdefault.jpg`,
-   falling back to `hqdefault.jpg`; fetch with `curl -4` into scratch). Pick
-   the two whose layout and mood fit the beat; vary the pair across the
-   five. The prompt frames it as a replacement, never a blend: the people
-   in the reference thumbnails are removed entirely and the person from
-   the portrait takes their place, with the portrait's own face and hair
-   (hairline, length, style, colour), skin tone and features kept exactly;
-   only his expression, pose and hands are adapted to suit the beat. The
-   references guide typography treatment, colour grading, contrast and
-   energy, nothing about the person. Pass `--identity <portrait>` too: the QA gate then compares
-   the result with the portrait feature by feature and regenerates when the
-   hair or a facial feature was changed. The exact words in `--expect-text`,
-   no other text. No more than
+   portrait. Generate the five thumbnails with it as `--input` and keep the
+   instruction simple: "Use this portrait image: the same person, the same
+   face and hair", then the expression (smiling, puzzled, serious,
+   surprised) and the gesture (pointing, thumbs up, a stop hand, arms
+   crossed) the beat calls for, then the text and the prop. Describe the
+   winners' look in words from your `patterns` (dark background, huge bold
+   text, one yellow line); do not pass the reference thumbnails as images
+   and do not add identity checks. The exact words in `--expect-text`, no
+   other text. Vary expression and gesture across the five. No more than
    5 words; 2 or 3 when they carry the point. Save as `img/thumb-1.jpg` to
    `img/thumb-5.jpg`. No portrait: stop and complete the task saying one
    must be uploaded (Artifacts tab).
