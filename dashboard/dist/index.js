@@ -876,6 +876,7 @@
     var parts = partsState[0], setParts = partsState[1];
     var keptState = useState({});
     var kept = keptState[0], setKept = keptState[1];
+    var pc = usePortrait();
     useEffect(function () {
       var alive = true;
       api("/artifact-sections").then(function (r) {
@@ -940,6 +941,7 @@
         placeholder: "What to verify, which sources to trust, numbers you doubt, what to leave out",
         onChange: function (e) { setGuide(e.target.value); },
       }),
+      pc.portrait && !pc.portrait.present ? h(PortraitControl, { portrait: pc.portrait, upload: pc.upload, prompt: true }) : null,
       props.error ? h("div", { className: "yti-notice yti-notice-error" }, props.error) : null,
       h("div", { className: "yti-modal-actions" },
         h(Button, { size: "sm", variant: "outline", onClick: props.onClose }, "Cancel"),
@@ -947,6 +949,60 @@
           onClick: function () { props.onSubmit(topic.trim(), pov, guide, allOn ? [] : chosen); } },
           props.busy ? "Starting…" : (allOn ? "Build ✦" : "Build " + contentCount + " section" + (contentCount === 1 ? "" : "s") + " ✦")))
     );
+  }
+
+  // The operator's portrait: the source image for every packaging thumbnail
+  // (the real person on the thumbnail, not an invented face). Stored on the
+  // data volume under $HERMES_HOME/media; one hook + one control, shown in
+  // the Artifacts header and inside both page modals, which prompt for it
+  // when it is missing.
+  function usePortrait() {
+    var st = useState(null);          // null = checking; {present, name, bytes}
+    var portrait = st[0], setPortrait = st[1];
+    useEffect(function () {
+      var alive = true;
+      api("/portrait").then(function (r) { if (alive) setPortrait(r || { present: false }); })
+        .catch(function () { if (alive) setPortrait({ present: false }); });
+      return function () { alive = false; };
+    }, []);
+    function upload(fileEl) {
+      var f = fileEl && fileEl.files && fileEl.files[0];
+      if (!f) return;
+      var reader = new FileReader();
+      reader.onload = function () {
+        var b64 = String(reader.result || "").split(",")[1] || "";
+        api("/portrait/upload", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ filename: f.name, dataBase64: b64 }),
+        }).then(function (r) { fileEl.value = ""; setPortrait(r || { present: true }); })
+          .catch(function (e) { alert(String((e && e.message) || e)); });
+      };
+      reader.readAsDataURL(f);
+    }
+    return { portrait: portrait, upload: upload };
+  }
+
+  // props: {portrait, upload, prompt?: bool} — prompt renders the missing
+  // state as a notice (the modals); otherwise it is one quiet line (the header).
+  function PortraitControl(props) {
+    var p = props.portrait;
+    var link = h("label", { style: { cursor: "pointer", textDecoration: "underline" },
+                            title: "A clear head-and-shoulders photo of you on a plain background. Saved to the data volume as the thumbnail source for every page." },
+      p && p.present ? "Replace…" : "Upload portrait…",
+      h("input", { type: "file", accept: "image/*", style: { display: "none" },
+                   onChange: function (e) { props.upload(e.target); } }));
+    if (p === null) return h("span", { className: "yti-muted yti-small" }, "Checking for your portrait…");
+    if (p.present) {
+      return h("span", { className: "yti-small" },
+        h("span", { style: { opacity: .75 } }, "Portrait: "), p.name || "on file", " ", link);
+    }
+    if (props.prompt) {
+      return h("div", { className: "yti-notice yti-notice-error", style: { marginTop: 8 } },
+        "No portrait on file. The packaging thumbnails put you on them, so the worker needs one before it can build the page. ", link);
+    }
+    return h("span", { className: "yti-small" },
+      h("span", { style: { opacity: .75 } }, "Portrait: "), h("span", { className: "yti-muted" }, "none"), " ", link);
   }
 
   // "Simple artifact": a brief page the operator presents from, built from a
@@ -964,29 +1020,8 @@
     var images = imagesState[0], setImages = imagesState[1];
     var hookState = useState("");
     var hook = hookState[0], setHook = hookState[1];
-    var portraitState = useState(null);
-    var portrait = portraitState[0], setPortrait = portraitState[1];
-    useEffect(function () {
-      var alive = true;
-      api("/portrait").then(function (r) { if (alive) setPortrait(r || { present: false }); })
-        .catch(function () { if (alive) setPortrait({ present: false }); });
-      return function () { alive = false; };
-    }, []);
-    function uploadPortrait(fileEl) {
-      var f = fileEl && fileEl.files && fileEl.files[0];
-      if (!f) return;
-      var reader = new FileReader();
-      reader.onload = function () {
-        var b64 = String(reader.result || "").split(",")[1] || "";
-        api("/portrait/upload", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ filename: f.name, dataBase64: b64 }),
-        }).then(function (r) { fileEl.value = ""; setPortrait(r || { present: true }); })
-          .catch(function (e) { alert(String((e && e.message) || e)); });
-      };
-      reader.readAsDataURL(f);
-    }
+    var pc = usePortrait();
+    var hasPortrait = !!(pc.portrait && pc.portrait.present);
     var ready = !!(url.trim() || content.trim());
     var words = content.trim() ? content.trim().split(/\s+/).length : 0;
     return h(YtiModal, { onClose: props.onClose },
@@ -1029,21 +1064,12 @@
         placeholder: "The opener you already have in mind. It leads the packaging block; the worker adds four alternatives that could beat it.",
         onChange: function (e) { setHook(e.target.value); },
       }),
-      h("div", { className: "yti-small", style: { marginTop: 8 } },
-        h("span", { className: portrait && portrait.present ? "" : "yti-muted" },
-          portrait === null ? "Checking for your portrait…" :
-          portrait.present ? "Portrait on file: " + (portrait.name || "yes") + ". Every thumbnail is generated from it." :
-          "No portrait on file. Thumbnails need one: "),
-        " ",
-        h("label", { style: { cursor: "pointer", textDecoration: "underline" },
-                     title: "A clear head-and-shoulders photo of you, plain background. Saved to the data volume as the thumbnail source." },
-          portrait && portrait.present ? "Replace…" : "Upload portrait…",
-          h("input", { type: "file", accept: "image/*", style: { display: "none" },
-                       onChange: function (e) { uploadPortrait(e.target); } }))),
+      h("div", { style: { marginTop: 8 } }, h(PortraitControl, { portrait: pc.portrait, upload: pc.upload, prompt: true })),
       props.error ? h("div", { className: "yti-notice yti-notice-error" }, props.error) : null,
       h("div", { className: "yti-modal-actions" },
         h(Button, { size: "sm", variant: "outline", onClick: props.onClose }, "Cancel"),
-        h(Button, { size: "sm", disabled: !ready || !!props.busy,
+        h(Button, { size: "sm", disabled: !ready || !!props.busy || !hasPortrait,
+          title: hasPortrait ? "" : "Upload your portrait first: the thumbnails are built from it",
           onClick: function () { props.onSubmit(title.trim(), url.trim(), content, images, hook.trim()); } },
           props.busy ? "Starting…" : "Build " + images + "-image brief ✦"))
     );
@@ -1472,6 +1498,8 @@
         setStyleCat(Object.assign({}, styleCat, { selected: id }));
       }).catch(function (e) { alert(String((e && e.message) || e)); });
     }
+
+    var headPortrait = usePortrait();
 
     function uploadStyle(fileEl) {
       var f = fileEl && fileEl.files && fileEl.files[0];
@@ -2007,7 +2035,9 @@
                          title: "Upload your own example image — it becomes the style anchor for every generation until you change it" },
               "Upload your own…",
               h("input", { type: "file", accept: "image/*", style: { display: "none" },
-                           onChange: function (e) { uploadStyle(e.target); } }))
+                           onChange: function (e) { uploadStyle(e.target); } })),
+            h("span", { style: { opacity: .4 } }, "·"),
+            h(PortraitControl, { portrait: headPortrait.portrait, upload: headPortrait.upload })
           )
         ),
         // preview fills the remaining header whitespace, top-aligned and big;
