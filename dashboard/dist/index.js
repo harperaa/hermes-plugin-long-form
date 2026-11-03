@@ -1915,6 +1915,24 @@
         var parts = rel.split("/");
         for (var i = 2; i <= parts.length; i++) produced[parts.slice(0, i).join("/")] = 1;
       });
+      // Page folders the task map does not know (built by hand, copied in,
+      // or older than the map) tick by what is on disk: index.html beside
+      // artifact.json or img/. Same ancestor chain as the map-known ones.
+      (function markPages(nodes) {
+        (nodes || []).forEach(function (n) {
+          if (n.kind !== "dir") return;
+          var kids = n.children || [];
+          var hasIndex = kids.some(function (c) { return c.kind === "file" && c.name === "index.html"; });
+          var hasContent = kids.some(function (c) {
+            return (c.kind === "file" && c.name === "artifact.json") || (c.kind === "dir" && c.name === "img");
+          });
+          if (hasIndex && hasContent) {
+            var parts = n.relPath.split("/");
+            for (var i = 2; i <= parts.length; i++) produced[parts.slice(0, i).join("/")] = 1;
+          }
+          markPages(kids);
+        });
+      })((tree && tree.children) || tree || []);
       // 3 More 🔁 (pipeline): no per-run path — spin today's recommended
       // folder (browser-local AND UTC date, they can differ near midnight).
       if (pipelineRunning) {
