@@ -49,8 +49,9 @@ _SKILL_DIR = Path(__file__).resolve().parent / "skills" / "youtube-artifact"
 _BUILDER = _SKILL_DIR / "build_artifact.py"
 _PAGE_FILES = {"index.html", "artifact.json"}
 # The simple-artifact: a brief page (promise / problem / value / apply /
-# summary / cta) from a URL or pasted content; its own skill, contract
-# (brief.json) and renderer, same folder lifecycle as the full page.
+# summary / cta) from a URL or pasted content; its own skill and renderer,
+# the same artifact.json file name marked `"kind": "simple"`, and the same
+# folder lifecycle as the full page.
 SIMPLE_SKILLS = (
     "long-form:simple-artifact",
     "long-form:generate-image",
@@ -90,18 +91,29 @@ def simple_builder():
     return mod
 
 
+def _artifact_kind(root: Path) -> Optional[str]:
+    """The `kind` declared in the folder's artifact.json (None when the file
+    is missing, unreadable, or a full page, which declares no kind)."""
+    try:
+        doc = json.loads((root / "artifact.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    k = doc.get("kind") if isinstance(doc, dict) else None
+    return k if isinstance(k, str) else None
+
+
 def is_simple(root: Path) -> bool:
-    """A folder is a simple-artifact when it carries brief.json (and no
-    artifact.json; a full page always wins when both exist)."""
-    return (root / "brief.json").exists() and not (root / "artifact.json").exists()
+    """A folder is a simple-artifact when its artifact.json says `"kind": "simple"`."""
+    return _artifact_kind(root) == "simple"
 
 
 def builder_for(root: Path, kind: Optional[str] = None):
-    """The renderer that owns *root*: the task's recorded kind decides for a
-    folder the worker has not written yet; the files decide otherwise."""
-    if (root / "artifact.json").exists():
-        return builder()
-    if (root / "brief.json").exists() or kind == "simple":
+    """The renderer that owns *root*. Every caller that validates, renders,
+    inlines or gates a page folder goes through here (a test enforces it):
+    artifact.json's own `kind` decides; the task's recorded kind decides for
+    a folder the worker has not written yet."""
+    declared = _artifact_kind(root)
+    if declared == "simple" or (declared is None and not (root / "artifact.json").exists() and kind == "simple"):
         return simple_builder()
     return builder()
 
@@ -173,8 +185,7 @@ def artifact_root(rel_path: str) -> Optional[Path]:
     for cand in (p, *p.parents):
         if cand == ws or ws not in cand.parents:
             break
-        if cand.is_dir() and ((cand / "artifact.json").exists() or (cand / "brief.json").exists()
-                              or (cand / "index.html").exists()):
+        if cand.is_dir() and ((cand / "artifact.json").exists() or (cand / "index.html").exists()):
             return cand
     return None
 
@@ -421,9 +432,9 @@ def build_simple_iterate_brief(out_dir: Path, feedback: str) -> str:
         "```",
         "",
         "### Steps",
-        "1. Read brief.json and the current index.html; understand exactly what",
+        "1. Read artifact.json and the current index.html; understand exactly what",
         "   the feedback asks for. Make the SMALLEST change that satisfies it:",
-        "   edit brief.json, and regenerate ONLY the images the feedback names",
+        "   edit artifact.json (keep `\"kind\": \"simple\"`), and regenerate ONLY the images the feedback names",
         "   through `long-form:generate-image` with the skill's invocation and",
         "   the feedback folded into the prompt and `--context`. A new beat",
         "   needs a new image. Never regenerate every image for a one-line note.",
@@ -450,11 +461,11 @@ def build_simple_fix_brief(entry: dict[str, Any], problems: list[str]) -> str:
         f"**Artifact folder:** {out_dir}",
         f"**Contract:** {_SIMPLE_SKILL_DIR / 'schema.md'}",
         f"**Title:** {entry.get('topic') or ''}",
-        f"**Length:** {entry.get('images') or 10} illustrated beats (`target_images` in brief.json).",
+        f"**Length:** {entry.get('images') or 10} illustrated beats (`target_images` in artifact.json).",
         "",
         "Load `long-form:simple-artifact`. Fix exactly the problems listed:",
         "missing sections or beats get written from the source already in the",
-        "folder's brief.json, missing images get generated through",
+        "folder's artifact.json, missing images get generated through",
         "`long-form:generate-image`, presenter instructions get rewritten as",
         f"content, strays get removed. Then run `python3 {_SIMPLE_BUILDER} {out_dir}`",
         "until it prints OK, `kanban_attach` index.html, and `kanban_complete`.",
@@ -506,7 +517,7 @@ def build_simple_brief(title: str, url: str, content: str, out_dir: Path, images
         f"**Length:** {images} illustrated beats, one image each: a talk of about {images} minutes.",
         f"The gate holds the page to {images - 1} to {images + 2} images in total.",
         f"**Output directory:** {out_dir}",
-        f"**Worked example (style and depth):** {_SIMPLE_SKILL_DIR / 'example' / 'brief.json'}",
+        f"**Worked example (style and depth):** {_SIMPLE_SKILL_DIR / 'example' / 'artifact.json'}",
         f"**Contract:** {_SIMPLE_SKILL_DIR / 'schema.md'}",
         "",
         "You do ALL phases yourself in this session: no subtasks, no",
@@ -527,8 +538,8 @@ def build_simple_brief(title: str, url: str, content: str, out_dir: Path, images
         "",
         "### Phase 1 to 2 (read, restructure) — from the skill",
         "List every point, example, story, number, name and link in the source;",
-        "every one lands on the page. Then write brief.json in the contract",
-        f"with `\"target_images\": {images}` at the top level. Promise, apply and cta",
+        "every one lands on the page. Then write artifact.json in the contract",
+        f"with `\"kind\": \"simple\"` and `\"target_images\": {images}` at the top level. Promise, apply and cta",
         f"carry one image each, so the problem and value sections hold about {images - 3}",
         f"beats between them ({images - 4} to {images - 1}). "
         + ("CONSOLIDATE: the source has more points than beats, so group related points into one beat "
@@ -546,7 +557,7 @@ def build_simple_brief(title: str, url: str, content: str, out_dir: Path, images
         "steps for an immediate win), summary, cta (always ends with: more",
         "content like this, like and subscribe). Bullets over prose. No",
         "instructions to the presenter: the page carries content only.",
-        "Coverage check before you render: re-read the source against brief.json",
+        "Coverage check before you render: re-read the source against artifact.json",
         "and move anything missing onto the page. The completion summary lists",
         "any point you could not place; the expected list is empty.",
         "",
@@ -562,14 +573,14 @@ def build_simple_brief(title: str, url: str, content: str, out_dir: Path, images
         "and fix every problem it prints until it says OK. A completion",
         "validator re-runs that exact gate; a folder that fails re-opens as a",
         "fix task, so do not complete until it is clean.",
-        "Then `kanban_attach` index.html and brief.json, and `kanban_complete`",
+        "Then `kanban_attach` index.html and artifact.json, and `kanban_complete`",
         "with a summary naming the folder, the page link",
         f"`{_dashboard_link(out_dir)}` (Artifacts tab, select index.html for the",
         "preview and Open page), the beat and image counts, and anything from",
         "the source that did not fit.",
         "",
         "### CRITICAL RULES",
-        f"- Every output file goes under exactly {out_dir}/ (brief.json,",
+        f"- Every output file goes under exactly {out_dir}/ (artifact.json,",
         "  index.html, img/). Scratch, logs and prompts stay in your task",
         "  workspace; the completion sweep deletes strays from the folder.",
         "- Content only on the page: no 'say this', no 'mention the link', no",
@@ -790,7 +801,7 @@ def _sweep(root: Path) -> list[str]:
     removed: list[str] = []
     if not root.is_dir():
         return removed
-    keep = {"index.html", "artifact.json", "brief.json", "img", "history", "README.md", "SUMMARY.md", "published.json"}
+    keep = {"index.html", "artifact.json", "img", "history", "README.md", "SUMMARY.md", "published.json"}
     for p in root.iterdir():
         if p.name in keep or p.name.startswith("."):
             continue
@@ -827,17 +838,17 @@ def _plan_mismatch(root: Path, plan: Optional[list[str]]) -> list[str]:
 
 
 def _images_mismatch(root: Path, images: Optional[int]) -> list[str]:
-    """A simple task carried a length (10 or 20 images): brief.json must
+    """A simple task carried a length (10 or 20 images): artifact.json must
     declare the same target so the gate enforced it."""
     if not images:
         return []
     try:
-        doc = json.loads((root / "brief.json").read_text(encoding="utf-8"))
+        doc = json.loads((root / "artifact.json").read_text(encoding="utf-8"))
     except Exception:  # noqa: BLE001
         return []
     got = doc.get("target_images") if isinstance(doc, dict) else None
     if got != images:
-        return [f"target_images: brief.json must declare {images} (the length the operator chose); found {got}"]
+        return [f"target_images: artifact.json must declare {images} (the length the operator chose); found {got}"]
     return []
 
 

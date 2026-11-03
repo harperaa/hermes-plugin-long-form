@@ -1,4 +1,7 @@
-# brief.json — the content contract for a simple-artifact page
+# artifact.json — the content contract for a simple-artifact page
+
+The file shares its name with the full page's contract; `"kind": "simple"` at
+the top level is what routes a folder to this renderer, and it is required.
 
 `build_simple.py` renders `index.html` from this file and refuses anything
 that breaks the contract. The agent writes content; the look is fixed.
@@ -13,6 +16,7 @@ like. The page is the outline the operator speaks from, written as content.
 
 | key | required | notes |
 |---|---|---|
+| `kind` | yes | always `"simple"` |
 | `title` | yes | 1 to 8 words (`Leads Every Day`) |
 | `eyebrow` | yes | small caps line above the title: `Video brief · How to get leads every day` |
 | `lede` | yes | 12 to 70 words: what the page is, for whom, the thesis |
@@ -45,7 +49,7 @@ Every image file is used once. `target_images` (10 or 20, optional at the top le
 
 ```
 <artifact-dir>/
-  brief.json         the content (this contract)
+  artifact.json         the content (this contract)
   index.html         rendered by build_simple.py; never hand-edited
   img/s00.jpg …      from generate-image (timestamp suffixes are fine)
   history/           previous index.html copies, written on re-render

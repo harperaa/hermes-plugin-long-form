@@ -231,7 +231,7 @@ def publish(rel_path: str, domain: str = "") -> dict[str, Any]:
     if root is None:
         raise RuntimeError(f"not inside an artifact folder: {rel_path}")
     # the gate must pass before anything goes public
-    rep = yti_artifact.builder().build(root, check_only=True)
+    rep = yti_artifact.builder_for(root).build(root, check_only=True)
     if not rep.get("ok"):
         raise RuntimeError("the page does not pass its quality gate: " + "; ".join(rep.get("problems") or [])[:400])
     domain = normalize_domain(domain, root)

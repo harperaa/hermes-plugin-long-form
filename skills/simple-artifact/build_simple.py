@@ -4,8 +4,9 @@
 A brief page is the outline the operator speaks from: six fixed sections
 (promise, problem, value, apply, summary, cta), bullets instead of prose, a
 sketchnote image on every beat, and no instructions to the presenter. The
-content lives in brief.json (contract in schema.md); this script validates it
-and writes index.html. The look is fixed here so every brief page matches.
+content lives in artifact.json with `"kind": "simple"` (contract in
+schema.md); this script validates it and writes index.html. The look is fixed
+here so every brief page matches.
 
 Usage:
   python3 build_simple.py <artifact-dir>            validate + render
@@ -149,7 +150,9 @@ def _beat(b: Any, where: str, base: Path, p: list[str], images: list[str]) -> No
 def validate(doc: Any, base_dir: Path) -> list[str]:
     p: list[str] = []
     if not isinstance(doc, dict):
-        return ["brief.json must be a JSON object"]
+        return ["artifact.json must be a JSON object"]
+    if doc.get("kind") != "simple":
+        p.append('kind: must be "simple" (the marker that routes this folder to the simple-artifact renderer)')
     for k in ("title", "eyebrow", "lede"):
         if not isinstance(doc.get(k), str) or not doc[k].strip():
             p.append(f"{k}: required")
@@ -453,13 +456,13 @@ def count_images(doc: dict) -> int:
 
 def build(artifact_dir: Path, check_only: bool = False) -> dict[str, Any]:
     artifact_dir = Path(artifact_dir)
-    src = artifact_dir / "brief.json"
+    src = artifact_dir / "artifact.json"
     if not src.is_file():
-        return {"ok": False, "problems": [f"brief.json not found in {artifact_dir}"], "fatal": True}
+        return {"ok": False, "problems": [f"artifact.json not found in {artifact_dir}"], "fatal": True}
     try:
         doc = json.loads(src.read_text(encoding="utf-8"))
     except (OSError, ValueError) as exc:
-        return {"ok": False, "problems": [f"brief.json is not valid JSON: {exc}"], "fatal": True}
+        return {"ok": False, "problems": [f"artifact.json is not valid JSON: {exc}"], "fatal": True}
     problems = validate(doc, artifact_dir)
     out = artifact_dir / "index.html"
     if problems:

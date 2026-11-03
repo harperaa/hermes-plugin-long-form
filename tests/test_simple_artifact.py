@@ -34,6 +34,7 @@ def _beat(n: int, **over) -> dict:
 
 def _minimal_doc(**over) -> dict:
     doc = {
+        "kind": "simple",
         "title": "Test Brief",
         "eyebrow": "Video brief · test",
         "lede": " ".join(["word"] * 20),
@@ -58,7 +59,7 @@ def _minimal_doc(**over) -> dict:
 
 def _write_doc(folder: Path, doc: dict, images=("p", "b1", "b2", "b3", "b4", "b5", "a", "c")) -> Path:
     folder.mkdir(parents=True, exist_ok=True)
-    (folder / "brief.json").write_text(json.dumps(doc))
+    (folder / "artifact.json").write_text(json.dumps(doc))
     for n in images:
         _fake_image(folder / "img" / f"{n}.jpg")
     return folder
@@ -154,7 +155,7 @@ def test_simple_task_from_url_or_content(conn, tmp_home, art_kanban):
     body = t["body"]
     assert "https://example.com/note" in body and "Build first is a trap." in body
     assert "long-form:simple-artifact" in body and "build_simple.py" in body
-    assert "example/brief.json" in body and "like and subscribe" in body
+    assert "example/artifact.json" in body and "like and subscribe" in body
     assert yti_artifact._load_map(conn)[r["outDir"]]["kind"] == "simple"
     assert yti_artifact._load_map(conn)[r["outDir"]]["images"] == 10
     assert "about 10 minutes" in body and '"target_images": 10' in body and "CONSOLIDATE" in body
@@ -200,9 +201,9 @@ def test_simple_folder_lifecycle_dispatches_to_simple_builder(conn, tmp_home, ar
     assert yti_artifact.states()[key]["simple"] is True
     # rebuild, iterate and the inline page route all resolve the simple folder
     assert yti_artifact.rebuild(key)["ok"]
-    (root / "brief.json").write_text("{bad json")
+    (root / "artifact.json").write_text("{bad json")
     assert "problems" in yti_artifact.rebuild(key)
-    (root / "brief.json").write_text(json.dumps(_minimal_doc()))
+    (root / "artifact.json").write_text(json.dumps(_minimal_doc()))
     art_kanban.tasks[fix["id"]]["status"] = "done"
     it = yti_artifact.create_iterate_task(key + "/img/p.jpg", "shorter promise")
     assert it["ok"] and "simple-artifact brief page from feedback" in art_kanban.created[-1]["body"]
@@ -211,13 +212,124 @@ def test_simple_folder_lifecycle_dispatches_to_simple_builder(conn, tmp_home, ar
     assert "data:image/jpeg;base64," in served["html"]
 
 
+def test_publish_gates_a_simple_folder_with_the_simple_builder(tmp_home, monkeypatch):
+    import io
+    import tarfile
+    import yti_publish
+    from tests.test_artifact import _Resp
+    ws = yti_paths.workspace_dir()
+    folder = _write_doc(ws / "youtube/2026-11-03/artifacts/pub-brief", _minimal_doc())
+    assert yti_artifact.rebuild("youtube/2026-11-03/artifacts/pub-brief")["ok"]
+    monkeypatch.setenv("SURGE_TOKEN", "tok-123")
+    sent = {}
+
+    def fake_put(url, data=None, auth=None, headers=None, timeout=None):
+        with tarfile.open(fileobj=io.BytesIO(data), mode="r:gz") as tar:
+            sent["names"] = sorted(m.name for m in tar.getmembers())
+        return _Resp(200, '{"type":"info","message":"Success"}\n')
+    monkeypatch.setattr(yti_publish.requests, "put", fake_put)
+    entry = yti_publish.publish("youtube/2026-11-03/artifacts/pub-brief/index.html", "")
+    # the default name comes from artifact.json's title, and the bundle is the page plus its images
+    assert entry["domain"].startswith("test-brief-")
+    assert "test-brief-" in sent["names"][-1] and sent["names"][-1].endswith("/index.html")
+    assert sum(1 for n in sent["names"] if "/img/" in n) == 8
+    # a broken brief is refused before any upload
+    (folder / "artifact.json").write_text("{}")
+    with pytest.raises(RuntimeError, match="quality gate"):
+        yti_publish.publish("youtube/2026-11-03/artifacts/pub-brief/index.html", "x")
+
+
 def test_full_folders_keep_the_full_builder(tmp_path):
     full = tmp_path / "full"; full.mkdir()
     (full / "artifact.json").write_text("{}")
     assert yti_artifact.builder_for(full).__name__ == "yti_build_artifact"
+    assert yti_artifact.builder_for(full, "simple").__name__ == "yti_build_artifact", "the file's own kind wins"
     simple = tmp_path / "simple"; simple.mkdir()
-    (simple / "brief.json").write_text("{}")
+    (simple / "artifact.json").write_text('{"kind": "simple"}')
     assert yti_artifact.builder_for(simple).__name__ == "yti_build_simple"
+    assert yti_artifact.is_simple(simple) and not yti_artifact.is_simple(full)
+    # the simple gate names the missing marker
+    assert any('kind: must be "simple"' in x for x in _b().validate(_minimal_doc(kind=None), simple))
     empty = tmp_path / "empty"; empty.mkdir()
     assert yti_artifact.builder_for(empty, "simple").__name__ == "yti_build_simple"
     assert yti_artifact.builder_for(empty).__name__ == "yti_build_artifact"
+
+
+def test_every_page_gate_goes_through_builder_for():
+    """Publish, rebuild, completion, the inline page route: anything that
+    validates or renders a folder must dispatch on the folder's kind. A
+    direct `builder()` call outside yti_artifact is the bug that let Publish
+    reject a simple page."""
+    import re
+    offenders = []
+    for py in ROOT.glob("*.py"):
+        if py.name == "yti_artifact.py":
+            continue
+        for i, line in enumerate(py.read_text().splitlines(), 1):
+            if re.search(r"\byti_artifact\.(simple_)?builder\(\)", line) or re.search(r"(?<![\w.])builder\(\)", line):
+                offenders.append(f"{py.name}:{i}: {line.strip()}")
+    assert not offenders, offenders
+    for py in (ROOT / "dashboard").glob("*.py"):
+        for i, line in enumerate(py.read_text().splitlines(), 1):
+            if re.search(r"\.(simple_)?builder\(\)", line):
+                offenders.append(f"dashboard/{py.name}:{i}: {line.strip()}")
+    assert not offenders, offenders
+
+
+def test_routes_create_rebuild_serve_and_publish_a_simple_page(tmp_home, art_kanban, monkeypatch):
+    """The dashboard's own API, end to end for the simple kind: the Simple
+    artifact button, states, rebuild, the page route, iterate and publish."""
+    import io
+    import tarfile
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+    import yti_publish
+    from tests.test_artifact import _Resp, _load_api_registered
+    from tests.test_generate_tasks import _cron_stubs
+    jobs_mod, execs_mod = _cron_stubs()
+    api = _load_api_registered(monkeypatch, jobs_mod, execs_mod)
+    app = FastAPI()
+    app.include_router(api.router, prefix="/api/plugins/long-form")
+    c = TestClient(app)
+    base = "/api/plugins/long-form"
+    # the button: a URL or pasted content, 10 or 20 images
+    t = c.post(f"{base}/artifact-simple", json={"title": "Leads", "content": "notes", "images": 20}).json()
+    assert t["ok"] and t["outDir"].endswith("/leads-brief")
+    assert art_kanban.created[-1]["skills"] == list(yti_artifact.SIMPLE_SKILLS)
+    assert c.post(f"{base}/artifact-simple", json={"title": "x"}).status_code == 400
+    assert c.post(f"{base}/artifact-simple", json={"content": "x", "images": 7}).status_code == 400
+    # the worker's folder: rebuild, states, page route, inline preview
+    ws = yti_paths.workspace_dir()
+    key = t["outDir"]
+    doc = _minimal_doc(target_images=10)
+    doc["sections"][2]["beats"].append(_beat(6))
+    _write_doc(ws / key, doc, images=("p", "b1", "b2", "b3", "b4", "b5", "b6", "a", "c"))
+    r = c.post(f"{base}/artifact-rebuild", json={"path": key})
+    assert r.status_code == 200 and r.json()["page"].endswith("/leads-brief/index.html")
+    st = c.get(f"{base}/artifact-states").json()["states"][key]
+    assert st["simple"] is True and st["page"] == key + "/index.html"
+    page = c.get(f"{base}/page/{key}/index.html")
+    assert page.status_code == 200 and 'id="promise"' in page.text
+    assert "data:image/jpeg;base64," in c.get(f"{base}/page/{key}/index.html?inline=1").text
+    # a broken simple page: 400 with the simple gate's problems, not "artifact.json not found"
+    (ws / key / "artifact.json").write_text(json.dumps({"kind": "simple"}))
+    bad = c.post(f"{base}/artifact-rebuild", json={"path": key})
+    assert bad.status_code == 400 and any("sections" in p for p in bad.json()["detail"])
+    (ws / key / "artifact.json").write_text(json.dumps(doc))
+    # iterate on it from any inner path
+    art_kanban.tasks[t["taskId"]]["status"] = "done"
+    it = c.post(f"{base}/artifact-iterate", json={"path": key + "/img/p.jpg", "feedback": "tighter"}).json()
+    assert it["ok"] and "simple-artifact brief page from feedback" in art_kanban.created[-1]["body"]
+    # publish: the simple gate runs, then the bundle goes up
+    monkeypatch.setenv("SURGE_TOKEN", "tok")
+    sent = {}
+
+    def fake_put(url, data=None, auth=None, headers=None, timeout=None):
+        with tarfile.open(fileobj=io.BytesIO(data), mode="r:gz") as tar:
+            sent["names"] = sorted(m.name for m in tar.getmembers())
+        return _Resp(200, '{"type":"info","message":"Success"}\n')
+    monkeypatch.setattr(yti_publish.requests, "put", fake_put)
+    pub = c.post(f"{base}/artifact-publish", json={"path": key, "domain": "leads-test"})
+    assert pub.status_code == 200, pub.text
+    assert "leads-test/index.html" in sent["names"] and sum("/img/" in n for n in sent["names"]) == 9
+    assert c.get(f"{base}/artifact-states").json()["states"][key]["published"]["url"] == "https://leads-test.surge.sh"

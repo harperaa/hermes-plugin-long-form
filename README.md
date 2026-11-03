@@ -63,7 +63,7 @@ dashboard under **Settings → Environment**.
   parts (Promise, Problem as what the crowd says vs what you say, Value,
   Apply today, Summary, a like-and-subscribe close), bullets over prose,
   stories collapsed, one sketchnote per beat, nothing from the source
-  dropped; `build_simple.py` renders it from a `brief.json`. Same Iterate,
+  dropped; `build_simple.py` renders it from a `artifact.json`. Same Iterate,
   Rebuild, Publish and completion gate as the full page.
 
 **Agent tools** (toolset `youtube_insights`):

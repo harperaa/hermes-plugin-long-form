@@ -9,15 +9,15 @@ The deliverable is ONE folder:
 
 ```
 <artifact-dir>/
-  brief.json      the content, in the contract described in schema.md
-  index.html      rendered by build_simple.py from brief.json (never hand-edited)
+  artifact.json      the content, in the contract described in schema.md
+  index.html      rendered by build_simple.py from artifact.json (never hand-edited)
   img/            one sketchnote image per beat, from the generate-image skill
   history/        earlier index.html copies, written automatically on re-render
 ```
 
 The page looks the same every time because `build_simple.py` owns the design.
 You own the reading, the restructuring, the bullets and the images. Study
-`example/brief.json` (the Leads Every Day page) before writing: it is the
+`example/artifact.json` (the Leads Every Day page) before writing: it is the
 house style for cue length, contrast framing, story collapsing and image prompts.
 
 ## Inputs (from the kanban brief)
@@ -48,7 +48,7 @@ points into one beat with up to 8 cues and move detail under `story`. For
 20, expand: every framework, rule, step, example and story is its own beat.
 Consolidating is grouping, never cutting. Every salient point, number, name,
 example and link in the source lands on the page as a cue, a story line or
-a contrast line. Before rendering, re-read the source against brief.json and
+a contrast line. Before rendering, re-read the source against artifact.json and
 place anything missing.
 
 1. **promise**: 2 to 6 bullets on what the viewer leaves with for sticking
@@ -115,7 +115,7 @@ re-opens as a fix task with the problem list.
 
 ## Phase 5: Publish
 
-1. `kanban_attach` the rendered `index.html` and `brief.json`.
+1. `kanban_attach` the rendered `index.html` and `artifact.json`.
 2. `kanban_complete` with a summary naming the artifact folder, the
    Artifacts-tab deep link the brief gives you, the beat and image counts,
    and anything from the source that did not fit (there should be nothing).
@@ -124,5 +124,5 @@ re-opens as a fix task with the problem list.
 ## Iterating (feedback runs)
 
 An iterate brief carries the operator's feedback and the existing folder.
-Make the smallest change that satisfies it: edit `brief.json`, regenerate
+Make the smallest change that satisfies it: edit `artifact.json`, regenerate
 only the images the feedback names, re-run the builder, attach, complete.
