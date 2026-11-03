@@ -848,7 +848,7 @@
           "label": "Step three",
           "heading": "Research outliers: the magic quadrant",
           "image": "img/s11.jpg",
-          "image_alt": "Sketch of a scatter chart with one large dot in the upper right circled and labeled OUTLIER, with an hourglass, titled MAGIC QUADRANT",
+          "image_alt": "Sketch of a supply versus demand chart with the magic quadrant shaded top left, three blue dots inside it, and a figure saying act now, titled SUPPLY vs DEMAND",
           "bullets": [
             "Tool: Eden, link in the description. Finds trending topics that are outliers on any platform.",
             "An outlier is the algorithm's signal: this creator uniquely met demand in that moment.",
