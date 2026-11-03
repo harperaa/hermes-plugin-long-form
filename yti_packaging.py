@@ -346,30 +346,30 @@ CSS = r"""
 .pack .body{padding:0 16px 16px}
 a.pack-link{color:var(--muted);text-decoration:none;border-bottom:1px dotted var(--line)}
 a.pack-link:hover{color:var(--accent)}
-.pack h4{font-family:var(--display);font-size:15px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:18px 0 8px}
-.pack .promise{border-left:4px solid var(--ok);background:var(--ok-bg);padding:8px 14px;border-radius:0 6px 6px 0;font-family:var(--display);font-size:18px;font-weight:600;margin-top:4px}
+.pack h4{font-family:var(--display);font-size:18.8px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:18px 0 8px}
+.pack .promise{border-left:4px solid var(--ok);background:var(--ok-bg);padding:8px 14px;border-radius:0 6px 6px 0;font-family:var(--display);font-size:22.5px;font-weight:600;margin-top:4px}
 .pack ol{margin:0;padding-left:24px}
 .pack ol li{margin:6px 0}
-.pack .given{font-family:var(--mono);font-size:11px;color:var(--ok);background:var(--ok-bg);padding:1px 6px;border-radius:999px;margin-left:6px;vertical-align:middle}
-.thumbs{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px}
+.pack .given{font-family:var(--mono);font-size:13.8px;color:var(--ok);background:var(--ok-bg);padding:1px 6px;border-radius:999px;margin-left:6px;vertical-align:middle}
+.thumbs{display:grid;grid-template-columns:repeat(auto-fill,minmax(275px,1fr));gap:12px}
 .thumbs figure{margin:0}
 .thumbs img{width:100%;height:auto;aspect-ratio:16/9;object-fit:cover;border-radius:6px;border:1px solid var(--line);background:#000}
-.thumbs figcaption{font-family:var(--display);font-size:14px;font-weight:600;margin-top:4px}
-.thumbs figcaption small{display:block;font-family:var(--body);font-weight:400;color:var(--muted);font-size:12px}
-.refs{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
-.refs a{display:block;text-decoration:none;color:var(--ink);font-size:12px;line-height:1.3}
+.thumbs figcaption{font-family:var(--display);font-size:17.5px;font-weight:600;margin-top:4px}
+.thumbs figcaption small{display:block;font-family:var(--body);font-weight:400;color:var(--muted);font-size:15px}
+.refs{display:grid;grid-template-columns:repeat(auto-fill,minmax(188px,1fr));gap:10px}
+.refs a{display:block;text-decoration:none;color:var(--ink);font-size:15px;line-height:1.3}
 .refs img{width:100%;height:auto;aspect-ratio:16/9;object-fit:cover;border-radius:4px;border:1px solid var(--line);background:#000;margin-bottom:4px}
-.refs b{display:block;font-weight:600;font-size:12.5px}
+.refs b{display:block;font-weight:600;font-size:15.6px}
 .refs span{color:var(--muted)}
-.pack ul.pat{margin:0;padding-left:20px;font-size:15px}
+.pack ul.pat{margin:0;padding-left:20px;font-size:18.8px}
 .pack ul.pat li{margin:4px 0}
-.pack ol.titles li .frame{display:block;font-family:var(--mono);font-size:11.5px;color:var(--muted)}
-.pack ul.frames{margin:0;padding-left:20px;font-size:14px;columns:2;column-gap:24px}
+.pack ol.titles li .frame{display:block;font-family:var(--mono);font-size:14.4px;color:var(--muted)}
+.pack ul.frames{margin:0;padding-left:20px;font-size:17.5px;columns:2;column-gap:24px}
 @media (max-width:600px){.pack ul.frames{columns:1}}
 .pack ul.frames li{margin:3px 0;break-inside:avoid}
 .pack ul.frames li b{font-weight:600}
-.pack ul.frames li span{color:var(--muted);font-size:12.5px}
-.pack ul.frames li.sep{list-style:none;margin:10px 0 4px -20px;font-family:var(--display);font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+.pack ul.frames li span{color:var(--muted);font-size:15.6px}
+.pack ul.frames li.sep{list-style:none;margin:10px 0 4px -20px;font-family:var(--display);font-size:16.2px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
 """
 
 
