@@ -2031,6 +2031,9 @@
               return h("option", { key: s.id, value: s.id,
                                    style: { color: "#111" } }, s.name);
             })),
+            stylePrev ? h("a", { href: "#", style: { opacity: .8 },
+                title: "See the selected style baseline full-size — every generated image anchors to this look",
+                onClick: function (e) { e.preventDefault(); setStyleZoom(true); } }, "preview") : null,
             h("label", { style: { cursor: "pointer", textDecoration: "underline", opacity: .8 },
                          title: "Upload your own example image — it becomes the style anchor for every generation until you change it" },
               "Upload your own…",
@@ -2040,19 +2043,8 @@
             h(PortraitControl, { portrait: headPortrait.portrait, upload: headPortrait.upload })
           )
         ),
-        // preview fills the remaining header whitespace, top-aligned and big;
-        // shrinks at narrow widths; click to inspect full-size
-        stylePrev ? h("img", {
-          src: stylePrev,
-          alt: "selected style preview",
-          title: "The selected style baseline — every generated image anchors to this look. Click to enlarge.",
-          onClick: function () { setStyleZoom(true); },
-          style: { maxHeight: 192, maxWidth: 460, minWidth: 0,
-                   flex: "0 1 auto", objectFit: "contain", cursor: "zoom-in",
-                   marginLeft: 12, marginRight: "auto", marginTop: -56,
-                   borderRadius: 8,
-                   border: "1px solid color-mix(in srgb, currentColor 25%, transparent)" },
-        }) : null,
+        // the selected style is not previewed in the header (it took the
+        // header's space); the "preview" link beside the dropdown opens it
         h("div", { className: "yti-actions" },
           pipeline.available ? h(Button, {
             size: "sm",
