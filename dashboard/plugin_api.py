@@ -234,6 +234,23 @@ def post_artifact(body: ArtifactTopicBody) -> dict[str, Any]:
     return result
 
 
+class ArtifactSimpleBody(BaseModel):
+    title: str = ""
+    url: str = ""
+    content: str = ""
+    images: int = 10        # 10 (a ~10 minute talk) or 20 (~20 minutes)
+
+
+@router.post("/artifact-simple")
+def post_artifact_simple(body: ArtifactSimpleBody) -> dict[str, Any]:
+    """Artifacts page Simple artifact ✦ button: a brief page (promise,
+    problem, value, apply, summary, cta) from a URL and/or pasted content."""
+    result = yti_artifact.create_simple_task(body.title, body.url, body.content, body.images)
+    if result.get("error"):
+        raise HTTPException(status_code=400, detail=result["error"])
+    return result
+
+
 @router.get("/artifact-states")
 def get_artifact_states() -> dict[str, Any]:
     return {"states": yti_artifact.states()}

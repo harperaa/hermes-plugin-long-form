@@ -48,6 +48,16 @@ ARTIFACT_MAX_RETRIES = 2
 _SKILL_DIR = Path(__file__).resolve().parent / "skills" / "youtube-artifact"
 _BUILDER = _SKILL_DIR / "build_artifact.py"
 _PAGE_FILES = {"index.html", "artifact.json"}
+# The simple-artifact: a brief page (promise / problem / value / apply /
+# summary / cta) from a URL or pasted content; its own skill, contract
+# (brief.json) and renderer, same folder lifecycle as the full page.
+SIMPLE_SKILLS = (
+    "long-form:simple-artifact",
+    "long-form:generate-image",
+)
+_SIMPLE_SKILL_DIR = Path(__file__).resolve().parent / "skills" / "simple-artifact"
+_SIMPLE_BUILDER = _SIMPLE_SKILL_DIR / "build_simple.py"
+SIMPLE_CONTENT_MAX = 60_000   # characters of pasted content carried in the brief
 
 
 def _now_iso() -> str:
@@ -69,6 +79,31 @@ def builder():
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)  # type: ignore[union-attr]
     return mod
+
+
+def simple_builder():
+    """The simple-artifact skill's build_simple module (same surface:
+    build / validate / render / inline_images)."""
+    spec = importlib.util.spec_from_file_location("yti_build_simple", str(_SIMPLE_BUILDER))
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)  # type: ignore[union-attr]
+    return mod
+
+
+def is_simple(root: Path) -> bool:
+    """A folder is a simple-artifact when it carries brief.json (and no
+    artifact.json; a full page always wins when both exist)."""
+    return (root / "brief.json").exists() and not (root / "artifact.json").exists()
+
+
+def builder_for(root: Path, kind: Optional[str] = None):
+    """The renderer that owns *root*: the task's recorded kind decides for a
+    folder the worker has not written yet; the files decide otherwise."""
+    if (root / "artifact.json").exists():
+        return builder()
+    if (root / "brief.json").exists() or kind == "simple":
+        return simple_builder()
+    return builder()
 
 
 def _load_map(conn) -> dict[str, Any]:
@@ -138,7 +173,8 @@ def artifact_root(rel_path: str) -> Optional[Path]:
     for cand in (p, *p.parents):
         if cand == ws or ws not in cand.parents:
             break
-        if cand.is_dir() and ((cand / "artifact.json").exists() or (cand / "index.html").exists()):
+        if cand.is_dir() and ((cand / "artifact.json").exists() or (cand / "brief.json").exists()
+                              or (cand / "index.html").exists()):
             return cand
     return None
 
@@ -371,6 +407,60 @@ def build_iterate_brief(out_dir: Path, feedback: str) -> str:
     ] + yti_generate.selected_style_block())
 
 
+def build_simple_iterate_brief(out_dir: Path, feedback: str) -> str:
+    return "\n".join([
+        "## MANDATORY: Iterate ONE existing simple-artifact brief page from feedback.",
+        "",
+        f"**Artifact folder:** {out_dir}",
+        f"**Contract:** {_SIMPLE_SKILL_DIR / 'schema.md'}",
+        "",
+        "### The operator's feedback (the whole job)",
+        "",
+        "```",
+        (feedback or "").strip() or "(none given: re-render and re-check the page)",
+        "```",
+        "",
+        "### Steps",
+        "1. Read brief.json and the current index.html; understand exactly what",
+        "   the feedback asks for. Make the SMALLEST change that satisfies it:",
+        "   edit brief.json, and regenerate ONLY the images the feedback names",
+        "   through `long-form:generate-image` with the skill's invocation and",
+        "   the feedback folded into the prompt and `--context`. A new beat",
+        "   needs a new image. Never regenerate every image for a one-line note.",
+        f"2. Render: `python3 {_SIMPLE_BUILDER} {out_dir}` until it prints OK",
+        "   (the previous page is kept under history/ automatically).",
+        "3. `kanban_attach` index.html, then `kanban_complete` naming what",
+        f"   changed and the page link `{_dashboard_link(out_dir)}`.",
+        "",
+        "### CRITICAL RULES",
+        "- Content only on the page: no presenter instructions, no em dashes.",
+        "- Scratch stays out of the folder; strays are swept on completion.",
+    ] + yti_generate.selected_style_block())
+
+
+def build_simple_fix_brief(entry: dict[str, Any], problems: list[str]) -> str:
+    out_dir = entry.get("outDir") or ""
+    return "\n".join([
+        "## MANDATORY: Fix a simple-artifact folder that FAILED its quality gate.",
+        "",
+        "A worker completed this brief page task, but the gate found:",
+        "",
+    ] + [f"- {p}" for p in problems[:40]] + [
+        "",
+        f"**Artifact folder:** {out_dir}",
+        f"**Contract:** {_SIMPLE_SKILL_DIR / 'schema.md'}",
+        f"**Title:** {entry.get('topic') or ''}",
+        f"**Length:** {entry.get('images') or 10} illustrated beats (`target_images` in brief.json).",
+        "",
+        "Load `long-form:simple-artifact`. Fix exactly the problems listed:",
+        "missing sections or beats get written from the source already in the",
+        "folder's brief.json, missing images get generated through",
+        "`long-form:generate-image`, presenter instructions get rewritten as",
+        f"content, strays get removed. Then run `python3 {_SIMPLE_BUILDER} {out_dir}`",
+        "until it prints OK, `kanban_attach` index.html, and `kanban_complete`.",
+    ])
+
+
 def build_fix_brief(entry: dict[str, Any], problems: list[str]) -> str:
     out_dir = entry.get("outDir") or ""
     return "\n".join([
@@ -395,6 +485,100 @@ def build_fix_brief(entry: dict[str, Any], problems: list[str]) -> str:
     ])
 
 
+def out_dir_for_simple(title: str) -> Path:
+    return _versioned(yti_paths.workspace_dir() / "youtube" / _today() / "artifacts",
+                      _slug(title) + "-brief")
+
+
+def build_simple_brief(title: str, url: str, content: str, out_dir: Path, images: int = 10) -> str:
+    title = (title or "").strip()
+    url = (url or "").strip()
+    content = (content or "").strip()
+    clipped = ""
+    if len(content) > SIMPLE_CONTENT_MAX:
+        clipped = (f"\n\n(…content clipped at {SIMPLE_CONTENT_MAX} characters; "
+                   f"{len(content) - SIMPLE_CONTENT_MAX} more were pasted. Ask for the rest if the page needs it.)")
+        content = content[:SIMPLE_CONTENT_MAX]
+    head = [
+        "## MANDATORY: Build ONE simple-artifact brief page from the source below.",
+        "",
+        f"**Title:** {title or '(derive one from the content, 1 to 8 words)'}",
+        f"**Length:** {images} illustrated beats, one image each: a talk of about {images} minutes.",
+        f"The gate holds the page to {images - 1} to {images + 2} images in total.",
+        f"**Output directory:** {out_dir}",
+        f"**Worked example (style and depth):** {_SIMPLE_SKILL_DIR / 'example' / 'brief.json'}",
+        f"**Contract:** {_SIMPLE_SKILL_DIR / 'schema.md'}",
+        "",
+        "You do ALL phases yourself in this session: no subtasks, no",
+        "delegation. Load `long-form:simple-artifact` and follow it.",
+        "",
+        "### The source (the whole job: nothing dropped, nothing added from research)",
+    ]
+    src: list[str] = []
+    if url:
+        src += [f"- **URL:** {url}",
+                "  Fetch it with `web_extract` and read all of it. A login page or a",
+                "  failed fetch ends the task with that finding; never invent content."]
+    if content:
+        src += ["- **Pasted content:**", "", "```text", content + clipped, "```"]
+    if not url and not content:
+        src += ["(no source given: complete the task with that finding)"]
+    tail = [
+        "",
+        "### Phase 1 to 2 (read, restructure) — from the skill",
+        "List every point, example, story, number, name and link in the source;",
+        "every one lands on the page. Then write brief.json in the contract",
+        f"with `\"target_images\": {images}` at the top level. Promise, apply and cta",
+        f"carry one image each, so the problem and value sections hold about {images - 3}",
+        f"beats between them ({images - 4} to {images - 1}). "
+        + ("CONSOLIDATE: the source has more points than beats, so group related points into one beat "
+           "with up to 8 cue bullets, and keep every example and story with its detail under `story`. "
+           "Consolidating means grouping, never cutting: every salient point, number, name, example "
+           "and link in the source still lands on the page as a bullet, a story line or a contrast "
+           "line. Ten beats is a ten minute talk, not a shorter talk." if images <= 10 else
+           "EXPAND: give every framework, rule, step, example and story its own beat with 2 to 5 cue "
+           "bullets, keep more of each story's detail in the open bullets, and let the problem section "
+           "run 3 to 5 beats. Twenty beats is a twenty minute talk."),
+        "Sections:",
+        "promise, problem (what the crowd says vs what I say), value (the",
+        "teaching in logical order; stories and examples as beats with a one or",
+        "two bullet cue and the facts under `story`), apply (2 to 5 easy, fast",
+        "steps for an immediate win), summary, cta (always ends with: more",
+        "content like this, like and subscribe). Bullets over prose. No",
+        "instructions to the presenter: the page carries content only.",
+        "Coverage check before you render: re-read the source against brief.json",
+        "and move anything missing onto the page. The completion summary lists",
+        "any point you could not place; the expected list is empty.",
+        "",
+        "### Phase 3 to 5 (images, render, publish) — from the skill",
+        f"Images: ONE sketchnote per beat (promise, every problem and value beat,",
+        f"apply, cta: {images} on this page, {images - 1} to {images + 2} accepted) through the",
+        "`long-form:generate-image` skill, at most six at a time, anchored on the",
+        f"selected style baseline `--input \"{yti_generate.selected_baseline_path()}\"`,",
+        "with every rendered word in `--expect-text` and the beat's meaning in",
+        f"`--context`. Save them under {out_dir}/img/. Look at each one once.",
+        "Render with:",
+        f"  python3 {_SIMPLE_BUILDER} {out_dir}",
+        "and fix every problem it prints until it says OK. A completion",
+        "validator re-runs that exact gate; a folder that fails re-opens as a",
+        "fix task, so do not complete until it is clean.",
+        "Then `kanban_attach` index.html and brief.json, and `kanban_complete`",
+        "with a summary naming the folder, the page link",
+        f"`{_dashboard_link(out_dir)}` (Artifacts tab, select index.html for the",
+        "preview and Open page), the beat and image counts, and anything from",
+        "the source that did not fit.",
+        "",
+        "### CRITICAL RULES",
+        f"- Every output file goes under exactly {out_dir}/ (brief.json,",
+        "  index.html, img/). Scratch, logs and prompts stay in your task",
+        "  workspace; the completion sweep deletes strays from the folder.",
+        "- Content only on the page: no 'say this', no 'mention the link', no",
+        "  'point up' (the validator rejects them). No em dashes.",
+        "- No images from anything but generate-image. Never hand-edit index.html.",
+    ] + yti_generate.selected_style_block()
+    return "\n".join(head + src + tail)
+
+
 # ---------------------------------------------------------------------------
 # Task creation
 # ---------------------------------------------------------------------------
@@ -411,13 +595,15 @@ def _create(conn, key: str, title: str, body: str, extra: dict[str, Any]) -> dic
             age = yti_generate._age_minutes(entry.get("createdAt"))
             if age is not None and age < yti_generate.STALE_MINUTES:
                 return {"ok": True, "taskId": existing, "already": True, "outDir": key}
+        skills = SIMPLE_SKILLS if extra.get("kind") == "simple" else ARTIFACT_SKILLS
         task_id = kb.create_task(
             conn_kb, title=title, body=yti_generate._with_voice(body),
             assignee=resolve_kanban_assignee(), created_by="long-form",
-            workspace_kind="scratch", skills=list(ARTIFACT_SKILLS), priority=10)
+            workspace_kind="scratch", skills=list(skills), priority=10)
     mapping[key] = {"taskId": task_id, "createdAt": _now_iso(), "outDir": extra.get("outDirAbs"),
                     "topic": extra.get("topic"), "kind": extra.get("kind"),
-                    "fixRetries": 0, "videoId": extra.get("videoId"), "plan": extra.get("plan")}
+                    "fixRetries": 0, "videoId": extra.get("videoId"), "plan": extra.get("plan"),
+                    "images": extra.get("images")}
     _save_map(conn, mapping)
     kick_dispatcher()
     return {"ok": True, "taskId": task_id, "outDir": key}
@@ -451,6 +637,38 @@ def create_topic_task(topic: str, pov: str = "", guidance: str = "",
                         "plan": plan})
     except Exception as exc:  # noqa: BLE001
         return {"error": f"could not create the page task: {exc}"}
+    finally:
+        conn.close()
+
+
+def create_simple_task(title: str = "", url: str = "", content: str = "",
+                       images: int = 10) -> dict[str, Any]:
+    """Artifacts page Simple artifact ✦ button: a brief page from a URL
+    and/or pasted content; *images* (10 or 20) sets the page length."""
+    title = (title or "").strip()
+    url = (url or "").strip()
+    content = (content or "").strip()
+    if not url and not content:
+        return {"error": "a URL or pasted content is required"}
+    try:
+        images = int(images)
+    except (TypeError, ValueError):
+        images = 0
+    if images not in simple_builder().IMAGE_TARGETS:
+        return {"error": "images must be 10 or 20"}
+    if url and not re.match(r"^https?://\S+$", url):
+        return {"error": "the URL must start with http:// or https://"}
+    name = title or (content.strip().splitlines()[0][:60] if content else url.rstrip("/").rsplit("/", 1)[-1][:60]) or "brief"
+    out_dir = out_dir_for_simple(name)
+    ws = yti_paths.workspace_dir()
+    key = out_dir.relative_to(ws).as_posix()
+    conn = yti_store.connect()
+    try:
+        return _create(conn, key, f"Brief page: {(title or name)[:70]}",
+                       build_simple_brief(title, url, content, out_dir, images),
+                       {"outDirAbs": str(out_dir), "topic": title or name, "kind": "simple", "images": images})
+    except Exception as exc:  # noqa: BLE001
+        return {"error": f"could not create the brief page task: {exc}"}
     finally:
         conn.close()
 
@@ -496,10 +714,12 @@ def create_iterate_task(rel_path: str, feedback: str = "") -> dict[str, Any]:
     conn = yti_store.connect()
     try:
         prev = _load_map(conn).get(key) or {}
+        simple = is_simple(root)
+        brief = build_simple_iterate_brief(root, feedback) if simple else build_iterate_brief(root, feedback)
         return _create(conn, key, f"Iterate page: {root.name if root.name.startswith('artifact') else root.name}",
-                       build_iterate_brief(root, feedback),
-                       {"outDirAbs": str(root), "topic": prev.get("topic") or root.name, "kind": "iterate",
-                        "videoId": prev.get("videoId")})
+                       brief,
+                       {"outDirAbs": str(root), "topic": prev.get("topic") or root.name,
+                        "kind": "simple-iterate" if simple else "iterate", "videoId": prev.get("videoId")})
     except Exception as exc:  # noqa: BLE001
         return {"error": f"could not create the iterate task: {exc}"}
     finally:
@@ -511,7 +731,7 @@ def rebuild(rel_path: str) -> dict[str, Any]:
     root = artifact_root(rel_path)
     if root is None:
         return {"error": f"not inside an artifact folder: {rel_path}", "problems": []}
-    rep = builder().build(root)
+    rep = builder_for(root).build(root)
     if not rep.get("ok"):
         return {"error": "the page does not pass its quality gate", "problems": rep.get("problems") or []}
     ws = yti_paths.workspace_dir()
@@ -537,6 +757,7 @@ def states() -> dict[str, dict[str, Any]]:
         page = ws / key / "index.html"
         st["page"] = f"{key}/index.html" if page.exists() else None
         st["published"] = _published(ws / key)
+        st["simple"] = is_simple(ws / key)
     return out
 
 
@@ -569,7 +790,7 @@ def _sweep(root: Path) -> list[str]:
     removed: list[str] = []
     if not root.is_dir():
         return removed
-    keep = {"index.html", "artifact.json", "img", "history", "README.md", "SUMMARY.md", "published.json"}
+    keep = {"index.html", "artifact.json", "brief.json", "img", "history", "README.md", "SUMMARY.md", "published.json"}
     for p in root.iterdir():
         if p.name in keep or p.name.startswith("."):
             continue
@@ -605,6 +826,21 @@ def _plan_mismatch(root: Path, plan: Optional[list[str]]) -> list[str]:
     return []
 
 
+def _images_mismatch(root: Path, images: Optional[int]) -> list[str]:
+    """A simple task carried a length (10 or 20 images): brief.json must
+    declare the same target so the gate enforced it."""
+    if not images:
+        return []
+    try:
+        doc = json.loads((root / "brief.json").read_text(encoding="utf-8"))
+    except Exception:  # noqa: BLE001
+        return []
+    got = doc.get("target_images") if isinstance(doc, dict) else None
+    if got != images:
+        return [f"target_images: brief.json must declare {images} (the length the operator chose); found {got}"]
+    return []
+
+
 def handle_completion(conn, kanban_task_id: str) -> Optional[dict[str, Any]]:
     """kanban_task_completed hook: sweep strays, re-run the skill's gate,
     open a fix task (max ARTIFACT_MAX_RETRIES) when the page does not pass."""
@@ -614,9 +850,13 @@ def handle_completion(conn, kanban_task_id: str) -> Optional[dict[str, Any]]:
             continue
         root = Path(entry.get("outDir") or (yti_paths.workspace_dir() / key))
         removed = _sweep(root)
-        rep = builder().build(root)  # renders when clean, so the page is always current
+        simple = str(entry.get("kind") or "").startswith("simple")
+        rep = builder_for(root, "simple" if simple else None).build(root)  # renders when clean
         problems = list(rep.get("problems") or [])
-        problems += _plan_mismatch(root, entry.get("plan"))
+        if simple:
+            problems += _images_mismatch(root, entry.get("images"))
+        else:
+            problems += _plan_mismatch(root, entry.get("plan"))
         if not problems:
             return {"ok": True, "clean": True, "key": key, "swept": len(removed), "page": rep.get("page")}
         retries = int(entry.get("fixRetries") or 0)
@@ -625,12 +865,13 @@ def handle_completion(conn, kanban_task_id: str) -> Optional[dict[str, Any]]:
         kb = _kanban()
         if kb is None:
             return {"ok": False, "key": key, "problems": problems}
+        fix_body = build_simple_fix_brief(entry, problems) if simple else build_fix_brief(entry, problems)
         with kb.connect_closing() as conn_kb:
             fix_id = kb.create_task(
                 conn_kb, title=f"Fix page: {root.name}",
-                body=yti_generate._with_voice(build_fix_brief(entry, problems)),
+                body=yti_generate._with_voice(fix_body),
                 assignee=resolve_kanban_assignee(), created_by="long-form",
-                workspace_kind="scratch", skills=list(ARTIFACT_SKILLS), priority=10)
+                workspace_kind="scratch", skills=list(SIMPLE_SKILLS if simple else ARTIFACT_SKILLS), priority=10)
         entry.update({"taskId": fix_id, "fixRetries": retries + 1, "createdAt": _now_iso()})
         mapping[key] = entry
         _save_map(conn, mapping)
@@ -659,6 +900,6 @@ def page_file(rel_path: str, inline: bool = False) -> dict[str, Any]:
     if media is None:
         return {"error": "unsupported file type"}
     if inline and ext == ".html":
-        mod = builder()
+        mod = builder_for(p.parent)
         return {"html": mod.inline_images(p.read_text(encoding="utf-8"), p.parent), "media": media}
     return {"path": str(p), "media": media}

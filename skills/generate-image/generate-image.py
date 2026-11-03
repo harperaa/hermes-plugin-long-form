@@ -31,6 +31,20 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
+# Prefer IPv4. On networks where IPv6 is advertised but not routed, the
+# connect to api.x.ai hangs in SYN_SENT until the socket timeout (minutes)
+# before Python tries the next address; every image then takes 5 to 10
+# minutes instead of 15 seconds. Set GENIMG_ALLOW_IPV6=1 to restore dual-stack.
+if not os.environ.get("GENIMG_ALLOW_IPV6"):
+    import socket as _socket
+    _orig_getaddrinfo = _socket.getaddrinfo
+
+    def _ipv4_first(host, port, family=0, type=0, proto=0, flags=0):  # noqa: A002
+        res = _orig_getaddrinfo(host, port, family, type, proto, flags)
+        v4 = [r for r in res if r[0] == _socket.AF_INET]
+        return v4 + [r for r in res if r[0] != _socket.AF_INET] if v4 else res
+    _socket.getaddrinfo = _ipv4_first
+
 API_BASE = os.environ.get("XAI_API_BASE", "https://api.x.ai/v1")
 GEMINI_API_BASE = os.environ.get(
     "GEMINI_API_BASE", "https://generativelanguage.googleapis.com/v1beta")

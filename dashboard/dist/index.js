@@ -949,6 +949,63 @@
     );
   }
 
+  // "Simple artifact": a brief page the operator presents from, built from a
+  // URL and/or pasted content. Fixed six sections (promise, problem, value,
+  // apply today, summary, call to action), bullets over prose, one sketch per
+  // beat. No point of view or research fields: the source is the whole job.
+  function SimpleArtifactModal(props) {
+    var titleState = useState("");
+    var title = titleState[0], setTitle = titleState[1];
+    var urlState = useState("");
+    var url = urlState[0], setUrl = urlState[1];
+    var contentState = useState("");
+    var content = contentState[0], setContent = contentState[1];
+    var imagesState = useState(10);
+    var images = imagesState[0], setImages = imagesState[1];
+    var ready = !!(url.trim() || content.trim());
+    var words = content.trim() ? content.trim().split(/\s+/).length : 0;
+    return h(YtiModal, { onClose: props.onClose },
+      h("h3", null, "Build a simple brief page"),
+      h("p", { className: "yti-modal-sub" },
+        "Turns a URL or pasted content into the page you present from: Promise, Problem (what the crowd says vs what you say), Value, Apply today, Summary and a like-and-subscribe close. Bullets, not prose; one sketchnote image per beat; nothing from the source dropped."),
+      h("label", null, "Length"),
+      h("div", { className: "yti-seg" },
+        [10, 20].map(function (n) {
+          return h(Button, { key: n, size: "sm", variant: images === n ? undefined : "outline",
+              title: n + " illustrated beats, one sketchnote each: a talk of about " + n + " minutes",
+              onClick: function () { setImages(n); } },
+            n + " images · ~" + n + " min");
+        })),
+      h("label", null, "Title (optional)"),
+      h("input", {
+        value: title,
+        placeholder: "e.g. Leads Every Day — derived from the content when left empty",
+        onChange: function (e) { setTitle(e.target.value); },
+      }),
+      h("label", null, "Source URL"),
+      h("input", {
+        value: url,
+        autoFocus: true,
+        placeholder: "https://… a public page the worker can fetch (private notes: paste the text below instead)",
+        onChange: function (e) { setUrl(e.target.value); },
+      }),
+      h("label", null, "Or paste the content"),
+      h("textarea", {
+        value: content,
+        rows: 12,
+        placeholder: "Paste the script, outline or notes here. Everything in it lands on the page.",
+        onChange: function (e) { setContent(e.target.value); },
+      }),
+      words ? h("div", { className: "yti-muted yti-small" }, words + " words pasted") : null,
+      props.error ? h("div", { className: "yti-notice yti-notice-error" }, props.error) : null,
+      h("div", { className: "yti-modal-actions" },
+        h(Button, { size: "sm", variant: "outline", onClick: props.onClose }, "Cancel"),
+        h(Button, { size: "sm", disabled: !ready || !!props.busy,
+          onClick: function () { props.onSubmit(title.trim(), url.trim(), content, images); } },
+          props.busy ? "Starting…" : "Build " + images + "-image brief ✦"))
+    );
+  }
+
   // Publish a page folder to surge.sh. First visit connects the account
   // (no SURGE_TOKEN stored yet): email + password mints the token on the
   // backend (a new email creates the account), or a pasted token with the
@@ -1427,6 +1484,24 @@
       return m ? m[1] : null;
     }
 
+    var simpleModalState = useState(false);
+    var simpleModal = simpleModalState[0], setSimpleModal = simpleModalState[1];
+    var simpleBusyState = useState(false);
+    var simpleBusy = simpleBusyState[0], setSimpleBusy = simpleBusyState[1];
+    var simpleErrorState = useState(null);
+    var simpleError = simpleErrorState[0], setSimpleError = simpleErrorState[1];
+
+    function buildSimpleArtifact(title, url, content, images) {
+      setSimpleBusy(true); setSimpleError(null);
+      api("/artifact-simple", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: title || "", url: url || "", content: content || "", images: images || 10 }),
+      }).then(function () {
+        setSimpleBusy(false); setSimpleModal(false); loadTree();
+      }).catch(function (e) { setSimpleBusy(false); setSimpleError(errorLines(e).join(" ")); });
+    }
+
     function buildArtifact(topicText, pov, guidance, sections) {
       setArtBusy(true); setArtError(null);
       api("/artifact", {
@@ -1459,7 +1534,7 @@
         body: JSON.stringify({ path: dir }),
       }).then(function (r) {
         setBusy(false);
-        setArtNotice({ ok: true, lines: ["Page rebuilt from artifact.json" + (r && r.page ? ": " + r.page : ".")] });
+        setArtNotice({ ok: true, lines: ["Page rebuilt from its content file" + (r && r.page ? ": " + r.page : ".")] });
         loadTree();
       }).catch(function (e) {
         setBusy(false);
@@ -1623,7 +1698,7 @@
           size: "sm",
           variant: "outline",
           disabled: artOpen || busy,
-          title: "Re-render index.html from artifact.json and the images on disk — no research, no agent",
+          title: "Re-render index.html from artifact.json (or brief.json) and the images on disk — no research, no agent",
           onClick: function () { rebuildArtifact(artDir); },
         }, busy ? "Rebuilding…" : "Rebuild page") : null,
         artDir ? h(Button, {
@@ -1931,7 +2006,16 @@
               ? "Building — a video page is being researched, drawn and rendered"
               : "Build a video page on a topic: verified research, timeline graphics, top items with talk tracks, one sketchnote image per recommendation — steered by your point of view",
             onClick: function () { setArtError(null); setArtModal(true); },
-          }, anyOpen(artStates) ? "Building…" : "Artifact ✦"),
+          }, anyOpen(artStates) ? "Building…" : "Full artifact ✦"),
+          h(Button, {
+            size: "sm",
+            className: anyOpen(artStates) ? "yti-busy" : undefined,
+            disabled: anyOpen(artStates),
+            title: anyOpen(artStates)
+              ? "Building — a page is being written, drawn and rendered"
+              : "Build a simple brief page from a URL or pasted content: Promise, Problem, Value, Apply today, Summary, CTA — bullets and one sketchnote per beat, the outline you present from",
+            onClick: function () { setSimpleError(null); setSimpleModal(true); },
+          }, anyOpen(artStates) ? "Building…" : "Simple artifact ✦"),
           h(Button, {
             size: "sm",
             className: presentOpen ? "yti-busy" : undefined,
@@ -1948,6 +2032,11 @@
         busy: artBusy, error: artError,
         onClose: function () { setArtModal(false); },
         onSubmit: buildArtifact,
+      }) : null,
+      simpleModal ? h(SimpleArtifactModal, {
+        busy: simpleBusy, error: simpleError,
+        onClose: function () { setSimpleModal(false); },
+        onSubmit: buildSimpleArtifact,
       }) : null,
       pubModal && artDir ? h(PublishModal, {
         dir: artDir,

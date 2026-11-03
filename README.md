@@ -42,7 +42,7 @@ dashboard under **Settings → Environment**.
   most-sourced/most-recent sort, expandable cards with source videos,
   timestamps, and quotes; pagination; delete.
 - **Artifacts** — the workspace tree of concepts, scripts and pages.
-  **Produce ✦ page** on a script, **Artifact ✦** on a topic, or
+  **Produce ✦ page** on a script, **Full artifact ✦** on a topic, or
   **Artifact ✦** on a Research focus row (with your point of view and
   research guidance, and a checklist of the page's sections so you can
   keep, say, only the solutions with images) each create one kanban task that runs the
@@ -57,7 +57,14 @@ dashboard under **Settings → Environment**.
   (same account and `SURGE_TOKEN` as shorts-lab's ad packs; connect with
   an email + password once, or paste an existing token) and records the
   URL beside the page as `published.json`; publishing again to the same
-  name replaces it.
+  name replaces it. **Simple artifact ✦** takes a URL or pasted content
+  and a length (10 or 20 images, about that many minutes) and runs the
+  `simple-artifact` skill: a brief page you present from with six fixed
+  parts (Promise, Problem as what the crowd says vs what you say, Value,
+  Apply today, Summary, a like-and-subscribe close), bullets over prose,
+  stories collapsed, one sketchnote per beat, nothing from the source
+  dropped; `build_simple.py` renders it from a `brief.json`. Same Iterate,
+  Rebuild, Publish and completion gate as the full page.
 
 **Agent tools** (toolset `youtube_insights`):
 `yt_add_channel`, `yt_remove_channel`, `yt_list_channels`,
@@ -72,7 +79,8 @@ dashboard under **Settings → Environment**.
 **Skills** (load with `skill_view("long-form:<name>")`):
 `youtube-video-analyst`, `youtube-gap-finder`, `ideal-mechanics`,
 `youtube-content-creator`, `youtube-artifact` (+ `build_artifact.py`, the
-page renderer and quality gate, and a worked example), `generate-image`,
+page renderer and quality gate, and a worked example), `simple-artifact`
+(+ `build_simple.py` and the Leads Every Day example), `generate-image`,
 `image-style-guide`, `outline-to-presentation`,
 `youtube-planner` (+ standalone dashboard scripts), `digest-url-liveness-gate`.
 

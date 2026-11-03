@@ -868,3 +868,6 @@
 .yti-rs-flagcol { min-width: 96px; }
 /* chart captions sit on data: give them a halo in the surface colour */
 .yti-sd-quad, .yti-sd-note { paint-order: stroke; stroke: var(--background-base, #0b0f14); stroke-width: 3.5px; stroke-linejoin: round; }
+
+/* Simple artifact modal: the 10 / 20 image length choice */
+.yti-seg{display:flex;gap:6px;margin:4px 0 10px}

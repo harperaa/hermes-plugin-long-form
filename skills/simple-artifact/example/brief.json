@@ -1,0 +1,348 @@
+{
+  "title": "Leads Every Day",
+  "eyebrow": "Video brief · How to get leads every day",
+  "lede": "Why most businesses have no leads, why the audience comes before the product, and the one lead source to start with today: short form content.",
+  "source": {
+    "title": "Eden note: Video: How to get leads every day"
+  },
+  "target_images": 20,
+  "sections": [
+    {
+      "type": "promise",
+      "heading": "Stick with this and you leave with",
+      "image": "img/s00.jpg",
+      "image_alt": "Sketch of a mailbox overflowing with envelopes beside a calendar where every day holds an envelope, titled LEADS EVERY DAY",
+      "bullets": [
+        "Why you have no leads, and the one thing most advice gets backwards.",
+        "The audience-first shift and how to find the best kind of leads: a premium offer.",
+        "A simple short form system that brings leads every day, from one platform.",
+        "Two real results from this exact approach: 8k followers in 8 months, and a 300k sale."
+      ],
+      "key": {
+        "text": "If you are not getting leads every day, this is for you.",
+        "tone": "ok"
+      }
+    },
+    {
+      "type": "problem",
+      "heading": "Most businesses lack leads, and the usual advice makes it worse",
+      "beats": [
+        {
+          "heading": "The number one problem is leads, not product",
+          "image": "img/s01.jpg",
+          "image_alt": "Sketch of an open storefront with an empty street and a tumbleweed, titled NO LEADS",
+          "contrast": {
+            "crowd": [
+              "Start by designing the product or service.",
+              "Get it polished, then they will come."
+            ],
+            "me": [
+              "Dead wrong. Build first is a trap.",
+              "Most businesses' number one problem: no leads."
+            ]
+          }
+        },
+        {
+          "heading": "Build first is a trap",
+          "image": "img/s02.jpg",
+          "image_alt": "Sketch of a person happily building inside a mousetrap-shaped cage while a crowd waits down the path, titled BUILD TRAP",
+          "bullets": [
+            "Building feels good. Dopamine hits every time you ship a piece.",
+            "That good feeling becomes procrastination. It keeps you from leads and sales."
+          ],
+          "key": {
+            "text": "Building is the most productive-looking way to avoid selling.",
+            "tone": "crit"
+          }
+        },
+        {
+          "label": "Story",
+          "heading": "If I build it, they will come",
+          "image": "img/s03.jpg",
+          "image_alt": "Sketch of a polished app on a launch stage facing empty chairs while money bags fly away, titled NOBODY CAME",
+          "bullets": [
+            "Built an app, polished it for a year. No one cared.",
+            "Tens of thousands of dollars spent: hired people, outsourced leads to \"marketers\". It did not work."
+          ],
+          "story": [
+            "Struggled with this for years, believing: if I build it, they will come.",
+            "A couple of years ago: one app, a year of polish, zero interest.",
+            "Frustration led to spending tens of thousands trying to buy a fix: hires, outsourced \"marketers\".",
+            "The lesson that came out of it: start with the audience, before any service or product."
+          ],
+          "key": {
+            "text": "A year of polish. Tens of thousands spent. Zero audience.",
+            "tone": "crit"
+          }
+        },
+        {
+          "heading": "The hidden second cost of no leads: your price",
+          "image": "img/s07.jpg",
+          "image_alt": "Split sketch of a water truck on an empty beach with a falling price and one cooler on a packed beach with a rising price, titled BEACH WATER",
+          "contrast": {
+            "crowd": [
+              "Price is set by the market. Compete on price."
+            ],
+            "me": [
+              "Supply and demand is micro economics, and you control it.",
+              "More demand than supply, the price goes up."
+            ]
+          },
+          "bullets": [
+            "Beach one: truck full of water, other sellers, ten people on the sand. Charge little.",
+            "Beach two: packed beach, one cooler of ice cold bottles, only seller. Charge more."
+          ],
+          "key": {
+            "text": "Generate more demand than supply and the price goes up.",
+            "tone": ""
+          }
+        }
+      ]
+    },
+    {
+      "type": "value",
+      "heading": "Audience first, then a premium offer, then short form leads every day",
+      "beats": [
+        {
+          "label": "The shift",
+          "heading": "Start with the audience, before any product or service",
+          "image": "img/s04.jpg",
+          "image_alt": "Sketch of a large crowd numbered 1 with an arrow to a small product box numbered 2, titled AUDIENCE FIRST",
+          "bullets": [
+            "What are you selling, what problem are you solving, if you do not start with the audience?",
+            "The audience tells you what to build and who pays for it."
+          ],
+          "key": {
+            "text": "Audience first. Always.",
+            "tone": "ok"
+          }
+        },
+        {
+          "label": "Who to attract",
+          "heading": "Four types of audience, one premium offer",
+          "image": "img/s05.jpg",
+          "image_alt": "Sketch of a two by two grid with the painful and specific cell circled and a crown labeled RICH, titled PREMIUM OFFER",
+          "bullets": [
+            "Two axes: optional vs painful. General vs specific.",
+            "Target the corner: the most painful, most specific problem you can solve.",
+            "For the richest people you can solve it for.",
+            "That is a premium offer. It is the key to success. Works in any niche."
+          ],
+          "key": {
+            "text": "Painful + specific + rich = premium offer.",
+            "tone": ""
+          }
+        },
+        {
+          "label": "Example",
+          "heading": "A mentee in the health niche",
+          "image": "img/s06.jpg",
+          "image_alt": "Sketch of a target with a single arrow in the bullseye next to a person with a CEO name tag, titled ONE PAINFUL PROBLEM",
+          "bullets": [
+            "Health, to weight loss, to loss of visceral fat. That specific.",
+            "CEOs and wealthy individuals first. He is doing it and starting to see success."
+          ]
+        },
+        {
+          "label": "The map",
+          "heading": "Three sources of daily leads",
+          "image": "img/s08.jpg",
+          "image_alt": "Sketch of three pipes labeled SHORT FORM, REFERRALS and RENTED pouring into one bucket, titled THREE SOURCES",
+          "bullets": [
+            "1. Short form content.",
+            "2. High trust referral leads.",
+            "3. Rented leads: affiliates, partnerships, paid ads.",
+            "Today: short form. The other two another day."
+          ]
+        },
+        {
+          "label": "Step one",
+          "heading": "Pick one platform. Just one.",
+          "image": "img/s09.jpg",
+          "image_alt": "Sketch of a hand pointing at one phone in a row of five, the chosen one circled in red, titled PICK ONE",
+          "bullets": [
+            "TikTok, Instagram, X, Facebook, Threads, YouTube Shorts.",
+            "The one you are most comfortable on, ideally one you already use daily.",
+            "Every platform has a culture. Go against the flow and you read as the used car salesman.",
+            "Weigh where your ideal clients hang out, including age demographics.",
+            "Not on social yet? Start now. Follow, comment, support others before posting."
+          ],
+          "key": {
+            "text": "One platform, the one you already live on.",
+            "tone": ""
+          }
+        },
+        {
+          "label": "Step two",
+          "heading": "Set up a professional profile",
+          "image": "img/s10.jpg",
+          "image_alt": "Sketch of a phone profile page with banner, avatar and a circled link icon at the top, titled LINK IN BIO",
+          "bullets": [
+            "Community-professional bio, banner and photo where supported.",
+            "Main link at the top of the bio or profile.",
+            "Now \"see the link in my bio\" works, every time."
+          ]
+        },
+        {
+          "label": "Step three",
+          "heading": "Research outliers: the magic quadrant",
+          "image": "img/s11.jpg",
+          "image_alt": "Sketch of a scatter chart with one large dot in the upper right circled and labeled OUTLIER, with an hourglass, titled MAGIC QUADRANT",
+          "bullets": [
+            "Tool: Eden, link in the description. Finds trending topics that are outliers on any platform.",
+            "An outlier is the algorithm's signal: this creator uniquely met demand in that moment.",
+            "Perishable. Supply catches up and the algorithm moves on.",
+            "Rule: 3x or more outliers, within a week of posting. The magic quadrant, video linked above."
+          ],
+          "key": {
+            "text": "3x outlier, under a week old. Fresh signal only.",
+            "tone": ""
+          }
+        },
+        {
+          "label": "Step four",
+          "heading": "Tear the winners down",
+          "image": "img/s12.jpg",
+          "image_alt": "Sketch of a video frame taken apart on a workbench under a magnifying glass, titled TEAR DOWN",
+          "bullets": [
+            "Study packaging, format, method of delivery, images and thumbnails.",
+            "Do not copy. Do not reinvent the wheel either.",
+            "Use them as a guide. Add your taste and point of view.",
+            "To break through: say something new, and above all, useful."
+          ]
+        },
+        {
+          "label": "Step five",
+          "heading": "Four parts of content that works",
+          "image": "img/s13.jpg",
+          "image_alt": "Sketch of four stacked blocks labeled HOOK, BODY, WIN and CTA, titled FOUR PARTS",
+          "bullets": [
+            "Hook: the promise. Body: the value. Win: a small insight or tool. CTA.",
+            "Short form is no different, just tighter. Tear down any winner and the four are there."
+          ],
+          "key": {
+            "text": "Hook, body, win, CTA. Even in 30 seconds.",
+            "tone": ""
+          }
+        },
+        {
+          "label": "The rule",
+          "heading": "The CTA is never \"buy my thing\"",
+          "image": "img/s14.jpg",
+          "image_alt": "Sketch of a well, a gift box with an envelope, and a crossed-out price tag, titled FREE FIRST",
+          "contrast": {
+            "crowd": [
+              "Every post should sell. Always pitch the offer."
+            ],
+            "me": [
+              "People do not like being sold on short form. Sell there and you poison your well.",
+              "Point to something free to capture the email, or to a long form piece."
+            ]
+          },
+          "key": {
+            "text": "Sell on short form and you poison the well.",
+            "tone": "crit"
+          }
+        },
+        {
+          "label": "Hack",
+          "heading": "Comment early, add value",
+          "image": "img/s15.jpg",
+          "image_alt": "Sketch of a viral post with a rocket, a comment bubble holding a lightbulb and an early clock, titled EARLY COMMENT",
+          "bullets": [
+            "Be early on others' posts that go viral.",
+            "Add real value. Not \"I agree\", not \"good post\".",
+            "People notice, check the bio, click the link."
+          ]
+        },
+        {
+          "label": "Proof",
+          "heading": "8k followers in 8 months, leads every day",
+          "image": "img/s16.jpg",
+          "image_alt": "Sketch of a rising chart made of people icons ending at a clubhouse door with envelopes, titled 8K IN 8 MONTHS",
+          "bullets": [
+            "Adding value and supporting others: 8k followers on X in 8 months.",
+            "Pointed them to a free Skool community, later paid for new members. Every email captured.",
+            "From that audience: leads every day, now."
+          ],
+          "key": {
+            "text": "Free community, emails captured, then paid. Leads daily.",
+            "tone": "ok"
+          }
+        },
+        {
+          "label": "Proof",
+          "heading": "The 300k sale: audience first, again",
+          "image": "img/s17.jpg",
+          "image_alt": "Sketch of a handshake between a person holding a prototype and a person in front of a large crowd, with a money bag, titled 300K",
+          "bullets": [
+            "Product idea, no audience. Built a prototype only.",
+            "Asked a creator with the audience to be an affiliate. They bought the site instead: 200k, then 100k more, still going."
+          ],
+          "story": [
+            "Had an idea for a product and realized there was no audience for it. Refused to repeat the old mistake.",
+            "Built a prototype, nothing more. Reached out to someone with a large audience in that niche.",
+            "Offer: be an affiliate, earn commissions for sending leads. Their answer: no, they wanted to buy the site.",
+            "200k for the site, then another 100k of improvements and maintenance, and still going.",
+            "Feedback from that audience came fast. Functionality and value were added quickly.",
+            "You can leverage someone else's audience to establish value and win. One way or another, the audience comes first."
+          ],
+          "key": {
+            "text": "Prototype only. Borrowed audience. 300k and counting.",
+            "tone": ""
+          }
+        }
+      ]
+    },
+    {
+      "type": "apply",
+      "heading": "A first win in under an hour",
+      "image": "img/s19.jpg",
+      "image_alt": "Sketch of a clipboard with three ticked boxes labeled PICK, PROFILE and COMMENT and a stopwatch, titled TODAY",
+      "steps": [
+        {
+          "title": "Pick your one platform",
+          "text": "The one already on your phone that you open daily. Decide now, not after research."
+        },
+        {
+          "title": "Fix the profile in ten minutes",
+          "text": "Photo, banner, one clear bio line, and your main link at the top."
+        },
+        {
+          "title": "Leave three valuable comments",
+          "text": "Find three posts in your niche taking off today. Add a real insight to each. No \"great post\"."
+        },
+        {
+          "title": "Write one short post in four parts",
+          "text": "Hook, body, one small win, and a CTA that points to something free."
+        }
+      ],
+      "key": {
+        "text": "Profile clicks start the same day you add value early.",
+        "tone": "ok"
+      }
+    },
+    {
+      "type": "summary",
+      "heading": "What we covered",
+      "bullets": [
+        "No leads is the number one problem. Build first is a trap.",
+        "Audience first, then a premium offer: painful, specific, rich.",
+        "More demand than supply and your price goes up.",
+        "Three lead sources. Short form first: one platform, profile, outliers, teardown, four parts, free CTA, early comments.",
+        "Proof: 8k in 8 months, and a 300k sale with a borrowed audience."
+      ]
+    },
+    {
+      "type": "cta",
+      "heading": "Short form attracts leads. It rarely converts them.",
+      "image": "img/s18.jpg",
+      "image_alt": "Sketch of a magnet pulling in a crowd and a funnel releasing a single drop with a question mark, titled ATTRACT NOT CONVERT",
+      "bullets": [
+        "How to convert leads into customers: the video below.",
+        "How to skip the job line and start an AI business, securely: the video at the top.",
+        "More content like this every week: like and subscribe."
+      ]
+    }
+  ]
+}
