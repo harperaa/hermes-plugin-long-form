@@ -178,6 +178,11 @@ def _beat(b: Any, where: str, base: Path, p: list[str], images: list[str]) -> No
     if "label" in b and not isinstance(b["label"], str):
         p.append(f"{where}.label: must be a string")
     _question(b.get("question"), where, p)
+    if "closes" in b:
+        if not isinstance(b["closes"], str) or not b["closes"].strip():
+            p.append(f"{where}.closes: the earlier question this beat answers, verbatim")
+        elif not isinstance(b.get("key"), dict):
+            p.append(f"{where}: a beat that closes a loop carries a key line; it renders as the Answer")
     _key(b.get("key"), where, p)
 
 
@@ -266,6 +271,29 @@ def validate(doc: Any, base_dir: Path) -> list[str]:
             p.append(f"packaging.thumbnails: {t['image']} is also a beat image; thumbnails are their own files")
     if len(images) != len(set(images)):
         p.append("images: the same file is used twice; every beat has its own sketch")
+    # every open loop is closed by a later beat, and every close answers an earlier question
+    asked: list[str] = []
+    order: list[tuple[str, str, str]] = []   # (kind, text, where)
+    for s in secs:
+        if s["type"] == "promise" and isinstance(s.get("question"), str):
+            order.append(("q", s["question"].strip(), "sections.promise"))
+        for j, b in enumerate(s.get("beats") or []):
+            if not isinstance(b, dict):
+                continue
+            wb = f"sections.{s['type']}.beats[{j}]"
+            if isinstance(b.get("question"), str):
+                order.append(("q", b["question"].strip(), wb))
+            if isinstance(b.get("closes"), str):
+                order.append(("a", b["closes"].strip(), wb))
+    for kind, text, where in order:
+        if kind == "q":
+            asked.append(text)
+        elif text not in asked:
+            p.append(f"{where}.closes: no earlier question reads {text!r}; copy the question verbatim")
+    closed = {t for k, t, _ in order if k == "a"}
+    for kind, text, where in order:
+        if kind == "q" and text not in closed:
+            p.append(f"{where}.question: never answered; a later beat must carry `closes` with this question and a key line")
     if target is not None and not (target - IMAGE_UNDER <= len(images) <= target + IMAGE_OVER):
         verb = "consolidate" if len(images) > target else "split"
         p.append(f"images: {len(images)} illustrated beats on the page; target_images is {target}, so "
@@ -343,6 +371,7 @@ ul.cues li::marker{color:var(--accent)}
 .key.crit{border-color:var(--crit);background:var(--crit-bg)}
 .key.ok{border-color:var(--ok);background:var(--ok-bg)}
 .key.warn{border-color:var(--warn);background:var(--warn-bg)}
+.key .ans{font-family:var(--mono);font-size:.7em;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);vertical-align:middle;margin-right:4px}
 .loop{display:flex;gap:12px;align-items:flex-start;margin:16px 0 0;padding:12px 16px;border:1px dashed var(--accent);border-radius:8px;background:var(--surface)}
 .loop .q{flex:none;width:30px;height:30px;border-radius:50%;background:var(--accent);color:var(--accent-ink);font-family:var(--display);font-weight:700;font-size:23.8px;display:flex;align-items:center;justify-content:center}
 .loop p{margin:2px 0 0;font-family:var(--display);font-size:25px;font-weight:600;line-height:1.25}
@@ -392,11 +421,12 @@ def _figure(sec: dict) -> str:
     return f'<figure><img src="{esc(sec["image"])}" alt="{esc(sec.get("image_alt", ""))}" loading="lazy"></figure>'
 
 
-def _keyline(k: Any) -> str:
+def _keyline(k: Any, answer: bool = False) -> str:
     if not k:
         return ""
     tone = k.get("tone") or ""
-    return f'<div class="key{(" " + tone) if tone else ""}">{inline(k["text"])}</div>'
+    lead = '<span class="ans">Answer:</span> ' if answer else ""
+    return f'<div class="key{(" " + tone) if tone else ""}{" answer" if answer else ""}">{lead}{inline(k["text"])}</div>'
 
 
 def _loop(q: Any) -> str:
@@ -417,7 +447,7 @@ def _render_beat(num: str, b: dict) -> str:
         out.append(_ul(b["bullets"]))
     if b.get("story"):
         out.append("<details open><summary>Full story</summary>" + _ul(b["story"], "") + "</details>")
-    out.append(_keyline(b.get("key")))
+    out.append(_keyline(b.get("key"), answer=bool(b.get("closes"))))
     out.append(_loop(b.get("question")))
     out.append("</section>")
     return "".join(out)

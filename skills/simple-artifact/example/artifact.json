@@ -754,7 +754,8 @@
           "key": {
             "text": "Generate more demand than supply and the price goes up.",
             "tone": ""
-          }
+          },
+          "closes": "What is the hidden cost of no leads?"
         }
       ]
     },
@@ -903,7 +904,8 @@
           "key": {
             "text": "Sell on short form and you poison the well.",
             "tone": "crit"
-          }
+          },
+          "closes": "Why should your short form post never sell anything?"
         },
         {
           "label": "Hack",
@@ -914,7 +916,12 @@
             "Be early on others' posts that go viral.",
             "Add real value. Not \"I agree\", not \"good post\".",
             "People notice, check the bio, click the link."
-          ]
+          ],
+          "closes": "What is the fastest way to get noticed on a small channel?",
+          "key": {
+            "text": "Comment early, with real value, on posts that are taking off.",
+            "tone": "ok"
+          }
         },
         {
           "label": "Proof",
@@ -951,7 +958,8 @@
           "key": {
             "text": "Prototype only. Borrowed audience. 300k and counting.",
             "tone": ""
-          }
+          },
+          "closes": "What did I do instead that sold for 300k?"
         }
       ]
     },

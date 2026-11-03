@@ -113,6 +113,7 @@ def test_example_passes_gate_and_renders(tmp_path):
     assert "If you are not getting leads every day, this is for you." in pack
     # four open loops on the example, and the promise hook sits between its image and its bullets
     assert html.count('<div class="loop">') == 4
+    assert html.count('<span class="ans">Answer:</span>') == 4
     promise = html.split('id="promise"', 1)[1].split('id="problem"', 1)[0]
     assert promise.index("</figure>") < promise.index('<div class="key') < promise.index('<ul class="cues">')
 
@@ -174,7 +175,13 @@ def test_gate_rejects_presenter_talk_order_and_missing_images(tmp_path):
     doc = _minimal_doc(); doc["sections"][2]["beats"][0]["question"] = " ".join(["w"] * 20) + "?"
     assert any("under 14" in x for x in b.validate(doc, folder))
     doc = _minimal_doc(); doc["sections"][0]["question"] = "Why does the crowd get this backwards?"
+    assert any("never answered" in x for x in b.validate(doc, folder))
+    doc["sections"][2]["beats"][1]["closes"] = "Why does the crowd get this backwards?"
+    assert any("carries a key line" in x for x in b.validate(doc, folder))
+    doc["sections"][2]["beats"][1]["key"] = {"text": "Because building feels like progress.", "tone": ""}
     assert not b.validate(doc, folder)
+    doc["sections"][2]["beats"][0]["closes"] = "Not a question anyone asked?"
+    assert any("no earlier question" in x for x in b.validate(doc, folder))
     # the chosen length is enforced, roughly: the minimal page has 8 images
     doc = _minimal_doc(target_images=10)
     assert any("target_images is 10" in x and "split" in x for x in b.validate(doc, folder))

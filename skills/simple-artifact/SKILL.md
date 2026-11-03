@@ -79,6 +79,9 @@ Writing rules (the validator enforces the mechanical ones):
   answers, and never a question the page does not answer. Keep each one
   plain and short, under 14 words, the way it would be spoken: "What is the
   hidden cost of no leads?", not a clause with a condition in front of it.
+  The beat that answers it carries `closes` (the question, verbatim) and a
+  `key` line; the key renders as "Answer: …", the cue that the loop is
+  closed. The gate refuses a question nobody answers.
 
 ## Phase 2b: Packaging (thumbnails, titles, hooks)
 

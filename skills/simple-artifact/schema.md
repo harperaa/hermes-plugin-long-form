@@ -45,7 +45,8 @@ Collapsed by default at the top of the page. Every piece makes the same promise 
 - **key**: `{text, tone?}`, tone in `ok crit warn` or empty. The one line to land; rendered as a highlighted bar. On the promise it renders right under the image, as the hook.
 - **question**: an optional open loop, on the promise or on any beat: one plain spoken question under 14 words, ending in `?`, read to the viewer here and answered by a later beat. Use two to four per page; never one the next beat answers immediately.
 - **image** + **image_alt**: `img/<file>.jpg` generated with the generate-image skill (at least 20 KB), and one sentence describing the sketch.
-- **beat**: `{label?, heading, image, image_alt, bullets?, contrast?, story?, key?, question?}`. A beat needs `bullets`, a `contrast`, or both.
+- **beat**: `{label?, heading, image, image_alt, bullets?, contrast?, story?, key?, question?, closes?}`. A beat needs `bullets`, a `contrast`, or both.
+  - `closes`: the earlier `question` this beat answers, copied verbatim. The beat must carry a `key` line; it renders with "Answer:" in front, the cue that this line closes the loop. Every question on the page must be closed by a later beat, and every `closes` must match an earlier question.
   - `contrast`: `{crowd: [..], me: [..]}`, 1 to 4 bullets each. What the crowd says versus what I say.
   - `story`: 2 to 14 bullets, collapsed under "Full story". Use it when the source carries a story, an example, or detail that a consolidated beat cannot hold in its cues: keep every fact there and put a one or two bullet cue in `bullets`. Nothing from the source is cut to fit a beat; it moves here.
   - `label`: short tag shown beside the beat number (`Story`, `Step one`, `Proof`).
