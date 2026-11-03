@@ -312,12 +312,20 @@ VERIFY_MODEL = os.environ.get("YTI_VERIFY_MODEL", "grok-4.5")
 
 
 def verify_image(path: Path, prompt: str, expect_text: str | None,
-                 context: str | None = None) -> dict:
+                 context: str | None = None, identity: str | None = None) -> dict:
     """Vision-QA a generated image: transcribe rendered text, flag misspellings
-    and visual defects. Returns {"pass": bool, "issues": [...], "text": "..."}."""
+    and visual defects. With *identity* (a portrait file), the person in the
+    image must be that person: same face and hair, only expression and pose
+    may differ. Returns {"pass": bool, "issues": [...], "text": "..."}."""
     provider, token = resolve_provider()
     mime = _MIME_BY_EXT.get(path.suffix.lower(), "image/jpeg")
     data_url = f"data:{mime};base64,{base64.b64encode(path.read_bytes()).decode()}"
+    id_mime, id_data = None, None
+    if identity:
+        ip = Path(identity)
+        if ip.is_file():
+            id_mime = _MIME_BY_EXT.get(ip.suffix.lower(), "image/jpeg")
+            id_data = base64.b64encode(ip.read_bytes()).decode()
     checklist = (
         "You are a strict pre-publication QA reviewer for generated images. "
         "1) Transcribe EVERY piece of rendered text in the image exactly as drawn, "
@@ -348,6 +356,14 @@ def verify_image(path: Path, prompt: str, expect_text: str | None,
            "'context:') if the image does not describe or fit the script "
            "text. "
            if context else "")
+        + ("5) IDENTITY: the SECOND image is the real person's portrait. The person "
+           "in the FIRST (generated) image must be that same person: the same face "
+           "shape, hairline, hair length, hair style and hair colour, skin tone, "
+           "eyes, nose, ears and jaw. Only the expression, the pose and the hands "
+           "may differ. Compare feature by feature. FAIL (add an issue starting "
+           "with 'identity:' naming the changed feature) if the hair or any facial "
+           "feature was changed, restyled, aged, slimmed or replaced. "
+           if id_data else "")
         + 'Reply with ONLY a JSON object: {"pass": true|false, "text": "<all transcribed text>", '
           '"issues": ["<each problem found>"]}. Fail on ANY spelling error or garbled text.'
     )
@@ -356,6 +372,7 @@ def verify_image(path: Path, prompt: str, expect_text: str | None,
             payload = _gemini_call(token, GEMINI_VERIFY_MODEL, [
                 {"inline_data": {"mime_type": mime,
                                  "data": base64.b64encode(path.read_bytes()).decode()}},
+            ] + ([{"inline_data": {"mime_type": id_mime, "data": id_data}}] if id_data else []) + [
                 {"text": checklist},
             ], {"temperature": 0})
             content = "".join(
@@ -367,6 +384,7 @@ def verify_image(path: Path, prompt: str, expect_text: str | None,
                 "model": VERIFY_MODEL,
                 "messages": [{"role": "user", "content": [
                     {"type": "image_url", "image_url": {"url": data_url}},
+                ] + ([{"type": "image_url", "image_url": {"url": f"data:{id_mime};base64,{id_data}"}}] if id_data else []) + [
                     {"type": "text", "text": checklist},
                 ]}],
                 "temperature": 0,
@@ -404,6 +422,10 @@ def main() -> None:
                          "the sketchnote style")
     ap.add_argument("--expect-text", default=None,
                     help="Comma-separated labels that must appear spelled exactly")
+    ap.add_argument("--identity", default=None,
+                    help="A portrait file: the QA gate fails any image whose person is not this "
+                         "person (face and hair unchanged; only expression and pose may differ). "
+                         "Use it with --input <portrait> for thumbnails.")
     ap.add_argument("--context", default=None,
                     help="The script text this image illustrates (beat title + "
                          "condensed spoken lines) — the QA gate fails images "
@@ -442,7 +464,7 @@ def main() -> None:
         failures: list[tuple[Path, dict]] = []
         for path in written:
             verdict = verify_image(path, args.prompt, args.expect_text,
-                                   args.context)
+                                   args.context, args.identity)
             if verdict.get("pass"):
                 print(f"saved: {path} (QA pass; text: {verdict.get('text', '')[:120]!r})")
             else:
@@ -460,8 +482,14 @@ def main() -> None:
         if args.expect_text:
             spelled = ", ".join("-".join(w.strip().upper()) for w in args.expect_text.split(","))
             spell = f" Spell these labels exactly, letter by letter: {spelled}."
+        ident = ""
+        if args.identity and "identity:" in fixes:
+            ident = (" IDENTITY LOCK: the person must be exactly the person in the first input "
+                     "image: same face shape, hairline, hair length, style and colour, skin tone, "
+                     "eyes, nose, ears and jaw. Change only the expression and the pose. Do not "
+                     "restyle the hair or borrow any feature from the reference images.")
         prompt = (f"{args.prompt} CRITICAL: previous attempt had these defects, avoid them: "
-                  f"{fixes}. Render all text perfectly spelled and fully legible.{spell}")
+                  f"{fixes}. Render all text perfectly spelled and fully legible.{spell}{ident}")
         print(f"retrying ({attempt}/{args.retries}) with corrective prompt...")
 
 

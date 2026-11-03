@@ -102,9 +102,14 @@ promise the page makes: copy the promise section's key line into
    set as `--reference` (full size: `https://i.ytimg.com/vi/<id>/maxresdefault.jpg`,
    falling back to `hqdefault.jpg`; fetch with `curl -4` into scratch). Pick
    the two whose layout and mood fit the beat; vary the pair across the
-   five. The prompt says: the person comes from the first image only; match
-   the references' typography treatment, colour grading, contrast and
-   energy; the exact words in `--expect-text`, no other text. No more than
+   five. The prompt says: the person comes from the first image only, with
+   the same face and hair (hairline, length, style, colour), skin tone and
+   features; only the expression, pose and hands change; the references
+   guide typography treatment, colour grading, contrast and energy, never
+   the person. Pass `--identity <portrait>` too: the QA gate then compares
+   the result with the portrait feature by feature and regenerates when the
+   hair or a facial feature was changed. The exact words in `--expect-text`,
+   no other text. No more than
    5 words; 2 or 3 when they carry the point. Save as `img/thumb-1.jpg` to
    `img/thumb-5.jpg`. No portrait: stop and complete the task saying one
    must be uploaded (Artifacts tab).
