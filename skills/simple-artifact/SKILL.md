@@ -78,6 +78,29 @@ Writing rules (the validator enforces the mechanical ones):
   story, the no-selling rule, the comment hack). Never one the next beat
   answers, and never a question the page does not answer.
 
+## Phase 2b: Packaging (thumbnails, titles, hooks)
+
+The page opens with a collapsed packaging block. Everything in it makes the
+promise the page makes: copy the promise section's key line into
+`packaging.promise` verbatim and write to it.
+
+1. `python3 <plugin>/yti_packaging.py examples` prints the reference set:
+   the 20 winning videos, from the Supply / Demand table when it is
+   populated (top by time-adjusted demand, hits only, comparable channels),
+   else the Trends tab top 20 by views per hour. Fetch their thumbnails into
+   scratch (`curl -4`) and look at them. Write 3 to 6 `patterns`: word
+   count, accent color, face placement, props, title frames. Store the
+   printed JSON as `packaging.examples` unchanged.
+2. `python3 <plugin>/yti_packaging.py portrait` prints the operator's
+   portrait. Generate the five thumbnails with it as `--input` (the real
+   person, on one side of the frame), the exact words in `--expect-text`,
+   and no other text. No more than 5 words; 2 or 3 when they carry the
+   point. Save as `img/thumb-1.jpg` to `img/thumb-5.jpg`. No portrait: stop
+   and complete the task saying one must be uploaded (Artifacts tab).
+3. Five titles under 70 characters in the frames the reference set wins
+   with. Five hooks of one or two spoken sentences; the operator's own
+   hook, when the brief gives one, is first with `given: true`.
+
 ## Phase 3: Images (one per beat, in parallel)
 
 Every image comes from the `long-form:generate-image` skill. No PIL, no

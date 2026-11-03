@@ -239,13 +239,14 @@ class ArtifactSimpleBody(BaseModel):
     url: str = ""
     content: str = ""
     images: int = 10        # 10 (a ~10 minute talk) or 20 (~20 minutes)
+    hook: str = ""          # the operator's own hook; shown first in the packaging block
 
 
 @router.post("/artifact-simple")
 def post_artifact_simple(body: ArtifactSimpleBody) -> dict[str, Any]:
     """Artifacts page Simple artifact ✦ button: a brief page (promise,
     problem, value, apply, summary, cta) from a URL and/or pasted content."""
-    result = yti_artifact.create_simple_task(body.title, body.url, body.content, body.images)
+    result = yti_artifact.create_simple_task(body.title, body.url, body.content, body.images, body.hook)
     if result.get("error"):
         raise HTTPException(status_code=400, detail=result["error"])
     return result
@@ -464,6 +465,42 @@ def post_style_upload(body: StyleUploadBody) -> dict[str, Any]:
     if result.get("error"):
         raise HTTPException(status_code=400, detail=result["error"])
     return result
+
+
+@router.get("/portrait")
+def get_portrait() -> dict[str, Any]:
+    """Is the operator's portrait on this instance ($HERMES_HOME/media/)?
+    Every packaging thumbnail is generated from it."""
+    import yti_packaging
+    return yti_packaging.portrait_status()
+
+
+class PortraitUploadBody(BaseModel):
+    filename: str
+    dataBase64: str
+
+
+@router.post("/portrait/upload")
+def post_portrait_upload(body: PortraitUploadBody) -> dict[str, Any]:
+    import base64 as _b64
+    import yti_packaging
+    ext = (body.filename or "").rsplit(".", 1)[-1] if "." in (body.filename or "") else ""
+    try:
+        payload = _b64.b64decode(body.dataBase64 or "", validate=True)
+    except Exception:
+        raise HTTPException(status_code=400, detail="invalid base64 payload")
+    result = yti_packaging.save_portrait(payload, ext)
+    if result.get("error"):
+        raise HTTPException(status_code=400, detail=result["error"])
+    return result
+
+
+@router.get("/packaging-examples")
+def get_packaging_examples() -> dict[str, Any]:
+    """The reference set the packaging block follows (Supply / Demand top 20
+    when populated, else the Trends tab top 20)."""
+    import yti_packaging
+    return yti_packaging.examples()
 
 
 @router.get("/styles/preview")

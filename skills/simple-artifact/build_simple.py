@@ -24,6 +24,13 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+# the packaging block (thumbnails, titles, hooks) is shared with the full
+# page's builder and lives at the plugin root
+_PLUGIN_ROOT = Path(__file__).resolve().parent.parent.parent
+if str(_PLUGIN_ROOT) not in sys.path:
+    sys.path.insert(0, str(_PLUGIN_ROOT))
+import yti_packaging  # noqa: E402
+
 SECTION_ORDER = ["promise", "problem", "value", "apply", "summary", "cta"]
 SECTION_LABELS = {"promise": "Promise", "problem": "Problem", "value": "Value",
                   "apply": "Apply today", "summary": "Summary", "cta": "Call to action"}
@@ -76,7 +83,7 @@ def _walk_text(node: Any, path: str, out: list[tuple[str, str]]) -> None:
         out.append((path, node))
     elif isinstance(node, dict):
         for k, v in node.items():
-            if k in ("url", "image", "id"):
+            if k in ("url", "image", "id", "thumbnail", "examples"):
                 continue
             _walk_text(v, f"{path}.{k}", out)
     elif isinstance(node, list):
@@ -175,6 +182,14 @@ def validate(doc: Any, base_dir: Path) -> list[str]:
         p.append("title: 1 to 8 words")
     if isinstance(doc.get("lede"), str) and not (12 <= len(doc["lede"].split()) <= 70):
         p.append("lede: 12 to 70 words")
+    promise_line = None
+    for s in (doc.get("sections") or []):
+        if isinstance(s, dict) and s.get("type") == "promise" and isinstance(s.get("key"), dict):
+            promise_line = s["key"].get("text")
+    if "packaging" not in doc:
+        p.append("packaging: required; the collapsed block at the top with thumbnails, titles and hooks (see schema.md)")
+    else:
+        p += yti_packaging.validate(doc["packaging"], base_dir, promise_line)
     src = doc.get("source")
     if src is not None:
         if not isinstance(src, dict):
@@ -234,6 +249,9 @@ def validate(doc: Any, base_dir: Path) -> list[str]:
             joined = " ".join(s.get("bullets") or []).lower() if isinstance(s.get("bullets"), list) else ""
             if "subscribe" not in joined:
                 p.append(f"{w}.bullets: the close always asks for more content, like and subscribe")
+    for t in (doc.get("packaging") or {}).get("thumbnails") or [] if isinstance(doc.get("packaging"), dict) else []:
+        if isinstance(t, dict) and t.get("image") in images:
+            p.append(f"packaging.thumbnails: {t['image']} is also a beat image; thumbnails are their own files")
     if len(images) != len(set(images)):
         p.append("images: the same file is used twice; every beat has its own sketch")
     if target is not None and not (target - IMAGE_UNDER <= len(images) <= target + IMAGE_OVER):
@@ -316,7 +334,6 @@ ul.cues li::marker{color:var(--accent)}
 .loop{display:flex;gap:12px;align-items:flex-start;margin:16px 0 0;padding:12px 16px;border:1px dashed var(--accent);border-radius:8px;background:var(--surface)}
 .loop .q{flex:none;width:30px;height:30px;border-radius:50%;background:var(--accent);color:var(--accent-ink);font-family:var(--display);font-weight:700;font-size:19px;display:flex;align-items:center;justify-content:center}
 .loop p{margin:2px 0 0;font-family:var(--display);font-size:20px;font-weight:600;line-height:1.25}
-.loop small{display:block;font-family:var(--body);font-size:13px;font-weight:400;color:var(--muted);margin-top:4px}
 .vs{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px}
 @media (max-width:600px){.vs{grid-template-columns:1fr}}
 .vs div{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:12px 14px}
@@ -343,7 +360,7 @@ footer{margin-top:48px;padding-top:14px;border-top:1px solid var(--line);font-si
 .theme button{border:0;background:transparent;color:var(--muted);padding:3px 9px;border-radius:999px;cursor:pointer;font:inherit}
 .theme button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink)}
 @media print{ body{font-size:13px} .beat{break-inside:avoid} figure img{max-height:280px;width:auto} details{display:block} .theme{display:none} }
-"""
+""" + yti_packaging.CSS
 
 THEME_JS = ("(function(){var k='brief-theme',r=document.documentElement,bs=document.querySelectorAll('.theme button');"
             "function ap(v){if(v==='auto'){r.removeAttribute('data-theme');}else{r.setAttribute('data-theme',v);}"
@@ -373,7 +390,7 @@ def _keyline(k: Any) -> str:
 def _loop(q: Any) -> str:
     if not q:
         return ""
-    return f'<div class="loop"><span class="q">?</span><p>{inline(q)}<small>Open loop: answered later in the talk</small></p></div>'
+    return f'<div class="loop"><span class="q">?</span><p>{inline(q)}</p></div>'
 
 
 def _render_beat(num: str, b: dict) -> str:
@@ -444,7 +461,7 @@ def render(doc: dict) -> str:
         '<div class="wrap">\n<header>'
         f'<div class="eyebrow">{inline(doc["eyebrow"])}</div><h1>{inline(doc["title"])}</h1>'
         f'<p class="lede">{inline(doc["lede"])}</p><div class="status">{chips}</div><div class="flow">{flow}</div>'
-        "</header>\n" + "\n".join(parts) +
+        "</header>\n" + yti_packaging.render(doc["packaging"], inline) + "\n" + "\n".join(parts) +
         f"\n<footer>{foot}</footer>\n</div>\n<script>{THEME_JS}</script>\n</body>\n</html>\n"
     )
 
@@ -506,7 +523,8 @@ def build(artifact_dir: Path, check_only: bool = False) -> dict[str, Any]:
             except OSError:
                 pass
         out.write_text(html_text, encoding="utf-8")
-    return {"ok": True, "problems": [], "page": str(out), "sections": SECTION_ORDER, "images": count_images(doc)}
+    return {"ok": True, "problems": [], "page": str(out), "sections": SECTION_ORDER, "images": count_images(doc),
+            "thumbnails": yti_packaging.count_images(doc.get("packaging"))}
 
 
 def main(argv: list[str] | None = None) -> int:

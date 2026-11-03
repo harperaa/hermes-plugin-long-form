@@ -111,16 +111,55 @@ def resolve_provider() -> tuple[str, str]:
 _MIME_BY_EXT = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp"}
 
 
-def _image_ref(source: str) -> dict:
+def _fit_to_aspect(data: bytes, mime: str, aspect_ratio: str | None) -> tuple[bytes, str]:
+    """Pad an --input image onto a canvas of the requested aspect ratio.
+
+    The edits endpoint keeps the input's frame, so a square portrait comes
+    back as a square picture pillar-boxed into 16:9 with the text cut off.
+    Centring the input on a neutral dark canvas of the target ratio gives the
+    model the whole frame to compose in. No-op without Pillow, without an
+    aspect, or when the input already matches (within 3%)."""
+    if not aspect_ratio or ":" not in aspect_ratio:
+        return data, mime
+    try:
+        from PIL import Image
+    except ImportError:
+        return data, mime
+    try:
+        w_r, h_r = (float(x) for x in aspect_ratio.split(":", 1))
+        target = w_r / h_r
+    except ValueError:
+        return data, mime
+    import io
+    try:
+        im = Image.open(io.BytesIO(data)).convert("RGB")
+    except Exception:  # noqa: BLE001
+        return data, mime
+    w, h = im.size
+    if abs((w / h) - target) / target <= 0.03:
+        return data, mime
+    if w / h < target:
+        cw, ch = int(round(h * target)), h
+    else:
+        cw, ch = w, int(round(w / target))
+    canvas = Image.new("RGB", (cw, ch), (20, 20, 22))
+    canvas.paste(im, ((cw - w) // 2, (ch - h) // 2))
+    buf = io.BytesIO()
+    canvas.save(buf, format="JPEG", quality=92)
+    return buf.getvalue(), "image/jpeg"
+
+
+def _image_ref(source: str, aspect_ratio: str | None = None) -> dict:
     """Build the API's image reference for --input: a URL passes through, a
-    local file is inlined as a data URL."""
+    local file is inlined as a data URL (padded to the requested aspect)."""
     if source.startswith(("http://", "https://", "data:")):
         return {"url": source, "type": "image_url"}
     path = Path(source)
     if not path.exists():
         sys.exit(f"ERROR: --input file not found: {path}")
     mime = _MIME_BY_EXT.get(path.suffix.lower(), "image/png")
-    encoded = base64.b64encode(path.read_bytes()).decode()
+    data, mime = _fit_to_aspect(path.read_bytes(), mime, aspect_ratio)
+    encoded = base64.b64encode(data).decode()
     return {"url": f"data:{mime};base64,{encoded}", "type": "image_url"}
 
 
@@ -171,6 +210,7 @@ def _generate_gemini(key: str, prompt: str, out: Path, n: int,
     parts: list = []
     if input_image:
         data, mime = _input_bytes(input_image)
+        data, mime = _fit_to_aspect(data, mime, aspect_ratio)
         parts.append({"inline_data": {"mime_type": mime,
                                       "data": base64.b64encode(data).decode()}})
     parts.append({"text": prompt})
@@ -208,7 +248,7 @@ def generate(prompt: str, out: Path, n: int, model: str,
     # source anchors composition/style and the prompt directs the transform.
     endpoint = "images/generations"
     if input_image:
-        payload_body["image"] = _image_ref(input_image)
+        payload_body["image"] = _image_ref(input_image, aspect_ratio)
         endpoint = "images/edits"
     body = json.dumps(payload_body).encode()
     req = urllib.request.Request(

@@ -7,6 +7,313 @@
     "title": "Eden note: Video: How to get leads every day"
   },
   "target_images": 20,
+  "packaging": {
+    "promise": "If you are not getting leads every day, this is for you.",
+    "thumbnails": [
+      {
+        "image": "img/thumb-1.jpg",
+        "text": "NO LEADS?",
+        "image_alt": "Allen with a puzzled look beside an empty mailbox, NO LEADS? in yellow"
+      },
+      {
+        "image": "img/thumb-2.jpg",
+        "text": "LEADS EVERY DAY",
+        "image_alt": "Allen smiling beside an overflowing mailbox and a ticked calendar, EVERY DAY in yellow"
+      },
+      {
+        "image": "img/thumb-3.jpg",
+        "text": "STOP BUILDING",
+        "image_alt": "Allen with a hand up in a stop gesture beside a crossed-out app icon, STOP in red"
+      },
+      {
+        "image": "img/thumb-4.jpg",
+        "text": "AUDIENCE FIRST",
+        "image_alt": "Allen pointing at a crowd of silhouettes with a number 1 badge, FIRST in yellow"
+      },
+      {
+        "image": "img/thumb-5.jpg",
+        "text": "8K IN 8 MONTHS",
+        "image_alt": "Allen with a proud half smile beside a rising chart of people icons, 8K in yellow"
+      }
+    ],
+    "titles": [
+      "How to Get Leads Every Day (Without Building Anything First)",
+      "No Leads? You Built the Wrong Thing First",
+      "8K Followers in 8 Months: The Short Form Lead System",
+      "Stop Building. Start With the Audience.",
+      "The Lead System That Sold a Prototype for $300K"
+    ],
+    "hooks": [
+      {
+        "text": "If you are not getting leads every day, this video is for you. Most businesses' number one problem is not the product. It is leads."
+      },
+      {
+        "text": "I polished an app for a year and nobody came. Then one shift brought leads every day and a 300k sale. Here is the shift."
+      },
+      {
+        "text": "Everyone tells you to build first. Dead wrong. Build first is a trap, and I paid tens of thousands of dollars to learn why."
+      },
+      {
+        "text": "There is a second cost to having no leads, and it is bigger than the sales you are missing. It is your price."
+      },
+      {
+        "text": "Pick one platform, fix one profile, leave three comments. That is how 8k followers in 8 months started."
+      }
+    ],
+    "patterns": [
+      "Two to four bold words, one of them in a single accent color (yellow or red), the rest white.",
+      "The creator's face on one side, reacting: puzzled, pointing, hand up, proud.",
+      "One prop that carries the promise: money bags, a chart, a clock, a crossed-out thing.",
+      "Titles lead with a question, a number, or a result (7 Ranked, $27 Million, 8K in 8 months).",
+      "Contrarian frames win: Stop, Jobless, Hated, Wrong."
+    ],
+    "examples": {
+      "source": "supply-demand",
+      "label": "Supply / Demand, top by time-adjusted demand",
+      "items": [
+        {
+          "id": "jygVc_FTuHE",
+          "title": "Oktane Keynote Recap: Okta CEO Todd McKinnon on Agent SSO, Cross App Access, and AI Agent Security",
+          "channel": "@OktaInc",
+          "niche": "secure-ai-founders",
+          "thumbnail": "https://i.ytimg.com/vi/jygVc_FTuHE/hqdefault.jpg",
+          "url": "https://www.youtube.com/watch?v=jygVc_FTuHE",
+          "metric": 17237.31,
+          "metric_label": "x normal, time-adjusted",
+          "views": 7035716,
+          "age_days": 40.74
+        },
+        {
+          "id": "kwFrqqCMy6c",
+          "title": "The 4 Questions Every CISO Must Answer About AI Agents | Blueprint Alliance",
+          "channel": "@OktaInc",
+          "niche": "secure-ai-founders",
+          "thumbnail": "https://i.ytimg.com/vi/kwFrqqCMy6c/hqdefault.jpg",
+          "url": "https://www.youtube.com/watch?v=kwFrqqCMy6c",
+          "metric": 1520.69,
+          "metric_label": "x normal, time-adjusted",
+          "views": 1039619,
+          "age_days": 31.95
+        },
+        {
+          "id": "T19-pSH6YWg",
+          "title": "Which AI Side Hustle Pays Fastest? 7 Ranked",
+          "channel": "@DarkHorseEntrepreneur",
+          "niche": "one-person-business",
+          "thumbnail": "https://i.ytimg.com/vi/T19-pSH6YWg/hqdefault.jpg",
+          "url": "https://www.youtube.com/watch?v=T19-pSH6YWg",
+          "metric": 983.78,
+          "metric_label": "x normal, time-adjusted",
+          "views": 98910,
+          "age_days": 35.42
+        },
+        {
+          "id": "w9ozaso2n7E",
+          "title": "Explore TechFix Apps Lab | Preview 5 New App Concepts",
+          "channel": "@techfix-guides",
+          "niche": "secure-ai-founders",
+          "thumbnail": "https://i.ytimg.com/vi/w9ozaso2n7E/hqdefault.jpg",
+          "url": "https://www.youtube.com/watch?v=w9ozaso2n7E",
+          "metric": 503.03,
+          "metric_label": "x normal, time-adjusted",
+          "views": 40742,
+          "age_days": 20.95
+        },
+        {
+          "id": "JpNOwmwbf2s",
+          "title": "I Made $27 Million Selling Simple Digital Products (Step by Step)",
+          "channel": "@RichardYuBusiness",
+          "niche": "one-person-business",
+          "thumbnail": "https://i.ytimg.com/vi/JpNOwmwbf2s/hqdefault.jpg",
+          "url": "https://www.youtube.com/watch?v=JpNOwmwbf2s",
+          "metric": 218.54,
+          "metric_label": "x normal, time-adjusted",
+          "views": 511817,
+          "age_days": 334.22
+        },
+        {
+          "id": "yM1_yCT_DQA",
+          "title": "AI MUSIC Creators Are Getting Demonetized for This One Mistake!",
+          "channel": "@itsnataliefong",
+          "niche": "one-person-business",
+          "thumbnail": "https://i.ytimg.com/vi/yM1_yCT_DQA/hqdefault.jpg",
+          "url": "https://www.youtube.com/watch?v=yM1_yCT_DQA",
+          "metric": 130.71,
+          "metric_label": "x normal, time-adjusted",
+          "views": 180054,
+          "age_days": 142.21
+        },
+        {
+          "id": "iQyg-KypKAA",
+          "title": "L8 Principal's Agentic Engineering Workflow",
+          "channel": "@kunchenguid",
+          "niche": "ai-agent-builders",
+          "thumbnail": "https://i.ytimg.com/vi/iQyg-KypKAA/hqdefault.jpg",
+          "url": "https://www.youtube.com/watch?v=iQyg-KypKAA",
+          "metric": 129.91,
+          "metric_label": "x normal, time-adjusted",
+          "views": 1108453,
+          "age_days": 136.16
+        },
+        {
+          "id": "-FbZp9jeBR8",
+          "title": "From Social Media To Scalable Success: GBG Hoops Journey With GetResponse",
+          "channel": "@getresponse",
+          "niche": "one-person-business",
+          "thumbnail": "https://i.ytimg.com/vi/-FbZp9jeBR8/hqdefault.jpg",
+          "url": "https://www.youtube.com/watch?v=-FbZp9jeBR8",
+          "metric": 123.22,
+          "metric_label": "x normal, time-adjusted",
+          "views": 249218,
+          "age_days": 645.19
+        },
+        {
+          "id": "QxZR0gOC-dg",
+          "title": "Why AI STORY Channels Keep Getting Demonetized",
+          "channel": "@itsnataliefong",
+          "niche": "one-person-business",
+          "thumbnail": "https://i.ytimg.com/vi/QxZR0gOC-dg/hqdefault.jpg",
+          "url": "https://www.youtube.com/watch?v=QxZR0gOC-dg",
+          "metric": 106.91,
+          "metric_label": "x normal, time-adjusted",
+          "views": 149528,
+          "age_days": 150.21
+        },
+        {
+          "id": "dROgcH6rZIs",
+          "title": "Anatomy of an AI Agent & Fireside Chat with Matt Wood",
+          "channel": "@be-SA",
+          "niche": "secure-ai-founders",
+          "thumbnail": "https://i.ytimg.com/vi/dROgcH6rZIs/hqdefault.jpg",
+          "url": "https://www.youtube.com/watch?v=dROgcH6rZIs",
+          "metric": 90.82,
+          "metric_label": "x normal, time-adjusted",
+          "views": 15540,
+          "age_days": 73.17
+        },
+        {
+          "id": "juEfJERgBE8",
+          "title": "Stop Building Websites — Build REAL Web Apps with Google AI + Firebase",
+          "channel": "@Profit-Studio-official",
+          "niche": "secure-ai-founders",
+          "thumbnail": "https://i.ytimg.com/vi/juEfJERgBE8/hqdefault.jpg",
+          "url": "https://www.youtube.com/watch?v=juEfJERgBE8",
+          "metric": 87.67,
+          "metric_label": "x normal, time-adjusted",
+          "views": 323148,
+          "age_days": 290.8
+        },
+        {
+          "id": "fXWFSTSvnVM",
+          "title": "What Would It Cost to Run Claude Fable 5 Locally?",
+          "channel": "@kaiexplainsYT",
+          "niche": "secure-ai-founders",
+          "thumbnail": "https://i.ytimg.com/vi/fXWFSTSvnVM/hqdefault.jpg",
+          "url": "https://www.youtube.com/watch?v=fXWFSTSvnVM",
+          "metric": 87.57,
+          "metric_label": "x normal, time-adjusted",
+          "views": 105405,
+          "age_days": 105.19
+        },
+        {
+          "id": "Dli5slNaJu0",
+          "title": "I Hated Every Coding Agent, So I Built My Own — Mario Zechner (Pi)",
+          "channel": "@mastra-ai",
+          "niche": "secure-ai-founders",
+          "thumbnail": "https://i.ytimg.com/vi/Dli5slNaJu0/hqdefault.jpg",
+          "url": "https://www.youtube.com/watch?v=Dli5slNaJu0",
+          "metric": 83.49,
+          "metric_label": "x normal, time-adjusted",
+          "views": 349832,
+          "age_days": 202.15
+        },
+        {
+          "id": "UMMfJ4au1o4",
+          "title": "Inside one of the world’s most efficient Data Centers",
+          "channel": "@tom.developer",
+          "niche": "secure-ai-founders",
+          "thumbnail": "https://i.ytimg.com/vi/UMMfJ4au1o4/hqdefault.jpg",
+          "url": "https://www.youtube.com/watch?v=UMMfJ4au1o4",
+          "metric": 80.46,
+          "metric_label": "x normal, time-adjusted",
+          "views": 365658,
+          "age_days": 130.11
+        },
+        {
+          "id": "xNgQtzEl4lY",
+          "title": "Exposing why every AI launch goes viral on X",
+          "channel": "@sciencebasedai",
+          "niche": "secure-ai-founders",
+          "thumbnail": "https://i.ytimg.com/vi/xNgQtzEl4lY/hqdefault.jpg",
+          "url": "https://www.youtube.com/watch?v=xNgQtzEl4lY",
+          "metric": 65.44,
+          "metric_label": "x normal, time-adjusted",
+          "views": 154951,
+          "age_days": 29.36
+        },
+        {
+          "id": "fXmIIKqqxWw",
+          "title": "The First Brain Was Just Uploaded To A Computer",
+          "channel": "@theresanaiforit",
+          "niche": "one-person-business",
+          "thumbnail": "https://i.ytimg.com/vi/fXmIIKqqxWw/hqdefault.jpg",
+          "url": "https://www.youtube.com/watch?v=fXmIIKqqxWw",
+          "metric": 60.42,
+          "metric_label": "x normal, time-adjusted",
+          "views": 1804260,
+          "age_days": 25.98
+        },
+        {
+          "id": "0xKE1UHpSfk",
+          "title": "OpenCode Full Tutorial: Free Models, Skills & MCPs",
+          "channel": "@ericwtech",
+          "niche": "ai-agent-builders",
+          "thumbnail": "https://i.ytimg.com/vi/0xKE1UHpSfk/hqdefault.jpg",
+          "url": "https://www.youtube.com/watch?v=0xKE1UHpSfk",
+          "metric": 59.16,
+          "metric_label": "x normal, time-adjusted",
+          "views": 161771,
+          "age_days": 119.07
+        },
+        {
+          "id": "tDeLeyPvZn0",
+          "title": "0 Jobs to ₹4L/Month: The AI Business That Changed My Life",
+          "channel": "@CompileFuture",
+          "niche": "one-person-business",
+          "thumbnail": "https://i.ytimg.com/vi/tDeLeyPvZn0/hqdefault.jpg",
+          "url": "https://www.youtube.com/watch?v=tDeLeyPvZn0",
+          "metric": 56.09,
+          "metric_label": "x normal, time-adjusted",
+          "views": 849572,
+          "age_days": 158.49
+        },
+        {
+          "id": "MjSUCg2NN4g",
+          "title": "AI Was Supposed to Replace Developers... Until It Couldn't",
+          "channel": "@devforgehq",
+          "niche": "secure-ai-founders",
+          "thumbnail": "https://i.ytimg.com/vi/MjSUCg2NN4g/hqdefault.jpg",
+          "url": "https://www.youtube.com/watch?v=MjSUCg2NN4g",
+          "metric": 55.7,
+          "metric_label": "x normal, time-adjusted",
+          "views": 388747,
+          "age_days": 324.16
+        },
+        {
+          "id": "larZ2OIn5KE",
+          "title": "Define the Right Problem with Mark Richman, Skeleton Key",
+          "channel": "@startupsuccesslaunch",
+          "niche": "secure-ai-founders",
+          "thumbnail": "https://i.ytimg.com/vi/larZ2OIn5KE/hqdefault.jpg",
+          "url": "https://www.youtube.com/watch?v=larZ2OIn5KE",
+          "metric": 55.54,
+          "metric_label": "x normal, time-adjusted",
+          "views": 694,
+          "age_days": 7.05
+        }
+      ]
+    }
+  },
   "sections": [
     {
       "type": "promise",

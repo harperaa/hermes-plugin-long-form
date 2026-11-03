@@ -54,6 +54,16 @@ MIN_IMAGE_BYTES = 20_000
 BANNED_IN_PROSE = ("—",)          # em dash: the house style never uses it
 # The page is the deliverable, not a script for whoever presents it: no stage
 # directions, no "say this", no slide or camera talk. (Case-insensitive.)
+# the packaging block (thumbnails, titles, hooks) is shared with the simple
+# page's builder and lives at the plugin root; optional on a full page
+_PLUGIN_ROOT = Path(__file__).resolve().parent.parent.parent
+if str(_PLUGIN_ROOT) not in sys.path:
+    sys.path.insert(0, str(_PLUGIN_ROOT))
+try:
+    import yti_packaging  # noqa: E402
+except ImportError:  # a copied-out builder without the plugin root
+    yti_packaging = None  # type: ignore
+
 PRESENTER_RE = re.compile(
     r"\b(before you record|on camera|on screen|talk track|this slide|the slide|"
     r"say (this|that|it) (out loud|on)|do not say|don't say|say \"|presenter'?s? (rule|note)|"
@@ -114,7 +124,7 @@ def _walk_text(node: Any, path: str, out: list[tuple[str, str]]) -> None:
         out.append((path, node))
     elif isinstance(node, dict):
         for k, v in node.items():
-            if k in ("url", "image", "css_extra", "id"):
+            if k in ("url", "image", "css_extra", "id", "thumbnail", "examples"):
                 continue
             _walk_text(v, f"{path}.{k}", out)
     elif isinstance(node, list):
@@ -180,6 +190,8 @@ def validate(doc: Any, base_dir: Path) -> list[str]:
     if lede and len(lede.split()) < 20:
         p.append("lede: under 20 words; say what the page is and who it is for")
     need(doc, "eyebrow", "top level")
+    if "packaging" in doc and yti_packaging is not None:
+        p += yti_packaging.validate(doc["packaging"], base_dir, None)
     chips = doc.get("chips") or []
     if not isinstance(chips, list) or not chips:
         p.append("chips: give 2 to 4 status chips under the lede")
@@ -730,12 +742,13 @@ def render(doc: dict) -> str:
         "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1, viewport-fit=cover\">\n"
         f"<title>{esc(doc['title'])}</title>\n"
         + (f'<meta name="description" content="{esc(doc.get("description") or doc.get("lede"))}">\n')
-        + FONTS + "\n<style>" + CSS + (doc.get("css_extra") or "") + "</style>\n</head>\n<body>\n"
+        + FONTS + "\n<style>" + CSS + (yti_packaging.CSS if yti_packaging else "") + (doc.get("css_extra") or "") + "</style>\n</head>\n<body>\n"
         '<div class="wrap" id="page">\n<header>'
         f'<div class="eyebrow">{inline(doc["eyebrow"])}</div>'
         f'<h1 style="margin-top:8px">{inline(doc["title"])}</h1>'
         f'<p class="lede">{inline(doc["lede"])}</p>'
         f'<div class="status">{chips}</div></header>\n'
+        + (yti_packaging.render(doc["packaging"], inline) + "\n" if (yti_packaging and doc.get("packaging")) else "")
         + sections
         + (f'<p class="foot">{inline(doc["credit"])} · {esc(generated)}</p>\n' if doc.get("credit") else "")
         + "</div>\n"

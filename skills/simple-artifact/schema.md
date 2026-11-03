@@ -22,7 +22,21 @@ like. The page is the outline the operator speaks from, written as content.
 | `lede` | yes | 12 to 70 words: what the page is, for whom, the thesis |
 | `source` | no | `{url?, title?}`: where the content came from; shown in the footer |
 | `description` | no | one sentence for link previews (defaults to the lede) |
+| `packaging` | yes | the collapsed block at the top: thumbnails, titles, hooks (below) |
 | `sections` | yes | exactly six, in this order: `promise`, `problem`, `value`, `apply`, `summary`, `cta` |
+
+## packaging
+
+Collapsed by default at the top of the page. Every piece makes the same promise the page makes.
+
+| key | required | notes |
+|---|---|---|
+| `promise` | yes | the promise section's `key.text`, verbatim |
+| `thumbnails` | yes | exactly 5 of `{image, text, image_alt?, note?}`. `image` is `img/thumb-N.jpg`, generated from the operator's portrait (`yti_packaging.py portrait`) so the real person appears. `text` is every word on the thumbnail: 1 to 5, and 2 or 3 when they carry the point |
+| `titles` | yes | exactly 5 strings under 70 characters, in the frames the reference set wins with |
+| `hooks` | yes | exactly 5 of `{text, given?: true}`: spoken openers of one or two sentences. The operator's own hook, when given, is first with `given: true` |
+| `examples` | yes | the JSON `yti_packaging.py examples` printed, unchanged: `{source, label, items: [{id, title, channel, thumbnail, url, metric, metric_label}]}` |
+| `patterns` | no | 3 to 6 strings: what the reference thumbnails and titles have in common, which the five above follow |
 
 ## Shared shapes
 

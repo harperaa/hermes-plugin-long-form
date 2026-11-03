@@ -501,10 +501,13 @@ def out_dir_for_simple(title: str) -> Path:
                       _slug(title) + "-brief")
 
 
-def build_simple_brief(title: str, url: str, content: str, out_dir: Path, images: int = 10) -> str:
+def build_simple_brief(title: str, url: str, content: str, out_dir: Path, images: int = 10,
+                       hook: str = "") -> str:
     title = (title or "").strip()
     url = (url or "").strip()
     content = (content or "").strip()
+    hook = (hook or "").strip()
+    plugin_root = Path(__file__).resolve().parent
     clipped = ""
     if len(content) > SIMPLE_CONTENT_MAX:
         clipped = (f"\n\n(…content clipped at {SIMPLE_CONTENT_MAX} characters; "
@@ -516,6 +519,7 @@ def build_simple_brief(title: str, url: str, content: str, out_dir: Path, images
         f"**Title:** {title or '(derive one from the content, 1 to 8 words)'}",
         f"**Length:** {images} illustrated beats, one image each: a talk of about {images} minutes.",
         f"The gate holds the page to {images - 1} to {images + 2} images in total.",
+        f"**Operator's hook:** {hook or '(none given: write five, strongest first)'}",
         f"**Output directory:** {out_dir}",
         f"**Worked example (style and depth):** {_SIMPLE_SKILL_DIR / 'example' / 'artifact.json'}",
         f"**Contract:** {_SIMPLE_SKILL_DIR / 'schema.md'}",
@@ -561,8 +565,33 @@ def build_simple_brief(title: str, url: str, content: str, out_dir: Path, images
         "and move anything missing onto the page. The completion summary lists",
         "any point you could not place; the expected list is empty.",
         "",
+        "### Phase 2b (packaging) — from the skill",
+        "The page opens with a collapsed `packaging` block: 5 thumbnails, 5 titles,",
+        "5 hooks, all making the SAME promise the page makes (the promise section's",
+        "key line, copied verbatim into `packaging.promise`). Steps:",
+        f"1. `python3 {plugin_root / 'yti_packaging.py'} examples` prints the reference",
+        "   set: the 20 winning videos (Supply / Demand top by time-adjusted demand",
+        "   when that table is populated, else the Trends tab top by views per",
+        "   hour), each with title and thumbnail URL. Fetch the 20 thumbnails into",
+        "   your scratch workspace (curl -4) and LOOK at them. Write 3 to 6",
+        "   `patterns` you see: word count, accent color, face placement, props,",
+        "   title frames (question, number, contrarian). Store the printed JSON as",
+        "   `packaging.examples` unchanged.",
+        f"2. `python3 {plugin_root / 'yti_packaging.py'} portrait` prints the operator's",
+        "   portrait path. Every thumbnail is generated with that file as",
+        "   `--input` so the real person appears; the prompt names the exact words",
+        "   (`--expect-text`) and nothing else. Words on a thumbnail: no more than",
+        "   5, and 2 or 3 when they carry the point. Follow the reference patterns.",
+        "   Save as img/thumb-1.jpg to img/thumb-5.jpg. If no portrait prints, stop",
+        "   and complete the task saying the operator must upload one (Artifacts",
+        "   tab, Upload portrait).",
+        "3. Titles: 5, under 70 characters, in the frames the reference set wins",
+        "   with. Hooks: 5 spoken openers of one or two sentences; when the",
+        "   operator gave a hook it is hooks[0] with `given: true`, and the other",
+        "   four are alternatives that could beat it.",
+        "",
         "### Phase 3 to 5 (images, render, publish) — from the skill",
-        f"Images: ONE sketchnote per beat (promise, every problem and value beat,",
+        f"Images: ONE sketchnote per beat (promise, every problem and value beat,"
         f"apply, cta: {images} on this page, {images - 1} to {images + 2} accepted) through the",
         "`long-form:generate-image` skill, at most six at a time, anchored on the",
         f"selected style baseline `--input \"{yti_generate.selected_baseline_path()}\"`,",
@@ -653,7 +682,7 @@ def create_topic_task(topic: str, pov: str = "", guidance: str = "",
 
 
 def create_simple_task(title: str = "", url: str = "", content: str = "",
-                       images: int = 10) -> dict[str, Any]:
+                       images: int = 10, hook: str = "") -> dict[str, Any]:
     """Artifacts page Simple artifact ✦ button: a brief page from a URL
     and/or pasted content; *images* (10 or 20) sets the page length."""
     title = (title or "").strip()
@@ -676,8 +705,9 @@ def create_simple_task(title: str = "", url: str = "", content: str = "",
     conn = yti_store.connect()
     try:
         return _create(conn, key, f"Brief page: {(title or name)[:70]}",
-                       build_simple_brief(title, url, content, out_dir, images),
-                       {"outDirAbs": str(out_dir), "topic": title or name, "kind": "simple", "images": images})
+                       build_simple_brief(title, url, content, out_dir, images, hook),
+                       {"outDirAbs": str(out_dir), "topic": title or name, "kind": "simple", "images": images,
+                        "hook": (hook or "").strip() or None})
     except Exception as exc:  # noqa: BLE001
         return {"error": f"could not create the brief page task: {exc}"}
     finally:

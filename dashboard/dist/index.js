@@ -962,6 +962,31 @@
     var content = contentState[0], setContent = contentState[1];
     var imagesState = useState(10);
     var images = imagesState[0], setImages = imagesState[1];
+    var hookState = useState("");
+    var hook = hookState[0], setHook = hookState[1];
+    var portraitState = useState(null);
+    var portrait = portraitState[0], setPortrait = portraitState[1];
+    useEffect(function () {
+      var alive = true;
+      api("/portrait").then(function (r) { if (alive) setPortrait(r || { present: false }); })
+        .catch(function () { if (alive) setPortrait({ present: false }); });
+      return function () { alive = false; };
+    }, []);
+    function uploadPortrait(fileEl) {
+      var f = fileEl && fileEl.files && fileEl.files[0];
+      if (!f) return;
+      var reader = new FileReader();
+      reader.onload = function () {
+        var b64 = String(reader.result || "").split(",")[1] || "";
+        api("/portrait/upload", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ filename: f.name, dataBase64: b64 }),
+        }).then(function (r) { fileEl.value = ""; setPortrait(r || { present: true }); })
+          .catch(function (e) { alert(String((e && e.message) || e)); });
+      };
+      reader.readAsDataURL(f);
+    }
     var ready = !!(url.trim() || content.trim());
     var words = content.trim() ? content.trim().split(/\s+/).length : 0;
     return h(YtiModal, { onClose: props.onClose },
@@ -997,11 +1022,29 @@
         onChange: function (e) { setContent(e.target.value); },
       }),
       words ? h("div", { className: "yti-muted yti-small" }, words + " words pasted") : null,
+      h("label", null, "Your hook (optional)"),
+      h("textarea", {
+        value: hook,
+        rows: 2,
+        placeholder: "The opener you already have in mind. It leads the packaging block; the worker adds four alternatives that could beat it.",
+        onChange: function (e) { setHook(e.target.value); },
+      }),
+      h("div", { className: "yti-small", style: { marginTop: 8 } },
+        h("span", { className: portrait && portrait.present ? "" : "yti-muted" },
+          portrait === null ? "Checking for your portrait…" :
+          portrait.present ? "Portrait on file: " + (portrait.name || "yes") + ". Every thumbnail is generated from it." :
+          "No portrait on file. Thumbnails need one: "),
+        " ",
+        h("label", { style: { cursor: "pointer", textDecoration: "underline" },
+                     title: "A clear head-and-shoulders photo of you, plain background. Saved to the data volume as the thumbnail source." },
+          portrait && portrait.present ? "Replace…" : "Upload portrait…",
+          h("input", { type: "file", accept: "image/*", style: { display: "none" },
+                       onChange: function (e) { uploadPortrait(e.target); } }))),
       props.error ? h("div", { className: "yti-notice yti-notice-error" }, props.error) : null,
       h("div", { className: "yti-modal-actions" },
         h(Button, { size: "sm", variant: "outline", onClick: props.onClose }, "Cancel"),
         h(Button, { size: "sm", disabled: !ready || !!props.busy,
-          onClick: function () { props.onSubmit(title.trim(), url.trim(), content, images); } },
+          onClick: function () { props.onSubmit(title.trim(), url.trim(), content, images, hook.trim()); } },
           props.busy ? "Starting…" : "Build " + images + "-image brief ✦"))
     );
   }
@@ -1491,12 +1534,13 @@
     var simpleErrorState = useState(null);
     var simpleError = simpleErrorState[0], setSimpleError = simpleErrorState[1];
 
-    function buildSimpleArtifact(title, url, content, images) {
+    function buildSimpleArtifact(title, url, content, images, hook) {
       setSimpleBusy(true); setSimpleError(null);
       api("/artifact-simple", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title: title || "", url: url || "", content: content || "", images: images || 10 }),
+        body: JSON.stringify({ title: title || "", url: url || "", content: content || "", images: images || 10,
+                               hook: hook || "" }),
       }).then(function () {
         setSimpleBusy(false); setSimpleModal(false); loadTree();
       }).catch(function (e) { setSimpleBusy(false); setSimpleError(errorLines(e).join(" ")); });

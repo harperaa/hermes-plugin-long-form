@@ -32,15 +32,31 @@ def _beat(n: int, **over) -> dict:
     return d
 
 
+def _packaging(**over) -> dict:
+    pk = {
+        "promise": "land it first",
+        "thumbnails": [{"image": f"img/thumb-{i}.jpg", "text": "TWO WORDS"} for i in range(1, 6)],
+        "titles": [f"Title {i}" for i in range(1, 6)],
+        "hooks": [{"text": "Mine first.", "given": True}] + [{"text": f"Hook {i}."} for i in range(2, 6)],
+        "examples": {"source": "trending", "label": "Trends tab", "items": [
+            {"id": "x1", "title": "A winning title", "channel": "@c", "thumbnail": "https://i.ytimg.com/vi/x1/hqdefault.jpg",
+             "url": "https://www.youtube.com/watch?v=x1", "metric": 12.5, "metric_label": "views per hour"}]},
+        "patterns": ["two words, one yellow"],
+    }
+    pk.update(over)
+    return pk
+
+
 def _minimal_doc(**over) -> dict:
     doc = {
         "kind": "simple",
         "title": "Test Brief",
         "eyebrow": "Video brief · test",
         "lede": " ".join(["word"] * 20),
+        "packaging": _packaging(),
         "sections": [
             {"type": "promise", "heading": "You leave with", "image": "img/p.jpg", "image_alt": "a",
-             "bullets": ["a promise", "another"]},
+             "bullets": ["a promise", "another"], "key": {"text": "land it first", "tone": "ok"}},
             {"type": "problem", "heading": "The problem", "beats": [
                 _beat(1, contrast={"crowd": ["build first"], "me": ["audience first"]}),
                 _beat(2, story=["it happened", "then this"], key={"text": "land it", "tone": "crit"})]},
@@ -62,6 +78,8 @@ def _write_doc(folder: Path, doc: dict, images=("p", "b1", "b2", "b3", "b4", "b5
     (folder / "artifact.json").write_text(json.dumps(doc))
     for n in images:
         _fake_image(folder / "img" / f"{n}.jpg")
+    for i in range(1, 6):
+        _fake_image(folder / "img" / f"thumb-{i}.jpg")
     return folder
 
 
@@ -79,8 +97,14 @@ def test_example_passes_gate_and_renders(tmp_path):
     ids = [html.index(f'id="{t}"') for t in _b().SECTION_ORDER]
     assert ids == sorted(ids)
     assert "prefers-color-scheme: dark" in html and 'data-theme="dark"' in html and 'class="theme"' in html
-    assert html.count("<figure>") == rep["images"]
+    assert html.count("<figure>") == rep["images"] + rep["thumbnails"]
     assert "What the crowd says" in html and "<details><summary>Full story</summary>" in html
+    # the packaging block opens the page, collapsed: five portrait thumbnails, titles, hooks, the reference set
+    assert rep["thumbnails"] == 5
+    pack = html.split('<details class="pack">', 1)[1].split("</details>", 1)[0]
+    assert html.index('<details class="pack">') < html.index('id="promise"')
+    assert pack.count('src="img/thumb-') == 5 and pack.count("<li>") >= 10 and 'class="refs"' in pack
+    assert "If you are not getting leads every day, this is for you." in pack
     # four open loops on the example, and the promise hook sits between its image and its bullets
     assert html.count('<div class="loop">') == 4
     promise = html.split('id="promise"', 1)[1].split('id="problem"', 1)[0]
@@ -117,6 +141,21 @@ def test_gate_rejects_presenter_talk_order_and_missing_images(tmp_path):
     # bullets are cues
     doc = _minimal_doc(); doc["sections"][4]["bullets"] = [" ".join(["w"] * 40), "b", "c"]
     assert any("keep it under" in x for x in b.validate(doc, folder))
+    # packaging: required, five of each, the promise verbatim, words on a thumbnail capped
+    doc = _minimal_doc(); del doc["packaging"]
+    assert any(x.startswith("packaging: required") for x in b.validate(doc, folder))
+    doc = _minimal_doc(packaging=_packaging(promise="a different promise"))
+    assert any("verbatim" in x for x in b.validate(doc, folder))
+    doc = _minimal_doc(packaging=_packaging(titles=["only one"]))
+    assert any("exactly 5 strings" in x for x in b.validate(doc, folder))
+    pk = _packaging(); pk["thumbnails"][0]["text"] = "six words is one too many here"
+    assert any("no more than 5" in x for x in b.validate(_minimal_doc(packaging=pk), folder))
+    pk = _packaging(); pk["hooks"] = pk["hooks"][1:] + [pk["hooks"][0]]
+    assert any("given hook comes first" in x for x in b.validate(_minimal_doc(packaging=pk), folder))
+    pk = _packaging(); pk["thumbnails"][0]["image"] = "img/p.jpg"
+    assert any("also a beat image" in x for x in b.validate(_minimal_doc(packaging=pk), folder))
+    pk = _packaging(examples={"source": "nowhere", "items": []})
+    assert any("packaging.examples" in x for x in b.validate(_minimal_doc(packaging=pk), folder))
     # open loops are questions, short, and read as such
     doc = _minimal_doc(); doc["sections"][0]["question"] = "What costs more than lost sales"
     assert any("question mark" in x for x in b.validate(doc, folder))
@@ -243,7 +282,7 @@ def test_publish_gates_a_simple_folder_with_the_simple_builder(tmp_home, monkeyp
     # the default name comes from artifact.json's title, and the bundle is the page plus its images
     assert entry["domain"].startswith("test-brief-")
     assert "test-brief-" in sent["names"][-1] and sent["names"][-1].endswith("/index.html")
-    assert sum(1 for n in sent["names"] if "/img/" in n) == 8
+    assert sum(1 for n in sent["names"] if "/img/" in n) == 13
     # a broken brief is refused before any upload
     (folder / "artifact.json").write_text("{}")
     with pytest.raises(RuntimeError, match="quality gate"):
@@ -304,8 +343,21 @@ def test_routes_create_rebuild_serve_and_publish_a_simple_page(tmp_home, art_kan
     c = TestClient(app)
     base = "/api/plugins/long-form"
     # the button: a URL or pasted content, 10 or 20 images
-    t = c.post(f"{base}/artifact-simple", json={"title": "Leads", "content": "notes", "images": 20}).json()
+    t = c.post(f"{base}/artifact-simple", json={"title": "Leads", "content": "notes", "images": 20,
+                                                 "hook": "If you have no leads, watch this."}).json()
     assert t["ok"] and t["outDir"].endswith("/leads-brief")
+    body = art_kanban.created[-1]["body"]
+    assert "If you have no leads, watch this." in body and "yti_packaging.py examples" in body and "thumb-1.jpg" in body
+    # the portrait: absent on a fresh instance, present after the upload route
+    assert c.get(f"{base}/portrait").json()["present"] is False
+    import base64 as _b64
+    up = c.post(f"{base}/portrait/upload", json={"filename": "me.jpg", "dataBase64": _b64.b64encode(b"\xff\xd8" + b"\0" * 100).decode()})
+    assert up.status_code == 200 and up.json()["present"] and up.json()["name"] == "source-portrait.jpg"
+    assert c.get(f"{base}/portrait").json()["present"] is True
+    assert c.post(f"{base}/portrait/upload", json={"filename": "me.gif", "dataBase64": "AAAA"}).status_code == 400
+    # the reference set route answers even on an empty instance (trending fallback, no items)
+    ex = c.get(f"{base}/packaging-examples").json()
+    assert ex["source"] in ("supply-demand", "trending") and isinstance(ex["items"], list)
     # the states report knows the kind before the worker has written a folder
     assert c.get(f"{base}/artifact-states").json()["states"][t["outDir"]]["simple"] is True
     assert art_kanban.created[-1]["skills"] == list(yti_artifact.SIMPLE_SKILLS)
@@ -344,5 +396,61 @@ def test_routes_create_rebuild_serve_and_publish_a_simple_page(tmp_home, art_kan
     monkeypatch.setattr(yti_publish.requests, "put", fake_put)
     pub = c.post(f"{base}/artifact-publish", json={"path": key, "domain": "leads-test"})
     assert pub.status_code == 200, pub.text
-    assert "leads-test/index.html" in sent["names"] and sum("/img/" in n for n in sent["names"]) == 9
+    assert "leads-test/index.html" in sent["names"] and sum("/img/" in n for n in sent["names"]) == 14
     assert c.get(f"{base}/artifact-states").json()["states"][key]["published"]["url"] == "https://leads-test.surge.sh"
+
+
+def test_packaging_examples_prefer_supply_demand_then_trending(tmp_home, monkeypatch):
+    import sys as _sys
+    import types
+    import yti_packaging
+    # a thin Supply / Demand table falls back to the Trends tab
+    monkeypatch.setattr(yti_packaging, "_supply_demand_examples", lambda limit: None)
+    monkeypatch.setattr(yti_packaging, "_trending_examples",
+                        lambda limit: [{"id": "v1", "title": "T", "channel": "@a", "thumbnail": "u", "url": "w", "metric": 3, "metric_label": "views per hour"}])
+    ex = yti_packaging.examples()
+    assert ex["source"] == "trending" and ex["items"][0]["id"] == "v1"
+    # a populated one wins, ranked by time-adjusted demand with the engine's hit filters
+    monkeypatch.undo()
+    sd = {"min_subs": 1000, "max_subs": 100000, "half_life": {"n": 100.0}, "default_half_life": 365.0, "points": []}
+
+    def pt(i, m, a, **o):
+        d = {"id": f"id{i}", "t": f"Title {i}", "ch": "@c", "n": "n", "m": m, "a": a, "c": "hit", "f": [], "fol": 0, "sub": 5000, "v": 1}
+        d.update(o)
+        return d
+    sd["points"] = [pt(i, 10, 0) for i in range(25)] + [
+        pt(90, 100, 0, c="normal"),                 # not a hit
+        pt(91, 100, 0, f=["paid?"]),                 # suspected paid
+        pt(92, 100, 0, sub=5_000_000),               # outside the comparable band
+        pt(93, 100, 0, sub=None),                    # size unknown
+        pt(94, 100, 0, t="被漁霸逼入絕境，窮小子覺醒逆天系統"),   # another script
+        pt(95, 50, 0),                               # the winner: 50x, brand new
+        pt(96, 90, 300),                             # 90x but 300 days old at a 100 day half-life: 11x
+    ]
+
+    class _C:
+        def close(self):
+            pass
+    monkeypatch.setitem(_sys.modules, "yti_rs_db", types.SimpleNamespace(connect=lambda: _C()))
+    monkeypatch.setitem(_sys.modules, "yti_rs_config", types.SimpleNamespace(load_config=lambda c: {}))
+    monkeypatch.setitem(_sys.modules, "yti_rs_report", types.SimpleNamespace(supply_demand=lambda c, cfg: sd))
+    ex = yti_packaging.examples()
+    ids = [it["id"] for it in ex["items"]]
+    assert ex["source"] == "supply-demand" and len(ids) == 20
+    assert ids[0] == "id95" and "id96" in ids[:3]
+    assert not any(i in ids for i in ("id90", "id91", "id92", "id93", "id94"))
+    assert ex["items"][0]["thumbnail"].endswith("/id95/hqdefault.jpg") and ex["items"][0]["metric_label"].startswith("x normal")
+
+
+def test_portrait_resolution_prefers_newest(tmp_home):
+    import os
+    import time
+    import yti_packaging
+    assert yti_packaging.portrait_path() is None
+    media = Path(os.environ["HERMES_HOME"]) / "media"
+    media.mkdir()
+    (media / "portrait-black-shirt.jpg").write_bytes(b"old")
+    time.sleep(0.02)
+    assert yti_packaging.save_portrait(b"new", "png")["name"] == "source-portrait.png"
+    assert yti_packaging.portrait_path().name == "source-portrait.png"
+    assert yti_packaging.save_portrait(b"", "png")["error"]
