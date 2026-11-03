@@ -357,15 +357,21 @@ def verify_image(path: Path, prompt: str, expect_text: str | None,
            "text. "
            if context else "")
         + ("5) IDENTITY: the SECOND image is the real person's portrait. The person "
-           "in the FIRST (generated) image must be that same person: the same face "
-           "shape, hairline, hair length, hair style and hair colour, skin tone, "
-           "eyes, nose, ears and jaw. Only the expression, the pose and the hands "
-           "may differ. Compare feature by feature. FAIL (add an issue starting "
-           "with 'identity:' naming the changed feature) if the hair or any facial "
-           "feature was changed, restyled, aged, slimmed or replaced. "
+           "in the FIRST (generated) image must be that same person, as a close "
+           "friend would judge it. Compare these features one at a time and give "
+           "each a likeness score from 0 to 10 in \"identity\": hairline (its height "
+           "at the temples and forehead, how far back it sits), hair (volume on top, "
+           "length, style, colour), face width and jaw, eyebrows (thickness), eyes, "
+           "nose, ears, skin tone. A lower or straighter hairline, fuller or longer "
+           "hair, a slimmer face, a stronger jaw, heavier eyebrows, or a younger "
+           "look are drift, not style. Only the expression, the pose and the hands "
+           "may differ. FAIL (add an issue starting with 'identity:' naming the "
+           "feature and what changed) if ANY feature scores below 8. "
            if id_data else "")
         + 'Reply with ONLY a JSON object: {"pass": true|false, "text": "<all transcribed text>", '
-          '"issues": ["<each problem found>"]}. Fail on ANY spelling error or garbled text.'
+          '"issues": ["<each problem found>"]'
+        + (', "identity": {"hairline": 0-10, "hair": 0-10, "face": 0-10, "eyebrows": 0-10, "eyes": 0-10, "nose": 0-10, "ears": 0-10, "skin": 0-10}' if id_data else "")
+        + '}. Fail on ANY spelling error or garbled text.'
     )
     try:
         if provider == "gemini":
@@ -465,6 +471,13 @@ def main() -> None:
         for path in written:
             verdict = verify_image(path, args.prompt, args.expect_text,
                                    args.context, args.identity)
+            if args.identity and isinstance(verdict.get("identity"), dict):
+                low = {k: v for k, v in verdict["identity"].items() if isinstance(v, (int, float)) and v < 8}
+                if low:
+                    verdict["pass"] = False
+                    verdict.setdefault("issues", []).append(
+                        "identity: likeness below 8 on " + ", ".join(f"{k} ({v})" for k, v in low.items()))
+                print(f"identity scores: {verdict['identity']}")
             if verdict.get("pass"):
                 print(f"saved: {path} (QA pass; text: {verdict.get('text', '')[:120]!r})")
             else:

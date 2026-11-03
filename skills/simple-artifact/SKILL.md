@@ -102,11 +102,13 @@ promise the page makes: copy the promise section's key line into
    set as `--reference` (full size: `https://i.ytimg.com/vi/<id>/maxresdefault.jpg`,
    falling back to `hqdefault.jpg`; fetch with `curl -4` into scratch). Pick
    the two whose layout and mood fit the beat; vary the pair across the
-   five. The prompt says: the person comes from the first image only, with
-   the same face and hair (hairline, length, style, colour), skin tone and
-   features; only the expression, pose and hands change; the references
-   guide typography treatment, colour grading, contrast and energy, never
-   the person. Pass `--identity <portrait>` too: the QA gate then compares
+   five. The prompt frames it as a replacement, never a blend: the people
+   in the reference thumbnails are removed entirely and the person from
+   the portrait takes their place, with the portrait's own face and hair
+   (hairline, length, style, colour), skin tone and features kept exactly;
+   only his expression, pose and hands are adapted to suit the beat. The
+   references guide typography treatment, colour grading, contrast and
+   energy, nothing about the person. Pass `--identity <portrait>` too: the QA gate then compares
    the result with the portrait feature by feature and regenerates when the
    hair or a facial feature was changed. The exact words in `--expect-text`,
    no other text. No more than
