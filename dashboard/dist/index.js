@@ -1929,10 +1929,23 @@
       return { producing: producing, produced: produced };
     })();
 
+    // A page folder is recognised by what is on disk (index.html beside
+    // artifact.json or an img/ folder), not only by the task map: a page
+    // built by hand, copied in, or made before the map existed still counts.
+    function isPageFolder(n) {
+      if (n.kind !== "dir") return false;
+      if (artStates[n.relPath] && artStates[n.relPath].status === "done") return true;
+      var kids = n.children || [];
+      var hasIndex = kids.some(function (c) { return c.kind === "file" && c.name === "index.html"; });
+      var hasContent = kids.some(function (c) {
+        return (c.kind === "file" && c.name === "artifact.json") || (c.kind === "dir" && c.name === "img");
+      });
+      return hasIndex && hasContent;
+    }
     function subtreeHasProduced(n) {
       if (n.kind === "file")
         return !!(produce[n.relPath] && produce[n.relPath].status === "done");
-      if (artStates[n.relPath] && artStates[n.relPath].status === "done") return true;
+      if (isPageFolder(n)) return true;
       return (n.children || []).some(subtreeHasProduced);
     }
     // "Produced": ancestor chain back to the date folders; once a folder
@@ -1945,7 +1958,8 @@
       nodes.forEach(function (n) {
         if (n.kind !== "dir") return;
         if (!subtreeHasProduced(n)) return;
-        if (artStates[n.relPath] && artStates[n.relPath].status === "done") { out.push(n); return; }
+        // a page folder is shown whole: index.html, artifact.json, img/, history/, published.json
+        if (isPageFolder(n)) { out.push(n); return; }
         var direct = (n.children || []).some(function (c) {
           return c.kind === "file" && produce[c.relPath] &&
             produce[c.relPath].status === "done";
