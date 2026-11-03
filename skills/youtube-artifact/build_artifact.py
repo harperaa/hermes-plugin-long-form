@@ -55,13 +55,25 @@ BANNED_IN_PROSE = ("—",)          # em dash: the house style never uses it
 # The page is the deliverable, not a script for whoever presents it: no stage
 # directions, no "say this", no slide or camera talk. (Case-insensitive.)
 # the packaging block (thumbnails, titles, hooks) is shared with the simple
-# page's builder and lives at the plugin root; optional on a full page
+# page's builder and lives at the plugin root. It is loaded from disk on every
+# builder load (never from sys.modules): the dashboard re-imports this builder
+# per call, and a long-running process must gate with the contract on disk,
+# not the one it started with.
 _PLUGIN_ROOT = Path(__file__).resolve().parent.parent.parent
-if str(_PLUGIN_ROOT) not in sys.path:
-    sys.path.insert(0, str(_PLUGIN_ROOT))
+
+
+def _load_packaging():
+    import importlib.util
+    src = _PLUGIN_ROOT / "yti_packaging.py"
+    spec = importlib.util.spec_from_file_location(f"yti_packaging_{id(src)}", str(src))
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)  # type: ignore[union-attr]
+    return mod
+
+
 try:
-    import yti_packaging  # noqa: E402
-except ImportError:  # a copied-out builder without the plugin root
+    yti_packaging = _load_packaging()
+except (OSError, ImportError):  # a copied-out builder without the plugin root
     yti_packaging = None  # type: ignore
 
 PRESENTER_RE = re.compile(

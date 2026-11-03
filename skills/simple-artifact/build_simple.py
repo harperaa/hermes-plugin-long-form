@@ -25,11 +25,23 @@ from pathlib import Path
 from typing import Any
 
 # the packaging block (thumbnails, titles, hooks) is shared with the full
-# page's builder and lives at the plugin root
+# page's builder and lives at the plugin root. It is loaded from disk on every
+# builder load (never from sys.modules): the dashboard re-imports this builder
+# per call, and a long-running process must gate with the contract on disk,
+# not the one it started with.
 _PLUGIN_ROOT = Path(__file__).resolve().parent.parent.parent
-if str(_PLUGIN_ROOT) not in sys.path:
-    sys.path.insert(0, str(_PLUGIN_ROOT))
-import yti_packaging  # noqa: E402
+
+
+def _load_packaging():
+    import importlib.util
+    src = _PLUGIN_ROOT / "yti_packaging.py"
+    spec = importlib.util.spec_from_file_location(f"yti_packaging_{id(src)}", str(src))
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)  # type: ignore[union-attr]
+    return mod
+
+
+yti_packaging = _load_packaging()
 
 SECTION_ORDER = ["promise", "problem", "value", "apply", "summary", "cta"]
 SECTION_LABELS = {"promise": "Promise", "problem": "Problem", "value": "Value",
