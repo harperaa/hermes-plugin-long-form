@@ -2104,11 +2104,14 @@
         onClose: function () { setSimpleModal(false); },
         onSubmit: buildSimpleArtifact,
       }) : null,
+      // the tree refresh waits for Done: reloading right after publish
+      // changes the selection the modal is keyed on and unmounts it before
+      // the URL can be copied
       pubModal && artDir ? h(PublishModal, {
         dir: artDir,
         published: art && art.published,
-        onClose: function () { setPubModal(false); },
-        onPublished: function () { loadTree(); },
+        onClose: function () { setPubModal(false); loadTree(); },
+        onPublished: function () {},
       }) : null,
       artIterModal && artDir ? h(YtiModal, { onClose: function () { setArtIterModal(false); } },
         h("h3", null, "Iterate on this page"),
