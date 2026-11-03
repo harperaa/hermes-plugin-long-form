@@ -414,8 +414,7 @@ def render(pk: dict[str, Any], inline_fn=None) -> str:
         patterns = "<h4>Patterns followed</h4><ul class=\"pat\">" + "".join(f"<li>{inl(s)}</li>" for s in pk["patterns"]) + "</ul>"
     n = len(ex["items"][:EXAMPLE_LIMIT])
     return (
-        '<details class="pack"><summary>Packaging<small>thumbnails, titles, hooks · modelled on '
-        f'{_esc(ex.get("label") or ex["source"])}</small></summary><div class="body">'
+        '<details class="pack"><summary>Packaging</summary><div class="body">'
         f'<h4>The promise every piece makes</h4><div class="promise">{inl(pk["promise"])}</div>'
         f'<h4>Thumbnails</h4><div class="thumbs">{thumbs}</div>'
         f'<h4>Titles ({len(pk["titles"])}, each in a winning frame)</h4><ol class="titles">{titles}</ol>'
