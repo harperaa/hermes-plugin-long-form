@@ -764,11 +764,21 @@ def _published(root: Path) -> Optional[dict[str, Any]]:
 def states() -> dict[str, dict[str, Any]]:
     out = yti_generate._states_for(ARTIFACT_META_KEY)
     ws = yti_paths.workspace_dir()
+    kinds: dict[str, str] = {}
+    try:
+        conn = yti_store.connect()
+        try:
+            kinds = {k: str(e.get("kind") or "") for k, e in _load_map(conn).items() if isinstance(e, dict)}
+        finally:
+            conn.close()
+    except Exception:  # noqa: BLE001
+        pass
     for key, st in out.items():
         page = ws / key / "index.html"
         st["page"] = f"{key}/index.html" if page.exists() else None
         st["published"] = _published(ws / key)
-        st["simple"] = is_simple(ws / key)
+        # the folder's own marker once written; the task's kind while the worker is still on it
+        st["simple"] = is_simple(ws / key) or kinds.get(key, "").startswith("simple")
     return out
 
 

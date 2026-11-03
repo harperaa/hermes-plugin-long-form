@@ -306,6 +306,8 @@ def test_routes_create_rebuild_serve_and_publish_a_simple_page(tmp_home, art_kan
     # the button: a URL or pasted content, 10 or 20 images
     t = c.post(f"{base}/artifact-simple", json={"title": "Leads", "content": "notes", "images": 20}).json()
     assert t["ok"] and t["outDir"].endswith("/leads-brief")
+    # the states report knows the kind before the worker has written a folder
+    assert c.get(f"{base}/artifact-states").json()["states"][t["outDir"]]["simple"] is True
     assert art_kanban.created[-1]["skills"] == list(yti_artifact.SIMPLE_SKILLS)
     assert c.post(f"{base}/artifact-simple", json={"title": "x"}).status_code == 400
     assert c.post(f"{base}/artifact-simple", json={"content": "x", "images": 7}).status_code == 400
