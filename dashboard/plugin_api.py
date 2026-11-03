@@ -495,6 +495,13 @@ def post_portrait_upload(body: PortraitUploadBody) -> dict[str, Any]:
     return result
 
 
+@router.get("/packaging-formats")
+def get_packaging_formats() -> dict[str, Any]:
+    """The winning title frames the packaging titles are written in."""
+    import yti_packaging
+    return yti_packaging.formats()
+
+
 @router.get("/packaging-examples")
 def get_packaging_examples() -> dict[str, Any]:
     """The reference set the packaging block follows (Supply / Demand top 20

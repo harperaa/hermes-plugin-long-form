@@ -36,7 +36,10 @@ def _packaging(**over) -> dict:
     pk = {
         "promise": "land it first",
         "thumbnails": [{"image": f"img/thumb-{i}.jpg", "text": "TWO WORDS"} for i in range(1, 6)],
-        "titles": [f"Title {i}" for i in range(1, 6)],
+        "titles": [{"text": f"Title {i}", "frame": "… how to build …"} for i in range(1, 21)],
+        "frames": {"source": "format-library", "label": "D3", "min_n": 10,
+                   "mined": [{"frame": "… how to build …", "hits": 16, "n": 82, "hit_rate": 0.2, "wilson_lb": 0.12, "examples": ["How to Build an LLM"]}],
+                   "seeded": [{"frame": "the new rules of {subject}", "psychology": "shift frame", "caution": ""}]},
         "hooks": [{"text": "Mine first.", "given": True}] + [{"text": f"Hook {i}."} for i in range(2, 6)],
         "examples": {"source": "trending", "label": "Trends tab", "items": [
             {"id": "x1", "title": "A winning title", "channel": "@c", "thumbnail": "https://i.ytimg.com/vi/x1/hqdefault.jpg",
@@ -103,7 +106,8 @@ def test_example_passes_gate_and_renders(tmp_path):
     assert rep["thumbnails"] == 5
     pack = html.split('<details class="pack">', 1)[1].split("</details>", 1)[0]
     assert html.index('<details class="pack">') < html.index('id="promise"')
-    assert pack.count('src="img/thumb-') == 5 and pack.count("<li>") >= 10 and 'class="refs"' in pack
+    assert pack.count('src="img/thumb-') == 5 and 'class="refs"' in pack
+    assert pack.count('<span class="frame">') == 20 and "Winning title frames" in pack and "Seeded templates" in pack
     assert "If you are not getting leads every day, this is for you." in pack
     # four open loops on the example, and the promise hook sits between its image and its bullets
     assert html.count('<div class="loop">') == 4
@@ -146,8 +150,14 @@ def test_gate_rejects_presenter_talk_order_and_missing_images(tmp_path):
     assert any(x.startswith("packaging: required") for x in b.validate(doc, folder))
     doc = _minimal_doc(packaging=_packaging(promise="a different promise"))
     assert any("verbatim" in x for x in b.validate(doc, folder))
-    doc = _minimal_doc(packaging=_packaging(titles=["only one"]))
-    assert any("exactly 5 strings" in x for x in b.validate(doc, folder))
+    doc = _minimal_doc(packaging=_packaging(titles=[{"text": "only one", "frame": "x"}]))
+    assert any("exactly 20" in x for x in b.validate(doc, folder))
+    pk = _packaging(); pk["titles"][3] = {"text": "No frame named"}
+    assert any("titles[3].frame" in x for x in b.validate(_minimal_doc(packaging=pk), folder))
+    pk = _packaging(); pk["titles"][4]["text"] = pk["titles"][2]["text"]
+    assert any("duplicate title" in x for x in b.validate(_minimal_doc(packaging=pk), folder))
+    pk = _packaging(); del pk["frames"]
+    assert any("packaging.frames" in x for x in b.validate(_minimal_doc(packaging=pk), folder))
     pk = _packaging(); pk["thumbnails"][0]["text"] = "six words is one too many here"
     assert any("no more than 5" in x for x in b.validate(_minimal_doc(packaging=pk), folder))
     pk = _packaging(); pk["hooks"] = pk["hooks"][1:] + [pk["hooks"][0]]
@@ -355,9 +365,11 @@ def test_routes_create_rebuild_serve_and_publish_a_simple_page(tmp_home, art_kan
     assert up.status_code == 200 and up.json()["present"] and up.json()["name"] == "source-portrait.jpg"
     assert c.get(f"{base}/portrait").json()["present"] is True
     assert c.post(f"{base}/portrait/upload", json={"filename": "me.gif", "dataBase64": "AAAA"}).status_code == 400
-    # the reference set route answers even on an empty instance (trending fallback, no items)
+    # the reference set and frame routes answer even on an empty instance
     ex = c.get(f"{base}/packaging-examples").json()
     assert ex["source"] in ("supply-demand", "trending") and isinstance(ex["items"], list)
+    fr = c.get(f"{base}/packaging-formats").json()
+    assert "mined" in fr and "seeded" in fr
     # the states report knows the kind before the worker has written a folder
     assert c.get(f"{base}/artifact-states").json()["states"][t["outDir"]]["simple"] is True
     assert art_kanban.created[-1]["skills"] == list(yti_artifact.SIMPLE_SKILLS)
@@ -454,3 +466,29 @@ def test_portrait_resolution_prefers_newest(tmp_home):
     assert yti_packaging.save_portrait(b"new", "png")["name"] == "source-portrait.png"
     assert yti_packaging.portrait_path().name == "source-portrait.png"
     assert yti_packaging.save_portrait(b"", "png")["error"]
+
+
+def test_formats_rank_actionable_mined_frames_and_keep_seeded(tmp_home, monkeypatch):
+    import sys as _sys
+    import types
+    import yti_packaging
+    lib = [
+        {"kind": "mined", "label": "… in # minutes …", "n_total": 69, "n_hits": 26, "hit_rate": 0.38, "wilson_lb": 0.27,
+         "examples": [{"title": "Master X in 35 minutes"}, {"title": "Master Y in 28 minutes"}, {"title": "third"}]},
+        {"kind": "mined", "label": "… thin …", "n_total": 4, "n_hits": 4, "hit_rate": 1.0, "wilson_lb": 0.51, "examples": []},
+        {"kind": "mined", "label": "… how to build …", "n_total": 82, "n_hits": 16, "hit_rate": 0.2, "wilson_lb": 0.12, "examples": []},
+        {"kind": "seeded", "label": "the new rules of {subject}", "psychology": "shift frame", "caution": "", "n_total": 0},
+    ]
+
+    class _C:
+        def close(self):
+            pass
+    monkeypatch.setitem(_sys.modules, "yti_rs_db", types.SimpleNamespace(connect=lambda: _C()))
+    monkeypatch.setitem(_sys.modules, "yti_rs_config", types.SimpleNamespace(load_config=lambda c: {"formats": {"min_actionable_n": 10}}))
+    monkeypatch.setitem(_sys.modules, "yti_rs_formats", types.SimpleNamespace(library=lambda c, niche=None: lib))
+    fr = yti_packaging.formats()
+    assert fr["source"] == "format-library" and fr["min_n"] == 10
+    # the thin frame (4 videos) is out even with a higher Wilson bound; ranking is by the bound
+    assert [m["frame"] for m in fr["mined"]] == ["… in # minutes …", "… how to build …"]
+    assert fr["mined"][0]["hits"] == 26 and fr["mined"][0]["examples"] == ["Master X in 35 minutes", "Master Y in 28 minutes"]
+    assert fr["seeded"] == [{"frame": "the new rules of {subject}", "psychology": "shift frame", "caution": ""}]

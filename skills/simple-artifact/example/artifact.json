@@ -37,11 +37,86 @@
       }
     ],
     "titles": [
-      "How to Get Leads Every Day (Without Building Anything First)",
-      "No Leads? You Built the Wrong Thing First",
-      "8K Followers in 8 Months: The Short Form Lead System",
-      "Stop Building. Start With the Audience.",
-      "The Lead System That Sold a Prototype for $300K"
+      {
+        "text": "Leads Every Day Explained in 12 Minutes",
+        "frame": "… explained in # minutes …"
+      },
+      {
+        "text": "Master Daily Leads in 10 Minutes (No Product Required)",
+        "frame": "… in # minutes …"
+      },
+      {
+        "text": "How to Build a Lead System That Fills Your Inbox Every Day",
+        "frame": "… how to build …"
+      },
+      {
+        "text": "How to Build an Audience Before You Build Anything",
+        "frame": "… how to build …"
+      },
+      {
+        "text": "I Made $300K From a Prototype With Zero Audience (Step by Step)",
+        "frame": "… i made $# … + … step by step …"
+      },
+      {
+        "text": "How I Made 8K Followers in 8 Months Without Selling Once",
+        "frame": "… how i made …"
+      },
+      {
+        "text": "The Lead Mistake You Need to Stop Making Today",
+        "frame": "… you need to …"
+      },
+      {
+        "text": "I Built an App for a Year and Nobody Came. Here Is What Works.",
+        "frame": "… i built a …"
+      },
+      {
+        "text": "How to Create Leads Every Day From One Platform",
+        "frame": "… how to create …"
+      },
+      {
+        "text": "The Short Form System That Brings Leads Every Day (Step by Step)",
+        "frame": "… step by step …"
+      },
+      {
+        "text": "How to Get Leads So Fast It Feels Like Cheating",
+        "frame": "how to {outcome} so fast it feels like cheating"
+      },
+      {
+        "text": "The New Rules of Getting Leads",
+        "frame": "the new rules of {subject}"
+      },
+      {
+        "text": "Brutally Honest Advice About Leads in 10 Minutes",
+        "frame": "brutally honest advice about {subject} in {n} minutes"
+      },
+      {
+        "text": "I Spent Tens of Thousands on Leads and Learned This",
+        "frame": "I {did} {N} {things} and learned this"
+      },
+      {
+        "text": "If You Don't Understand Demand, You Don't Understand Your Price",
+        "frame": "if you don't understand {mechanism}, you don't understand {outcome}"
+      },
+      {
+        "text": "Lead Generation Is About to Change Forever (Audience First)",
+        "frame": "{subject} is about to change forever and nobody even realises"
+      },
+      {
+        "text": "$0 vs $40,000 Ways to Get Leads",
+        "frame": "${low} vs ${high} {subject}"
+      },
+      {
+        "text": "No Leads? You Built the Wrong Thing First",
+        "frame": "reference set: question + contrarian"
+      },
+      {
+        "text": "Stop Building. Start With the Audience.",
+        "frame": "reference set: contrarian (Stop)"
+      },
+      {
+        "text": "Which Lead Source Pays Fastest? 3 Ranked",
+        "frame": "reference set: question + number (7 Ranked)"
+      }
     ],
     "hooks": [
       {
@@ -64,8 +139,8 @@
       "Two to four bold words, one of them in a single accent color (yellow or red), the rest white.",
       "The creator's face on one side, reacting: puzzled, pointing, hand up, proud.",
       "One prop that carries the promise: money bags, a chart, a clock, a crossed-out thing.",
-      "Titles lead with a question, a number, or a result (7 Ranked, $27 Million, 8K in 8 months).",
-      "Contrarian frames win: Stop, Jobless, Hated, Wrong."
+      "Contrarian frames win: Stop, Jobless, Hated, Wrong.",
+      "Titles: the strongest mined frames are time-boxed ('in # minutes', 'explained in # minutes'), 'how to build', 'I made $#' and 'step by step'; the seeded templates add the contrarian and loss frames."
     ],
     "examples": {
       "source": "supply-demand",
@@ -310,6 +385,280 @@
           "metric_label": "x normal, time-adjusted",
           "views": 694,
           "age_days": 7.05
+        }
+      ]
+    },
+    "frames": {
+      "source": "format-library",
+      "label": "D3 format library, winning title frames",
+      "min_n": 10,
+      "mined": [
+        {
+          "frame": "… in # minutes …",
+          "hits": 26,
+          "n": 69,
+          "hit_rate": 0.38,
+          "wilson_lb": 0.27,
+          "examples": [
+            "Master OpenClaw/Clawdbot in 35 minutes",
+            "Master OpenCode in 28 minutes"
+          ]
+        },
+        {
+          "frame": "… build an ai …",
+          "hits": 9,
+          "n": 22,
+          "hit_rate": 0.41,
+          "wilson_lb": 0.23,
+          "examples": [
+            "🔴 Let's build an AI Agent that can use Tools in NEXT.JS 15! (LangChain, Clerk, Convex, TS, IBM)",
+            "How to Build an AI Agent with Claude Code (Claude AI Agent Tutorial)"
+          ]
+        },
+        {
+          "frame": "… to build an …",
+          "hits": 5,
+          "n": 11,
+          "hit_rate": 0.45,
+          "wilson_lb": 0.21,
+          "examples": [
+            "How to Build an LLM from Scratch | An Overview",
+            "How to Build an AI Agent with Claude Code (Claude AI Agent Tutorial)"
+          ]
+        },
+        {
+          "frame": "… gpt # astra …",
+          "hits": 10,
+          "n": 31,
+          "hit_rate": 0.32,
+          "wilson_lb": 0.19,
+          "examples": [
+            "ChatGPT Released GPT-6 Astra and It’s INSANE! (ChatGPT Astra Use Cases)",
+            "🟢 Build a 3D Chess Game with GPT-6 Astra! | Beginner Series Ep #21 (Online Matchmaking & AI Players)"
+          ]
+        },
+        {
+          "frame": "… gpt # sol …",
+          "hits": 6,
+          "n": 16,
+          "hit_rate": 0.38,
+          "wilson_lb": 0.18,
+          "examples": [
+            "How To Use Codex To Build Insanely Beautiful Websites Using GPT 5.6 Sol",
+            "🟢 The BEST way to build Durable & Secure AI Agents that Scale (GPT 5.6 Sol) | Beginner Series Ep #14"
+          ]
+        },
+        {
+          "frame": "… with next js …",
+          "hits": 6,
+          "n": 16,
+          "hit_rate": 0.38,
+          "wilson_lb": 0.18,
+          "examples": [
+            "🔴 Let's build a Receipt Tracker SaaS with NEXT.JS 15 (AI Agents, Inngest, Schematic, Stripe, Clerk)",
+            "🔴 Lets build a Ticket Marketplace SAAS with NEXT.JS 15 (Convex, Stripe Connect, Clerk, Tailwind, TS)"
+          ]
+        },
+        {
+          "frame": "… explained in # minutes …",
+          "hits": 5,
+          "n": 13,
+          "hit_rate": 0.38,
+          "wilson_lb": 0.18,
+          "examples": [
+            "Model Context Protocol (MCP) Explained in 20 Minutes",
+            "Harness Engineering Explained in 22 Minutes"
+          ]
+        },
+        {
+          "frame": "… how to create …",
+          "hits": 5,
+          "n": 14,
+          "hit_rate": 0.36,
+          "wilson_lb": 0.16,
+          "examples": [
+            "How to Create a Custom Email Signature in Gmail (2025)",
+            "How to create a mobile app prototype with Google Stitch in 9 minutes"
+          ]
+        },
+        {
+          "frame": "… i made $# …",
+          "hits": 5,
+          "n": 17,
+          "hit_rate": 0.29,
+          "wilson_lb": 0.13,
+          "examples": [
+            "I Made $27 Million Selling Simple Digital Products (Step by Step)",
+            "I Made $32.7 Million Selling Simple Digital Products (Full Masterclass)"
+          ]
+        },
+        {
+          "frame": "… how to use …",
+          "hits": 7,
+          "n": 28,
+          "hit_rate": 0.25,
+          "wilson_lb": 0.13,
+          "examples": [
+            "How To Use Codex To Build Insanely Beautiful Websites Using GPT 5.6 Sol",
+            "Jev is HERE. How to use it"
+          ]
+        },
+        {
+          "frame": "… step by step …",
+          "hits": 6,
+          "n": 23,
+          "hit_rate": 0.26,
+          "wilson_lb": 0.13,
+          "examples": [
+            "I Made $27 Million Selling Simple Digital Products (Step by Step)",
+            "FULL COURSE: How to Build & Sell Digital Products With AI (Step by Step)"
+          ]
+        },
+        {
+          "frame": "… in # mins …",
+          "hits": 5,
+          "n": 18,
+          "hit_rate": 0.28,
+          "wilson_lb": 0.12,
+          "examples": [
+            "Master Hermes Agent in 41 mins",
+            "This AI Built My SAAS In 14 MINS???"
+          ]
+        },
+        {
+          "frame": "… how to build …",
+          "hits": 16,
+          "n": 82,
+          "hit_rate": 0.2,
+          "wilson_lb": 0.12,
+          "examples": [
+            "How to Build an LLM from Scratch | An Overview",
+            "FULL COURSE: How to Build & Sell Digital Products With AI (Step by Step)"
+          ]
+        },
+        {
+          "frame": "… claude code just …",
+          "hits": 4,
+          "n": 14,
+          "hit_rate": 0.29,
+          "wilson_lb": 0.12,
+          "examples": [
+            "Claude Code Just Got Way Better | Auto Claude Kanban Boards",
+            "Claude Code Just Automated My Video Production"
+          ]
+        },
+        {
+          "frame": "… saas in # …",
+          "hits": 3,
+          "n": 10,
+          "hit_rate": 0.3,
+          "wilson_lb": 0.11,
+          "examples": [
+            "This AI Built My SAAS In 14 MINS???",
+            "DeepSeek V4.1 Flash + DeepSeek Harness = Full SaaS In 18 Mins (Cost: $0.12)"
+          ]
+        },
+        {
+          "frame": "… how i made $# …",
+          "hits": 3,
+          "n": 10,
+          "hit_rate": 0.3,
+          "wilson_lb": 0.11,
+          "examples": [
+            "How I Made $30 Million With Simple Digital Products (Full Breakdown)",
+            "How I Made $30,146,997 Selling Digital Products (2026 Breakdown)"
+          ]
+        },
+        {
+          "frame": "… you need to …",
+          "hits": 6,
+          "n": 29,
+          "hit_rate": 0.21,
+          "wilson_lb": 0.1,
+          "examples": [
+            "ZSvirt: The Best VMware Alternative You Need to Try",
+            "7 AI Terms You Need to Know: Agents, RAG, ASI & More"
+          ]
+        },
+        {
+          "frame": "… how i made …",
+          "hits": 4,
+          "n": 18,
+          "hit_rate": 0.22,
+          "wilson_lb": 0.09,
+          "examples": [
+            "How I made $11k a day with 1 Digital Product (Full Breakdown)",
+            "How I Made $30 Million With Simple Digital Products (Full Breakdown)"
+          ]
+        },
+        {
+          "frame": "… # claude code …",
+          "hits": 3,
+          "n": 13,
+          "hit_rate": 0.23,
+          "wilson_lb": 0.08,
+          "examples": [
+            "Don't Miss These 7 Claude Code Updates",
+            "8 Claude Code Skills Every Developer Needs in 2026"
+          ]
+        },
+        {
+          "frame": "… i built a …",
+          "hits": 4,
+          "n": 22,
+          "hit_rate": 0.18,
+          "wilson_lb": 0.07,
+          "examples": [
+            "I Built a Self-Improving Software Factory",
+            "I Built a Reddit Monitoring Tool Using Claude Code Agent Teams"
+          ]
+        }
+      ],
+      "seeded": [
+        {
+          "frame": "if you don't understand {mechanism}, you don't understand {outcome}",
+          "psychology": "pattern interrupt + curiosity + loss framing; bridges an unvalued mechanism to a wanted outcome",
+          "caution": ""
+        },
+        {
+          "frame": "I {did} {N} {things} and learned this",
+          "psychology": "earned authority through volume",
+          "caution": ""
+        },
+        {
+          "frame": "how to {outcome} so fast it feels like cheating",
+          "psychology": "a wanted outcome, faster than plausible; reads as unfair advantage",
+          "caution": ""
+        },
+        {
+          "frame": "the new era of {subject} has just begun",
+          "psychology": "shift/urgency frame",
+          "caution": ""
+        },
+        {
+          "frame": "the new rules of {subject}",
+          "psychology": "shift frame; implies the viewer's model is stale",
+          "caution": ""
+        },
+        {
+          "frame": "brutally honest advice about {subject} in {n} minutes",
+          "psychology": "compression promise + candour signal",
+          "caution": ""
+        },
+        {
+          "frame": "{subject} is about to change forever and nobody even realises",
+          "psychology": "shift frame + insider framing",
+          "caution": ""
+        },
+        {
+          "frame": "speedrunning {outcome} [show everything]",
+          "psychology": "validated in gaming, transfers to any 'prove it end to end' audience",
+          "caution": ""
+        },
+        {
+          "frame": "${low} vs ${high} {subject}",
+          "psychology": "price-anchored comparison; curiosity about what money buys",
+          "caution": "strongly audience-dependent; validate before transferring"
         }
       ]
     }

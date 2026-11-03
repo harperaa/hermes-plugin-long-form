@@ -206,11 +206,15 @@ def _gemini_image_parts(payload: dict) -> list[bytes]:
 
 def _generate_gemini(key: str, prompt: str, out: Path, n: int,
                      aspect_ratio: str | None,
-                     input_image: str | None) -> list[Path]:
+                     input_image: str | None,
+                     references: list[str] | None = None) -> list[Path]:
     parts: list = []
     if input_image:
         data, mime = _input_bytes(input_image)
         data, mime = _fit_to_aspect(data, mime, aspect_ratio)
+        for r in (references or []):
+            rd, rm = _input_bytes(r)
+            parts.append({"inline_data": {"mime_type": rm, "data": base64.b64encode(rd).decode()}})
         parts.append({"inline_data": {"mime_type": mime,
                                       "data": base64.b64encode(data).decode()}})
     parts.append({"text": prompt})
@@ -232,10 +236,16 @@ def _generate_gemini(key: str, prompt: str, out: Path, n: int,
 
 def generate(prompt: str, out: Path, n: int, model: str,
              aspect_ratio: str | None = None,
-             input_image: str | None = None) -> list[Path]:
+             input_image: str | None = None,
+             references: list[str] | None = None) -> list[Path]:
     provider, token = resolve_provider()
+    references = [r for r in (references or []) if r]
+    if references and not input_image:
+        sys.exit("ERROR: --reference needs --input (the references ride with the primary image)")
+    if len(references) > 2:
+        sys.exit("ERROR: at most 2 --reference images (the edits endpoint takes 3 images in total)")
     if provider == "gemini":
-        return _generate_gemini(token, prompt, out, n, aspect_ratio, input_image)
+        return _generate_gemini(token, prompt, out, n, aspect_ratio, input_image, references)
     payload_body: dict = {
         "model": model,
         "prompt": prompt,
@@ -248,7 +258,13 @@ def generate(prompt: str, out: Path, n: int, model: str,
     # source anchors composition/style and the prompt directs the transform.
     endpoint = "images/generations"
     if input_image:
-        payload_body["image"] = _image_ref(input_image, aspect_ratio)
+        # the primary is the subject (the portrait); references are style and
+        # layout anchors (winning thumbnails). xAI takes them as `images`.
+        if references:
+            payload_body["images"] = [_image_ref(input_image, aspect_ratio)] + \
+                [_image_ref(r, aspect_ratio) for r in references]
+        else:
+            payload_body["image"] = _image_ref(input_image, aspect_ratio)
         endpoint = "images/edits"
     body = json.dumps(payload_body).encode()
     req = urllib.request.Request(
@@ -377,6 +393,10 @@ def main() -> None:
     ap.add_argument("--model", default=DEFAULT_MODEL)
     ap.add_argument("--aspect-ratio", default=None,
                     help="e.g. 16:9 — verified supported by the xAI API")
+    ap.add_argument("--reference", action="append", default=[], dest="references",
+                    help="Up to 2 extra images (local path or URL) the generation should follow for "
+                         "style, layout and energy; rides with --input (the subject). Used for "
+                         "packaging thumbnails: the portrait plus two winning thumbnails.")
     ap.add_argument("--input", default=None, dest="input_image",
                     help="Starting image (local path or URL) — routes to the "
                          "images/edits endpoint for image-to-image; use the "
@@ -413,7 +433,8 @@ def main() -> None:
     while True:
         written = generate(prompt, out, args.n, args.model,
                            aspect_ratio=args.aspect_ratio,
-                           input_image=args.input_image)
+                           input_image=args.input_image,
+                           references=args.references)
         if args.no_verify:
             for path in written:
                 print(f"saved: {path} (verification skipped)")

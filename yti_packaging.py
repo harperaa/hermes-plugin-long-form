@@ -16,6 +16,7 @@ here so the simple and the full page share one look. Run as a script from a
 worker task:
 
     python3 yti_packaging.py examples   # the reference set, JSON
+    python3 yti_packaging.py formats    # the winning title frames, JSON
     python3 yti_packaging.py portrait   # the portrait path, or nothing
 """
 from __future__ import annotations
@@ -37,7 +38,8 @@ except ImportError:  # standalone (script / builder) import
 EXAMPLE_LIMIT = 20
 MIN_SUPPLY_DEMAND_POINTS = 20
 THUMB_COUNT = 5
-TITLE_COUNT = 5
+TITLE_COUNT = 20
+FRAME_LIMIT = 20
 HOOK_COUNT = 5
 THUMB_MAX_WORDS = 5
 TITLE_MAX_CHARS = 70
@@ -195,6 +197,46 @@ def _trending_examples(limit: int) -> list[dict[str, Any]]:
              "age_days": None} for v in vids[:limit]]
 
 
+def formats(limit: int = FRAME_LIMIT) -> dict[str, Any]:
+    """The winning title frames: the research engine's D3 format library.
+    `mined` frames are title shapes that recur across channels, ranked by the
+    Wilson lower bound of their hit rate and kept only when they have enough
+    videos behind them (the engine's min_actionable_n); `seeded` frames are
+    the curated templates with their psychology. Titles are written in
+    these, each tagged with the frame it uses."""
+    try:
+        import yti_rs_config
+        import yti_rs_db
+        import yti_rs_formats
+    except ImportError:
+        return {"source": "none", "min_n": 0, "mined": [], "seeded": []}
+    try:
+        conn = yti_rs_db.connect()
+    except Exception:  # noqa: BLE001
+        return {"source": "none", "min_n": 0, "mined": [], "seeded": []}
+    try:
+        cfg = yti_rs_config.load_config(conn)
+        lib = yti_rs_formats.library(conn)
+    except Exception:  # noqa: BLE001
+        return {"source": "none", "min_n": 0, "mined": [], "seeded": []}
+    finally:
+        try:
+            conn.close()
+        except Exception:  # noqa: BLE001
+            pass
+    min_n = int((cfg.get("formats") or {}).get("min_actionable_n", 10)) if isinstance(cfg, dict) else 10
+    mined = [f for f in lib if f.get("kind") == "mined" and int(f.get("n_total") or 0) >= min_n]
+    mined.sort(key=lambda f: (-(float(f.get("wilson_lb") or 0)), -int(f.get("n_total") or 0)))
+    out_m = [{"frame": f.get("label"), "hits": int(f.get("n_hits") or 0), "n": int(f.get("n_total") or 0),
+              "hit_rate": round(float(f.get("hit_rate") or 0), 2), "wilson_lb": round(float(f.get("wilson_lb") or 0), 2),
+              "examples": [e.get("title") for e in (f.get("examples") or [])[:2] if e.get("title")]}
+             for f in mined[:limit]]
+    out_s = [{"frame": f.get("label"), "psychology": f.get("psychology") or "", "caution": f.get("caution") or ""}
+             for f in lib if f.get("kind") == "seeded" and f.get("label")]
+    return {"source": "format-library", "label": "D3 format library, winning title frames",
+            "min_n": min_n, "mined": out_m, "seeded": out_s}
+
+
 def examples(limit: int = EXAMPLE_LIMIT) -> dict[str, Any]:
     """The reference set: Supply / Demand top N when that table is populated
     (at least MIN_SUPPLY_DEMAND_POINTS points), else the Trends tab top N."""
@@ -237,13 +279,24 @@ def validate(pk: Any, base_dir: Path, promise: Optional[str]) -> list[str]:
             p.append(f"{w}.hooks: the operator's given hook comes first")
     titles = pk.get("titles")
     if not isinstance(titles, list) or len(titles) != TITLE_COUNT:
-        p.append(f"{w}.titles: exactly {TITLE_COUNT} strings")
+        p.append(f"{w}.titles: exactly {TITLE_COUNT} of {{text, frame}}, written in the winning frames from `yti_packaging.py formats`")
     else:
+        seen_t = set()
         for i, t in enumerate(titles):
-            if not isinstance(t, str) or not t.strip():
-                p.append(f"{w}.titles[{i}]: needs text")
-            elif len(t) > TITLE_MAX_CHARS:
-                p.append(f"{w}.titles[{i}]: {len(t)} characters; keep a title under {TITLE_MAX_CHARS}")
+            if not isinstance(t, dict) or not isinstance(t.get("text"), str) or not t["text"].strip():
+                p.append(f"{w}.titles[{i}]: needs {{text, frame}}")
+                continue
+            if len(t["text"]) > TITLE_MAX_CHARS:
+                p.append(f"{w}.titles[{i}]: {len(t['text'])} characters; keep a title under {TITLE_MAX_CHARS}")
+            if not isinstance(t.get("frame"), str) or not t["frame"].strip():
+                p.append(f"{w}.titles[{i}].frame: name the title frame it uses (a mined frame label, a seeded template, or a pattern from the reference set)")
+            key = t["text"].strip().lower()
+            if key in seen_t:
+                p.append(f"{w}.titles[{i}]: duplicate title")
+            seen_t.add(key)
+    fr = pk.get("frames")
+    if not isinstance(fr, dict) or not isinstance(fr.get("mined"), list) or not isinstance(fr.get("seeded"), list):
+        p.append(f"{w}.frames: the JSON `yti_packaging.py formats` printed, unchanged ({{source, label, min_n, mined, seeded}})")
     thumbs = pk.get("thumbnails")
     if not isinstance(thumbs, list) or len(thumbs) != THUMB_COUNT:
         p.append(f"{w}.thumbnails: exactly {THUMB_COUNT} of {{image, text, image_alt?}}")
@@ -311,6 +364,13 @@ CSS = r"""
 .refs span{color:var(--muted)}
 .pack ul.pat{margin:0;padding-left:20px;font-size:15px}
 .pack ul.pat li{margin:4px 0}
+.pack ol.titles li .frame{display:block;font-family:var(--mono);font-size:11.5px;color:var(--muted)}
+.pack ul.frames{margin:0;padding-left:20px;font-size:14px;columns:2;column-gap:24px}
+@media (max-width:600px){.pack ul.frames{columns:1}}
+.pack ul.frames li{margin:3px 0;break-inside:avoid}
+.pack ul.frames li b{font-weight:600}
+.pack ul.frames li span{color:var(--muted);font-size:12.5px}
+.pack ul.frames li.sep{list-style:none;margin:10px 0 4px -20px;font-family:var(--display);font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
 """
 
 
@@ -324,7 +384,20 @@ def render(pk: dict[str, Any], inline_fn=None) -> str:
     inl = inline_fn or _esc
     given_tag = '<span class="given">yours</span>'
     hooks = "".join(f"<li>{inl(h['text'])}{given_tag if h.get('given') else ''}</li>" for h in pk["hooks"])
-    titles = "".join(f"<li>{inl(t)}</li>" for t in pk["titles"])
+    titles = "".join(
+        f"<li>{inl(t['text'])}<span class=\"frame\">{inl(t.get('frame') or '')}</span></li>" for t in pk["titles"])
+    fr = pk.get("frames") or {}
+    mined = "".join(
+        f"<li><b>{inl(m.get('frame') or '')}</b> <span>{m.get('hits', 0)} of {m.get('n', 0)} hit"
+        f"{(' · e.g. ' + inl(m['examples'][0])) if m.get('examples') else ''}</span></li>"
+        for m in (fr.get("mined") or [])[:FRAME_LIMIT])
+    seeded = "".join(
+        f"<li><b>{inl(s_.get('frame') or '')}</b> <span>{inl(s_.get('psychology') or '')}</span></li>"
+        for s_ in (fr.get("seeded") or []))
+    frames_html = ""
+    if mined or seeded:
+        frames_html = ("<h4>Winning title frames (D3 format library)</h4><ul class=\"frames\">" + mined +
+                       (f"<li class=\"sep\">Seeded templates</li>{seeded}" if seeded else "") + "</ul>")
     thumbs = "".join(
         f'<figure><img src="{_esc(t["image"])}" alt="{_esc(t.get("image_alt") or t["text"])}" loading="lazy">'
         f'<figcaption>{_esc(t["text"])}{("<small>" + inl(t["note"]) + "</small>") if t.get("note") else ""}</figcaption></figure>'
@@ -345,9 +418,10 @@ def render(pk: dict[str, Any], inline_fn=None) -> str:
         f'{_esc(ex.get("label") or ex["source"])}</small></summary><div class="body">'
         f'<h4>The promise every piece makes</h4><div class="promise">{inl(pk["promise"])}</div>'
         f'<h4>Thumbnails</h4><div class="thumbs">{thumbs}</div>'
-        f'<h4>Titles</h4><ol>{titles}</ol>'
+        f'<h4>Titles ({len(pk["titles"])}, each in a winning frame)</h4><ol class="titles">{titles}</ol>'
         f'<h4>Hooks</h4><ol>{hooks}</ol>'
         f'{patterns}'
+        f'{frames_html}'
         f'<h4>Reference set: {n} winning videos ({_esc(ex.get("label") or ex["source"])})</h4><div class="refs">{refs}</div>'
         "</div></details>"
     )
@@ -366,6 +440,9 @@ def main(argv: list[str]) -> int:
     if cmd == "examples":
         print(json.dumps(examples(), indent=2, ensure_ascii=False))
         return 0
+    if cmd == "formats":
+        print(json.dumps(formats(), indent=2, ensure_ascii=False))
+        return 0
     if cmd == "portrait":
         p = portrait_path()
         if p is None:
@@ -373,7 +450,7 @@ def main(argv: list[str]) -> int:
             return 1
         print(p)
         return 0
-    print("usage: yti_packaging.py examples | portrait", file=sys.stderr)
+    print("usage: yti_packaging.py examples | formats | portrait", file=sys.stderr)
     return 2
 
 

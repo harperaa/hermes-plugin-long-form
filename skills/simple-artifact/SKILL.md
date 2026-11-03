@@ -93,12 +93,24 @@ promise the page makes: copy the promise section's key line into
    printed JSON as `packaging.examples` unchanged.
 2. `python3 <plugin>/yti_packaging.py portrait` prints the operator's
    portrait. Generate the five thumbnails with it as `--input` (the real
-   person, on one side of the frame), the exact words in `--expect-text`,
-   and no other text. No more than 5 words; 2 or 3 when they carry the
-   point. Save as `img/thumb-1.jpg` to `img/thumb-5.jpg`. No portrait: stop
-   and complete the task saying one must be uploaded (Artifacts tab).
-3. Five titles under 70 characters in the frames the reference set wins
-   with. Five hooks of one or two spoken sentences; the operator's own
+   person, on one side of the frame) AND two reference thumbnails from the
+   set as `--reference` (full size: `https://i.ytimg.com/vi/<id>/maxresdefault.jpg`,
+   falling back to `hqdefault.jpg`; fetch with `curl -4` into scratch). Pick
+   the two whose layout and mood fit the beat; vary the pair across the
+   five. The prompt says: the person comes from the first image only; match
+   the references' typography treatment, colour grading, contrast and
+   energy; the exact words in `--expect-text`, no other text. No more than
+   5 words; 2 or 3 when they carry the point. Save as `img/thumb-1.jpg` to
+   `img/thumb-5.jpg`. No portrait: stop and complete the task saying one
+   must be uploaded (Artifacts tab).
+3. `python3 <plugin>/yti_packaging.py formats` prints the winning title
+   frames from the research engine's D3 format library: mined frames with
+   hit counts and example titles, and the seeded templates with their
+   psychology. Store it as `packaging.frames` unchanged. Write twenty
+   titles under 70 characters, each `{text, frame}`: the strongest mined
+   frames first, then the seeded templates, then patterns from the
+   reference set, the frame named on each. Every title makes the page's
+   promise. Five hooks of one or two spoken sentences; the operator's own
    hook, when the brief gives one, is first with `given: true`.
 
 ## Phase 3: Images (one per beat, in parallel)
